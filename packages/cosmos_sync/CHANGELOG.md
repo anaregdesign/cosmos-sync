@@ -9,7 +9,7 @@
 - Keep exact outbox identities, observed bases and ambiguous retry outcomes across
   restart/reset; preserve explicit conflict and conservative revocation behavior.
 - Breaking changes to the unpublished 0.1 API: await put/delete/retry/discard.
-- Public license and publication remain undecided; this is not a released package.
+- Adopt the owner-approved MIT license (copyright 2026 anaregdesign).
 
 # 0.1.0-dev.1
 

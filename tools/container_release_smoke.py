@@ -3,6 +3,7 @@
 
 import hashlib
 import argparse
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -38,13 +39,23 @@ def verify_bundle(path, sha, version):
             manifest = blob(entry["digest"])
             config = blob(manifest["config"]["digest"])
             release.validate_image(config, sha, version, architecture)
+            notices = {}
+            for layer in manifest["layers"]:
+                data = archive.extractfile("blobs/sha256/" + layer["digest"][7:]).read()
+                release.require(hashlib.sha256(data).hexdigest() == layer["digest"][7:], "Layer checksum mismatch")
+                with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as contents:
+                    for member in contents:
+                        name = member.name.removeprefix("./").lstrip("/")
+                        if member.isfile() and (name == "LICENSE" or name.startswith("licenses/")):
+                            notices[name] = contents.extractfile(member).read()
+            release.require(notices.get("LICENSE") == (release.ROOT / "LICENSE").read_bytes(), "Runtime project MIT notice differs from source")
+            release.require(len(notices.get("licenses/Go-LICENSE", b"")) > 100, "Runtime lacks the upstream Go license")
+            release.require(any(name.startswith("licenses/modules/") for name in notices), "Runtime lacks module license/notice files")
             attached = next(m for m in index["manifests"] if m.get("annotations", {}).get("vnd.docker.reference.digest") == entry["digest"])
             predicates = set()
             for layer in blob(attached["digest"])["layers"]:
                 statement = blob(layer["digest"])
-                subject_digests = [s.get("digest", {}).get("sha256") for s in statement.get("subject", [])]
-                release.require(entry["digest"][7:] in subject_digests, "Attestation subject differs from platform manifest: " + str(subject_digests) + "; expected " + entry["digest"] + "; predicate " + statement["predicateType"])
-                predicates.add(statement["predicateType"])
+                predicates.add(release.validate_statement(statement, entry["digest"]))
             release.require(any(p.startswith("https://slsa.dev/provenance/") for p in predicates), "Missing SLSA provenance")
             release.require("https://spdx.dev/Document" in predicates, "Missing SPDX SBOM")
             platforms.append("linux/" + architecture)
@@ -61,7 +72,7 @@ def main():
         version = release.metadata()["version"]
         with tempfile.TemporaryDirectory(prefix="cosmos-sync-oci-smoke-") as directory:
             bundle = Path(directory) / "release.tar"
-            labels = {"source": release.SOURCE, "revision": sha, "version": version}
+            labels = {"source": release.SOURCE, "revision": sha, "version": version, "licenses": "MIT"}
             builder = args.builder
             if builder is None:
                 owned_builder = "cosmos-sync-release-" + uuid.uuid4().hex[:12]

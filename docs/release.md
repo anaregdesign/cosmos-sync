@@ -1,18 +1,21 @@
 # Release and distribution
 
-No package has been published. Source remains private; the package LICENSE is an
-explicit pending/UNLICENSED placeholder. Tooling acceptance does not grant redistribution
-rights. The proposed first version is **0.2.0-dev.1**, a prerelease with measured
-Android/iOS emulator, macOS and Chromium coverage, rather than a production SLA.
-The owner selects the license, publication identities and source/container visibility.
-pub.dev distributes the SDK source publicly even if the GitHub repository stays private.
+No package has been published yet. On 2026-10-03 the owner explicitly approved
+**MIT**, copyright 2026 anaregdesign, **public GitHub source and public GHCR**, and
+the initial prerelease **0.2.0-dev.1**. The chosen pub.dev Google account is kept
+private in the owner's local authentication flow; no personal email is recorded here.
+Repository, BFF and SDK include identical approved MIT licenses. Actual visibility
+changes, owner sign-in and registry publication remain execution steps until their
+evidence is recorded. The prerelease has measured Android/iOS emulator, macOS and
+Chromium coverage and no production SLA. A verified publisher/domain has not been
+selected; that does not prevent the approved first personal-account publication.
 
 ## Prepare the exact candidate
 
-1. Resolve [#14](https://github.com/anaregdesign/cosmos-sync/issues/14): legal license,
-   source disclosure, chosen Google account/publisher and approved initial version.
-   Install the approved license in the repository and package; update preview notices
-   so the published README/CHANGELOG accurately describe licensing and release state.
+1. Record the resolved owner decisions on [#14](https://github.com/anaregdesign/cosmos-sync/issues/14)
+   without publishing the personal account identity. Preserve matching MIT notices
+   in the repository, BFF and SDK. The container includes its project license, the
+   Go license and downloaded dependency LICENSE/NOTICE files under `/licenses`.
 2. Run `python3 tools/package_docs.py` after any protocol/query/security edit. The
    archive includes those documents under `packages/cosmos_sync/doc`; optional source
    links can remain private without blocking package usage or safety documentation.
@@ -26,7 +29,7 @@ pub.dev distributes the SDK source publicly even if the GitHub repository stays 
 
 `python3 tools/release_verify.py preflight` reports candidate metadata and pending
 license files without publishing. The `--target ghcr|pub --sha <40-hex> --version <version>`
-mode additionally rejects dirty/mismatched sources, pending licenses, missing approval
+mode additionally rejects dirty/mismatched sources, pending/mismatched MIT licenses, missing approval
 variables, stale main commits, missing/skipped/failed CI jobs and incomplete latest CI.
 Successful checks provide the exact run URL. New main commits require new review and
 new SHA approval. Distribution uses a digest; a source-SHA tag is still a mutable registry tag.
@@ -140,7 +143,7 @@ python3 tools/release_verify.py pub --version 0.2.0-dev.1 \
 This downloads the public version archive, verifies the registry SHA256 when supplied,
 and compares all library files, essential package docs and every archive file with
 the reviewed source. It rejects extra library files, development assets, links and unsafe paths.
-Record the package/version URL, publisher/uploader identity and archive hash on
+Record the package/version URL, ownership-verification result and archive hash on
 [#23](https://github.com/anaregdesign/cosmos-sync/issues/23). Also resolve the SDK
 from pub.dev in a clean temporary consumer directory and run its public example;
 this happens in the same verification command. It checks real native SQLite
@@ -171,7 +174,8 @@ Before public release, establish a private vulnerability reporting route. A publ
 GitHub repository can enable private vulnerability reporting; verify the Security
 tab's reporting flow afterward. If source stays private, the owner must designate
 a private support/security contact for SDK consumers. Do not publish an invented
-email. Keep deployment, incident response, physical-device and live Azure acceptance
+email. Keep personal account details out of public Issues and logs. Keep deployment,
+incident response, physical-device and live Azure acceptance
 separate from registry upload. [Security boundaries](security.md) remain mandatory.
 
 Azure work needs an explicitly selected isolated subscription/resource group,

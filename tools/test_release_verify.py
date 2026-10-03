@@ -6,6 +6,7 @@ import io
 from pathlib import Path
 import tarfile
 import unittest
+from urllib.request import Request
 from unittest.mock import patch
 from types import SimpleNamespace
 
@@ -17,6 +18,32 @@ VERSION = "0.2.0-dev.1"
 
 
 class ReleaseGuardsTest(unittest.TestCase):
+    def test_approved_mit_files_match_and_pending_license_stays_blocked(self):
+        release.verify_license_files("MIT")
+        with self.assertRaises(release.ReleaseError):
+            release.verify_license_files("Apache-2.0")
+        with patch.object(release, "license_pending", return_value=True):
+            with self.assertRaises(release.ReleaseError):
+                release.verify_license_files("MIT")
+
+    def test_remote_attestation_is_bound_to_platform_digest(self):
+        digest = "sha256:" + "a" * 64
+        statement = {"_type": "https://in-toto.io/Statement/v0.1", "predicateType": "https://spdx.dev/Document", "predicate": {"SPDXID": "SPDXRef-DOCUMENT"}, "subject": [{"digest": {"sha256": "a" * 64}}]}
+        self.assertEqual(release.validate_statement(statement, digest), "https://spdx.dev/Document")
+        with self.assertRaises(release.ReleaseError):
+            release.validate_statement(statement, "sha256:" + "b" * 64)
+        with self.assertRaises(release.ReleaseError):
+            release.validate_statement(dict(statement, predicate={}), digest)
+
+    def test_cross_origin_blob_redirect_drops_all_credentials(self):
+        request = Request("https://ghcr.io/v2/owned/blobs/digest", headers={"Authorization": "Bearer private", "Cookie": "private", "Proxy-Authorization": "private"})
+        redirected = release.SafeRedirect().redirect_request(request, None, 302, "redirect", {}, "https://artifact.example/path")
+        self.assertIsNone(redirected.get_header("Authorization"))
+        self.assertIsNone(redirected.get_header("Cookie"))
+        self.assertIsNone(redirected.get_header("Proxy-authorization"))
+        with self.assertRaises(release.ReleaseError):
+            release.SafeRedirect().redirect_request(request, None, 302, "redirect", {}, "http://artifact.example/path")
+
     def test_initial_private_stage_preserves_public_owner_approval(self):
         response = SimpleNamespace(returncode=1, stdout='{"status": "404"}', stderr="gh: Package not found (HTTP 404)")
         with patch.object(release.subprocess, "run", return_value=response):
@@ -78,7 +105,7 @@ class ReleaseGuardsTest(unittest.TestCase):
                 release.validate_manifest({"schemaVersion": 2, "manifests": entries[:removed] + entries[removed + 1:]})
 
     def test_image_revision_entrypoint_and_nonroot(self):
-        image = {"os": "linux", "architecture": "arm64", "config": {"User": "nonroot:nonroot", "Entrypoint": ["/cosmos-sync-bff"], "Labels": {"org.opencontainers.image.source": release.SOURCE, "org.opencontainers.image.revision": SHA, "org.opencontainers.image.version": VERSION}}}
+        image = {"os": "linux", "architecture": "arm64", "config": {"User": "nonroot:nonroot", "Entrypoint": ["/cosmos-sync-bff"], "Labels": {"org.opencontainers.image.source": release.SOURCE, "org.opencontainers.image.revision": SHA, "org.opencontainers.image.version": VERSION, "org.opencontainers.image.licenses": "MIT"}}}
         release.validate_image(image, SHA, VERSION, "arm64")
         for key, value in (("User", "root"), ("Entrypoint", ["/bin/sh"])):
             changed = copy.deepcopy(image)

@@ -2,6 +2,7 @@
 """Fail-closed release checks and post-publication evidence; never publishes."""
 
 import argparse
+import base64
 import hashlib
 import io
 import json
@@ -15,7 +16,7 @@ import tarfile
 import tempfile
 from urllib.error import HTTPError
 from urllib.parse import urlencode, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "packages/cosmos_sync"
@@ -35,6 +36,24 @@ DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
 class ReleaseError(Exception):
     pass
+
+
+class SafeRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, url):
+        old, new = urlparse(request.full_url), urlparse(url)
+        require(new.scheme == "https", "Registry redirect must remain HTTPS")
+        redirected = super().redirect_request(request, response, code, message, headers, url)
+        if (old.hostname, old.port or 443) != (new.hostname, new.port or 443):
+            redirected.remove_header("Authorization")
+            redirected.remove_header("Proxy-authorization")
+            redirected.remove_header("Cookie")
+        return redirected
+
+
+def safe_open(request):
+    url = request.full_url if isinstance(request, Request) else request
+    require(urlparse(url).scheme == "https", "Registry reads require HTTPS")
+    return build_opener(SafeRedirect()).open(request, timeout=30)
 
 
 def require(condition, message):
@@ -73,7 +92,7 @@ def ghcr_stage(final_visibility):
 
 
 def json_url(url, headers=None):
-    with urlopen(Request(url, headers=headers or {}), timeout=30) as response:
+    with safe_open(Request(url, headers=headers or {})) as response:
         return json.load(response)
 
 
@@ -100,6 +119,14 @@ def license_pending(path):
     ))
 
 
+def verify_license_files(license_id):
+    require(license_id == "MIT", "The owner approved MIT; record RELEASE_LICENSE_SPDX=MIT")
+    files = (ROOT / "LICENSE", ROOT / "bff/LICENSE", PACKAGE / "LICENSE")
+    require(all(not license_pending(path) for path in files), "Replace pending licenses before distribution")
+    contents = [path.read_bytes() for path in files]
+    require(len(set(contents)) == 1 and contents[0].startswith(b"MIT License\n"), "Repository, BFF and SDK must carry the identical approved MIT license")
+
+
 def successful_main_ci(sha):
     ref = gh(f"repos/{REPOSITORY}/git/ref/heads/main")
     require(ref["object"]["sha"] == sha, "Approved SHA is no longer the current main commit")
@@ -120,7 +147,7 @@ def successful_main_ci(sha):
 def preflight(target, sha=None, version=None):
     result = metadata()
     result["sourceSha"] = run("git", "rev-parse", "HEAD")
-    pending = [str(p.relative_to(ROOT)) for p in (ROOT / "LICENSE", PACKAGE / "LICENSE") if license_pending(p)]
+    pending = [str(p.relative_to(ROOT)) for p in (ROOT / "LICENSE", ROOT / "bff/LICENSE", PACKAGE / "LICENSE") if license_pending(p)]
     result["pendingLicenseFiles"] = pending
     result["status"] = "ready_for_owner_review" if target == "prepare" else "approved_source_verified"
     if target == "prepare":
@@ -135,6 +162,7 @@ def preflight(target, sha=None, version=None):
     require(os.environ.get("RELEASE_APPROVED_VERSION") == version, "RELEASE_APPROVED_VERSION does not match the candidate")
     license_id = os.environ.get("RELEASE_LICENSE_SPDX", "")
     require(license_id and re.fullmatch(r"[A-Za-z0-9.+-]+", license_id) and license_id != "UNLICENSED", "Set the owner's approved SPDX license identifier")
+    verify_license_files(license_id)
     if target == "ghcr":
         require(os.environ.get("GHCR_PUBLISH_ENABLED") == "true", "GHCR publication has not been enabled after approval")
         final_visibility = os.environ.get("GHCR_RELEASE_VISIBILITY")
@@ -172,6 +200,7 @@ def validate_image(config, sha, version, architecture):
     labels = runtime.get("Labels", {})
     for key, value in {"source": SOURCE, "revision": sha, "version": version}.items():
         require(labels.get("org.opencontainers.image." + key) == value, "Container metadata does not match approved " + key)
+    require(labels.get("org.opencontainers.image.licenses") == "MIT", "Container must declare the owner-approved MIT license")
     require(runtime.get("Entrypoint") == ["/cosmos-sync-bff"], "Unexpected container entrypoint")
 
 
@@ -192,6 +221,37 @@ def anonymous_visibility(digest, expected):
         return "anonymous_access_denied"
 
 
+def registry_pull_token(authenticated):
+    url = "https://ghcr.io/token?" + urlencode({"service": "ghcr.io", "scope": "repository:anaregdesign/cosmos-sync-bff:pull"})
+    headers = {}
+    if authenticated:
+        credential = os.environ.get("GH_TOKEN") or run("gh", "auth", "token")
+        actor = os.environ.get("GITHUB_ACTOR") or gh("user")["login"]
+        headers["Authorization"] = "Basic " + base64.b64encode((actor + ":" + credential).encode()).decode()
+    token = json_url(url, headers).get("token")
+    require(isinstance(token, str) and token, "Missing scoped registry pull token")
+    return token
+
+
+def registry_statement(digest, token):
+    require(DIGEST.fullmatch(digest), "Invalid attestation layer digest")
+    request = Request(f"https://ghcr.io/v2/anaregdesign/cosmos-sync-bff/blobs/{digest}", headers={"Authorization": "Bearer " + token})
+    with safe_open(request) as response:
+        raw = response.read(16 * 1024 * 1024 + 1)
+    require(len(raw) <= 16 * 1024 * 1024, "Attestation exceeds the reviewed read bound")
+    require(hashlib.sha256(raw).hexdigest() == digest[7:], "Attestation layer checksum mismatch")
+    return json.loads(raw)
+
+
+def validate_statement(statement, image_digest):
+    require(statement.get("_type") in ("https://in-toto.io/Statement/v0.1", "https://in-toto.io/Statement/v1"), "Unsupported attestation statement type")
+    subjects = [s.get("digest", {}).get("sha256") for s in statement.get("subject", [])]
+    require(image_digest[7:] in subjects, "Attestation subject differs from the platform manifest")
+    predicate = statement.get("predicateType")
+    require(isinstance(predicate, str) and statement.get("predicate"), "Missing attestation predicate")
+    return predicate
+
+
 def ghcr_verify(digest, sha, version, visibility):
     require(DIGEST.fullmatch(digest), "Use the image index SHA256 digest")
     require(SHA.fullmatch(sha) and SEMVER.fullmatch(version), "Invalid source SHA/version")
@@ -201,17 +261,20 @@ def ghcr_verify(digest, sha, version, visibility):
     reference = IMAGE + "@" + digest
     index = json.loads(run("docker", "buildx", "imagetools", "inspect", "--raw", reference))
     validate_manifest(index)
-    evidence = {"image": reference, "sourceSha": sha, "version": version, "visibility": visibility, "platforms": []}
+    token = registry_pull_token(visibility == "private")
+    evidence = {"image": reference, "sourceSha": sha, "version": version, "visibility": visibility, "licenseSpdx": "MIT", "platforms": []}
     for architecture in ("amd64", "arm64"):
         platform = "linux/" + architecture
         run("docker", "pull", "--platform=" + platform, reference)
         config = json.loads(run("docker", "buildx", "imagetools", "inspect", reference, "--format", '{{json (index .Image "' + platform + '")}}'))
         validate_image(config, sha, version, architecture)
-        provenance = json.loads(run("docker", "buildx", "imagetools", "inspect", reference, "--format", '{{json (index .Provenance "' + platform + '")}}'))
-        sbom = json.loads(run("docker", "buildx", "imagetools", "inspect", reference, "--format", '{{json (index .SBOM "' + platform + '")}}'))
-        require(provenance and provenance.get("SLSA"), "Missing BuildKit provenance for " + platform)
-        require(sbom and sbom.get("SPDX"), "Missing SPDX SBOM for " + platform)
-        evidence["platforms"].append({"platform": platform, "authenticatedPull": True, "provenance": "BuildKit (not a signed GitHub attestation)", "sbom": "SPDX"})
+        entry = next(m for m in index["manifests"] if m.get("platform", {}).get("os") == "linux" and m["platform"].get("architecture") == architecture)
+        attestation = next(m for m in index["manifests"] if m.get("annotations", {}).get("vnd.docker.reference.digest") == entry["digest"])
+        attached = json.loads(run("docker", "buildx", "imagetools", "inspect", "--raw", IMAGE + "@" + attestation["digest"]))
+        predicates = {validate_statement(registry_statement(layer["digest"], token), entry["digest"]) for layer in attached["layers"]}
+        require(any(p.startswith("https://slsa.dev/provenance/") for p in predicates), "Missing bound SLSA provenance for " + platform)
+        require("https://spdx.dev/Document" in predicates, "Missing bound SPDX SBOM for " + platform)
+        evidence["platforms"].append({"platform": platform, "authenticatedPull": True, "attestationSubjectBinding": entry["digest"], "attestationLayerSha256Verified": True, "provenance": "BuildKit (not a signed GitHub attestation)", "sbom": "SPDX"})
     evidence["anonymousAccess"] = anonymous_visibility(digest, visibility)
     return evidence
 
@@ -280,7 +343,7 @@ def pub_verify(version):
     archive_url = info.get("archive_url", "")
     parsed = urlparse(archive_url)
     require(parsed.scheme == "https" and parsed.hostname == "pub.dev", "Unexpected registry archive origin")
-    with urlopen(archive_url, timeout=30) as response:
+    with safe_open(archive_url) as response:
         raw = response.read(50 * 1024 * 1024 + 1)
     require(len(raw) <= 50 * 1024 * 1024, "Published archive exceeds the reviewed transfer bound")
     evidence = validate_archive(raw, info.get("archive_sha256"))

@@ -1,7 +1,7 @@
 # cosmos_sync
 
 Dart/Flutter offline documents through an OIDC BFF for Cosmos DB for NoSQL.
-**Unpublished v0.2 preview; public licensing remains undecided.** Native SQLite and
+**MIT-licensed v0.2 preview.** Native SQLite and
 Chromium IndexedDB preserve confirmed data, pending overlays and exact durable
 operations. The BFF alone holds Cosmos credentials. This is a finite document API,
 with [Firestore differences](doc/query.md). Essential protocol, query and security
@@ -139,7 +139,13 @@ newer SQLite package hooks currently conflict with stable Flutter's pinned meta.
 The browser reload probe in `web/cache_reload_probe.dart` verifies exact outbox
 identities, observed bases, overlays, scope, cursor and consistency envelope after
 a full page reload. Publication
-needs owner-approved license/source/publisher/version and registry access; no command
+uses the owner's selected publishing account and reviewed version; no command
 here publishes or creates Azure resources. The optional
 [source release record](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/release.md)
-requires repository access while the source remains private.
+records registry and deployment evidence.
+
+The package and BFF are distributed under the [MIT license](LICENSE), copyright
+2026 anaregdesign. Dependency licenses remain with their respective owners.
+Use [GitHub private vulnerability reporting](https://github.com/anaregdesign/cosmos-sync/security/advisories/new)
+after the owner verifies activation during public-source setup; do not report
+credentials or exploit details in public issues.
