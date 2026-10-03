@@ -6,6 +6,16 @@ Native SQLite and Chromium IndexedDB store confirmed documents and a durable out
 
 Development is tracked by [epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). [Verification](docs/verification.md) reports actual results; owner-controlled distribution and live-cloud gates remain explicit.
 
+**Apple and Google are the intended practical end-user login providers.** The
+current Flutter adapter implements native OIDC/PKCE with a dedicated Entra API
+access-token validation path; Apple/Google login, account linking and provider
+acceptance are additional work, not delivered support. The [social-login design
+and roadmap](docs/social-auth.md) compares an API-token identity broker with
+native provider login followed by a backend session exchange. Raw Apple/Google
+ID tokens are not Cosmos Sync API credentials. Server grants continue to control
+document access, and matching email addresses must never automatically merge
+accounts.
+
 ## Layout and verification
 
 - `bff/`: Go service, official Azure SDK, security/atomicity tests and opt-in emulator integration.

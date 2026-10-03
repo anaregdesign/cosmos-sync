@@ -1,5 +1,11 @@
 # Native end-user authentication
 
+Apple and Google are the intended practical end-user login providers. This page
+describes the implemented native OIDC API-access-token adapter; the dedicated
+Entra validation path is not an Apple/Google implementation. The
+[social-login design](social-auth.md) covers their additional trust boundary,
+identity linking, platform requirements and acceptance work.
+
 The runnable sample is `examples/flutter_app`. Its native login adapter uses
 `flutter_appauth` 12.1.0 on Android, iOS and macOS. AppAuth performs Authorization
 Code with PKCE and validates its browser callback/state/nonce; Android uses an
@@ -9,6 +15,58 @@ The plugin does not provide web, Linux or Windows login in this sample.
 See [AppAuth Android](https://github.com/openid/AppAuth-Android),
 [AppAuth iOS/macOS](https://github.com/openid/AppAuth-iOS) and the
 [Flutter adapter](https://pub.dev/packages/flutter_appauth).
+
+## Apple and Google roadmap
+
+The first integration candidate is a consumer identity broker that federates
+Apple/Google login and issues an access token for the Cosmos Sync API. Microsoft
+[Entra External ID](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-authentication-methods-customers)
+supports these providers through browser-delegated authentication; it requires
+an external consumer tenant and reviewed configuration, separate from the
+current workforce-tenant validation. If native provider UI is required,
+Firebase Authentication/Identity Platform plus a dedicated backend identity
+proof exchange is the alternative under review. This recommendation is a design
+proposal, not an enabled provider deployment.
+
+An Apple/Google or broker **ID token** proves authentication to its intended
+relying party; it must not replace the API access token expected by existing
+sync routes. The selected design must validate its issuer/audience, signature
+and rotating keys, nonce/challenge/replay policy and flow-specific PKCE/state,
+then establish a separate API credential/session and current server grants.
+A broker-issued dedicated API access JWT supplies that credential directly,
+without an additional custom BFF token issuer. Firebase/direct ID proofs require
+the separate backend exchange.
+Provider identities use verified `(issuer, sub)`; application account and data
+ownership IDs must remain stable across explicit link/unlink with recent
+reauthentication. Email, including Apple private-relay addresses, is an attribute
+and must never automatically merge accounts. Broker defaults need verification:
+the [Firebase Flutter guide](https://firebase.google.com/docs/auth/flutter/federated-auth)
+documents trusted-provider automatic account changes, while
+[Identity Platform account linking](https://docs.cloud.google.com/identity-platform/docs/link-accounts)
+describes multiple-account configuration and explicit linking.
+Broker SDK/self-service linking must not bypass a recent-authenticated BFF link
+transaction or gain data access through an unchanged broker user ID; trusted
+server-side identity bindings and adversarial direct-SDK tests are required.
+
+The English Issues distinguish local implementation and automated tests from
+real provider/platform acceptance:
+
+- Trust boundary and broker decision: [#26](https://github.com/anaregdesign/cosmos-sync/issues/26).
+- Stable accounts, linking, API sessions and cache policy: [#27](https://github.com/anaregdesign/cosmos-sync/issues/27).
+- Flutter provider adapters and platform matrix: [#28](https://github.com/anaregdesign/cosmos-sync/issues/28).
+- Automated attack/lifecycle regressions: [#29](https://github.com/anaregdesign/cosmos-sync/issues/29).
+- Owner-approved provider setup and actual platform acceptance: [#30](https://github.com/anaregdesign/cosmos-sync/issues/30).
+
+Apple Developer/Google Cloud/broker registrations, signing or server credentials,
+new consent/scopes and paid resources require concrete owner approval before
+changes. External consumer-tenant API consent or client preauthorization may
+need a new scoped administrator approval; the existing workforce-tenant consent
+does not authorize it or any Graph data permission. Current one-account
+verification and unsigned iOS choices remain in
+force. The pure Dart SDK has Chromium cache coverage; the current native Flutter
+app has no Web login target. Cancellation/denial, reinstall/relogin, account
+switch/linking, refresh/revocation and offline-cache isolation need both automated
+coverage and explicitly recorded real-provider evidence on each claimed platform.
 
 ## Register a public client and the API
 

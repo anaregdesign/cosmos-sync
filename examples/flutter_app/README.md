@@ -24,6 +24,16 @@ development team is configured. These are not app-store distribution artifacts.
 The owner's unsigned iOS build choice produces a compilation artifact, not an
 installable physical iPhone application.
 
+Apple and Google are the intended end-user login providers. This version uses
+native OIDC/PKCE and an API-specific access token, with the dedicated Entra path
+used for validation. Apple/Google buttons, stable linked accounts and actual
+provider/platform acceptance are tracked in the [social-login roadmap](../../docs/social-auth.md)
+and [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2).
+They are not implemented support claims. The proposed broker/API-token or
+backend-exchange boundary keeps raw provider ID tokens away from sync routes;
+email matching must never automatically link accounts. Provider registrations,
+credentials and signing changes need the owner's concrete approval.
+
 ## Connect a real account
 
 The owner must first approve/register a public native OIDC client and BFF API,
@@ -38,6 +48,11 @@ The default callback is `com.anaregdesign.cosmossync://auth/oauthredirect`. The 
 callback must be registered with the provider. Its scheme is registered in all
 three native platform projects; changing it requires a corresponding build
 configuration change. The sample has no client-secret or token-input field.
+
+These settings configure the implemented API-token OIDC path. Pasting an Apple
+or Google client ID/issuer into the form does not add social login or make its ID
+token a BFF credential. Use a reviewed provider/broker integration when the
+roadmap implementation and actual acceptance are complete.
 
 `Save and sign in` opens the system browser. The adapter uses the returned access
 token for the BFF; it never substitutes an ID token. The BFF's verified `/session`
