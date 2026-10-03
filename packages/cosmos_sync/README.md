@@ -89,7 +89,7 @@ The owner is immutable; invitations, ownership transfer and account deletion are
 not implemented. Preview policies retain revoked entries and support up to 128
 member identities and 10,000 revisions per shared scope; capacity exhaustion
 requires operator action, never silently reuses a revoked permission generation.
-See the [authorization contract](doc/protocol.md).
+See the [authorization contract](doc/authorization.md).
 
 The shared ID only selects a server-created scope; it grants no permission or
 Cosmos credential. The SDK requires the server session to match that selected ID

@@ -7,7 +7,7 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ("protocol.md", "query.md", "security.md")
+FILES = ("protocol.md", "query.md", "security.md", "authorization.md")
 
 
 def content(name):
@@ -41,7 +41,7 @@ def main():
     if stale:
         print("Refresh package docs with python3 tools/package_docs.py: " + ", ".join(stale), file=sys.stderr)
         return 1
-    print("Package protocol/query/security docs match reviewed source.")
+    print("Package protocol/query/security/authorization docs match reviewed source.")
     return 0
 
 
