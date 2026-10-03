@@ -85,6 +85,8 @@ deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
 | Flutter analysis and full app suite | No issues; 46 tests, including 37 auth lifecycle/native-adapter/secure-store tests |
 | macOS app integration | Actual Go HTTP BFF, disposable signed JWT/JWKS issuer, SQLite, document/conflict/pending UI and an isolated native Keychain key; provider is a test adapter |
 | Android physical SDK fixture | Pixel 9a / Android 17 API 37; actual SQLite and deterministic transport; cache close/reopen within the test process |
+| Normal iOS release build | Unsigned arm64 build passed from core `e7fa4ccb`; no physical install or Apple portal operation |
+| iOS simulator app integration | iPhone 16 Pro / iOS 26.5; actual HTTP BFF, SQLite and isolated Keychain probe; local ad-hoc simulator signing and ephemeral arm64 workaround, test auth adapter |
 | MIT archive | 72 KB strict pub publish dry-run, zero warnings; no upload |
 | Multiarch OCI artifact | Linux amd64/arm64, nonroot runtime, checked provenance/SBOM subjects, MIT and Go/module license notices; local build, no push |
 | Independent review | Auth reentry/purge defects and Azure request/deadline/partial-evidence defects reproduced, fixed and independently rechecked |
@@ -95,3 +97,8 @@ unsigned iOS verification and one-account live tests. Different-user isolation
 remains an important live-provider gap even though independent signed-fixture
 and emulator principal/partition tests pass. Keep actual release/CI links and
 remaining scope in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2).
+The exact unsigned/simulator commands and toolchain workaround are recorded in
+[iOS validation](ios-validation.md). The owner approved the isolated East US
+Cosmos validation target, current developer egress and container-scoped data
+role, then explicitly required retaining the reusable Cosmos/Entra environment.
+That retention instruction supersedes the earlier after-test deletion approval.

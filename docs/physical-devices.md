@@ -53,6 +53,12 @@ The physical iOS gate can proceed only if the owner later explicitly changes
 this decision and supplies the signing/provisioning authorization described
 below. The Android gate is independent of that decision.
 
+The normal unsigned iOS release build passed, and the iOS 26.5 simulator passed
+the real HTTP/SQLite/native Keychain application fixture from core commit
+`e7fa4ccb`. The simulator used only local ad-hoc signing, an empty team and a
+temporary arm64 toolchain workaround; it was deleted afterwards. Reproducible
+commands and the exact evidence limits are in [iOS validation](ios-validation.md).
+
 The following prerequisites apply to any future authorized physical run. The
 Android target/install grant is already supplied; iOS signing and provisioning
 are currently declined:
