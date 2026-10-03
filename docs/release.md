@@ -49,7 +49,7 @@ inputs plus the matching approval variables above. Set `GHCR_RELEASE_VISIBILITY`
 to the owner's approved **final** visibility. Authentication uses the job's temporary
 `GITHUB_TOKEN` with `packages:write`; no user token or registry secret is required.
 
-New GHCR packages start **private**. For an approved public first distribution,
+The preflight treats a missing first package as **private**. For an approved public first distribution,
 the workflow retains the owner-approved final value `public`, discovers the current
 package state (a missing initial package means `private`), verifies that private
 stage and reports `verified_private_stage_public_transition_pending`. It records
@@ -58,6 +58,22 @@ Then explicitly change only this package to public in GitHub's package settings 
 run `verify-ghcr.yml` with visibility `public`. Existing public packages verify
 public directly. The workflow never changes package visibility or treats a private
 stage as completed public distribution.
+
+For the first `0.2.0-dev.1` release, push run
+[37140837379](https://github.com/anaregdesign/cosmos-sync/actions/runs/37140837379)
+created index digest
+`sha256:a23ab75eb4518597aa26e4833787b9b77a07def717868e080944555594adc1b3`.
+Post-push inspection found the package already public, so the expected-private
+stage check failed after publication. Reuse that digest and verify its actual
+public visibility; this failure requires no image rebuild or upload.
+
+Verification also pulls each platform by its child manifest digest from the
+reviewed index. Pulling amd64 and arm64 into a classic daemon image store under
+the same index-digest reference can fail with `cannot overwrite digest` even
+after all layers download. Distinct child references avoid that local collision.
+Evidence retains the original index digest, each selected platform manifest and
+its bound source metadata/provenance/SBOM. Docker context or image-store settings
+do not need to change.
 Repository access inheritance and Actions access must also be inspected; public
 source alone does not make a GHCR package public. [Official GHCR access rules](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 
