@@ -7,6 +7,12 @@ operations. The BFF alone holds Cosmos credentials. This is a finite document AP
 with [Firestore differences](doc/query.md). Essential protocol, query and security
 documentation is included in this package; using it does not require repository access.
 
+Apple and Google are the intended end-user login providers. The SDK accepts a
+dedicated BFF API access token through `tokenProvider`; it does not implement a
+provider login or turn a provider ID token into API authorization. The native
+sample currently validates Entra OIDC/PKCE. Apple/Google adapters and explicit
+account linking remain planned in the [social-login roadmap](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/social-auth.md).
+
 ## Durable local writes
 
 ```dart
@@ -105,7 +111,7 @@ automatic merge, external Cosmos writer ingestion or cloud RU/SLA is promised.
 
 | Declared platform | Measured evidence | Remaining limits |
 | --- | --- | --- |
-| Android | Real SQLite SDK fixture on Android 14/API 34 arm64 emulator and physical Pixel 9a Android 17/API 37 | Physical fixture uses deterministic transport; production sign-in, suspension and cloud app flow remain unverified. |
+| Android | Real SQLite SDK fixture on Android 14/API 34 arm64 emulator and physical Pixel 9a Android 17/API 37; physical app UI also passed actual Go HTTP/offline/conflict/purge | App authentication uses a signed-fixture adapter; real provider sign-in, suspension and Azure app flow remain unverified. |
 | iOS | Flutter app + real SQLite on iOS 26.5 arm64 simulator | Physical device, suspension and production sign-in remain unverified. |
 | macOS | Flutter app + real SQLite on macOS 26.7 arm64 | No x86_64 or minimum-OS support claim. |
 | Web | Chromium IndexedDB/Web Locks, browser reload and actual BFF HTTP/SSE | Other browsers, persistent-storage eviction and mobile-browser behavior are unverified. |

@@ -6,6 +6,16 @@ Native SQLite and Chromium IndexedDB store confirmed documents and a durable out
 
 Development is tracked by [epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). [Verification](docs/verification.md) reports actual results; owner-controlled distribution and live-cloud gates remain explicit.
 
+The product goal is a Firestore-like developer experience for the supported
+document subset: deploy the supplied BFF on Azure Container Apps, configure the
+identity provider and server grants, then connect the Dart SDK for authenticated
+CRUD, watches, durable offline edits, reconnect and explicit conflicts. Application
+developers should not have to implement a synchronization or security gateway.
+The [onboarding guide](docs/developer-onboarding.md) distinguishes Terraform
+resources, operator configuration and remaining acceptance work. Container Apps
+Terraform and its runbook are tracked in [#31](https://github.com/anaregdesign/cosmos-sync/issues/31);
+clean-checkout hosted onboarding is tracked in [#32](https://github.com/anaregdesign/cosmos-sync/issues/32).
+
 **Apple and Google are the intended practical end-user login providers.** The
 current Flutter adapter implements native OIDC/PKCE with a dedicated Entra API
 access-token validation path; Apple/Google login, account linking and provider
@@ -93,4 +103,14 @@ Startup validates an existing container and never provisions one. Mutation/head/
 
 The foundation was merged to main in [PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1); all seven main checks passed. The remaining publication work is tracked in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2), including the usable Flutter app/auth, release artifacts, live Azure and physical devices. The owner approved MIT, public GitHub/GHCR distribution and the first `cosmos_sync` 0.2.0-dev.1 preview. Actual registry publication and final access checks are tracked in [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and [#23](https://github.com/anaregdesign/cosmos-sync/issues/23); a name check or dry run does not reserve or publish a package. Planned image: `ghcr.io/anaregdesign/cosmos-sync-bff`.
 
-Dedicated Entra registration is being prepared for the selected tenant. An isolated Azure account, operating budget and hosting target remain required in [#16](https://github.com/anaregdesign/cosmos-sync/issues/16). No paid Azure resource or hosted deployment has been created. [Physical-device acceptance](docs/physical-devices.md) separates Android runtime evidence from the owner's unsigned iOS build choice: an unsigned iOS build cannot establish physical iPhone execution. Provider/cloud/physical-device checks remain open until their actual acceptance evidence is recorded.
+Dedicated Entra registration and actual macOS browser PKCE, API-token validation,
+secure credential restore, refresh and local sign-out passed. Physical Android
+app integration also passed real HTTP/SQLite with fixture authentication. The
+approved reusable Azure environment currently contains an empty tagged resource
+group; free-tier creation was rejected by the subscription offer and East US
+serverless creation failed because of capacity. Cosmos data operations await
+approval of an alternative region. Reusable Cosmos/Entra resources will be
+retained. Container Apps is the intended hosted target; its Terraform preparation
+does not authorize an actual deployment. [Physical-device acceptance](docs/physical-devices.md)
+records the owner's unsigned iOS build choice: the build and simulator passed,
+while unsigned physical iPhone execution cannot be verified.

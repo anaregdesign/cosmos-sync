@@ -85,14 +85,24 @@ deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
 | Flutter analysis and full app suite | No issues; 46 tests, including 37 auth lifecycle/native-adapter/secure-store tests |
 | macOS app integration | Actual Go HTTP BFF, disposable signed JWT/JWKS issuer, SQLite, document/conflict/pending UI and an isolated native Keychain key; provider is a test adapter |
 | Android physical SDK fixture | Pixel 9a / Android 17 API 37; actual SQLite and deterministic transport; cache close/reopen within the test process |
+| Android physical application | Pixel 9a / Android 17 API 37; actual Go HTTP BFF, SQLite, offline reconnect/conflict/delete/purge UI and isolated native secure storage; signed-fixture auth adapter |
+| Actual Entra native authentication | macOS system-browser AppAuth PKCE, callback, Keychain controller restore, provider refresh and local sign-out passed; both API JWTs independently verified against issuer/JWKS/audience/scope/tenant/approved owner |
 | Normal iOS release build | Unsigned arm64 build passed from core `e7fa4ccb`; no physical install or Apple portal operation |
 | iOS simulator app integration | iPhone 16 Pro / iOS 26.5; actual HTTP BFF, SQLite and isolated Keychain probe; local ad-hoc simulator signing and ephemeral arm64 workaround, test auth adapter |
 | MIT archive | 72 KB strict pub publish dry-run, zero warnings; no upload |
 | Multiarch OCI artifact | Linux amd64/arm64, nonroot runtime, checked provenance/SBOM subjects, MIT and Go/module license notices; local build, no push |
 | Independent review | Auth reentry/purge defects and Azure request/deadline/partial-evidence defects reproduced, fixed and independently rechecked |
 
-These checks do not establish real Entra callback acceptance, live Cosmos data
-operations, physical iPhone runtime or registry distribution. The owner chose
+The Entra check used the approved native client and the owner's one account.
+It verifies a controller restore within the process, not an OS process restart.
+Its local sign-out cleared the isolated credential but does not revoke an
+already-issued API access token. The Android application check ran reviewed
+test-only small-screen interaction changes, subsequently committed in `8500ad2`;
+the production app core was unchanged. Both physical Android fixtures use
+test authentication, independently of the actual macOS provider check.
+
+These checks do not establish live Cosmos data operations, physical iPhone
+runtime, actual Android provider sign-in or registry distribution. The owner chose
 unsigned iOS verification and one-account live tests. Different-user isolation
 remains an important live-provider gap even though independent signed-fixture
 and emulator principal/partition tests pass. Keep actual release/CI links and

@@ -74,8 +74,10 @@ else:
     )
 ```
 
-Run from that isolated snapshot's repository root, capturing output in a private
-log:
+The following is the historical command for that isolated, patched snapshot;
+the current committed runner accepts only macOS and authorized physical Android
+targets. It is not a command to run unchanged against current main. Run from
+the isolated snapshot's repository root, capturing output in a private log:
 
 ```sh
 FLUTTER_BIN=/path/to/flutter \

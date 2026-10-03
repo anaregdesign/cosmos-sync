@@ -26,8 +26,8 @@ iPhone 16 Pro running iOS 26.7.1. Their exact identities were matched locally an
 stored only in ignored `0600` files. The owner authorized test-app installation
 and launch, then chose **unsigned iOS verification**. Consequently, no iOS
 signing, Apple portal updates, profiles, certificate creation or physical iOS
-installation is authorized. Android SDK runtime verification passed on the
-selected phone; iOS physical runtime remains blocked by the operating system's
+installation is authorized. Android SDK and application runtime verification
+passed on the selected phone; iOS physical runtime remains blocked by the operating system's
 development-signing requirement.
 
 ## Current iOS verification choice: unsigned build
@@ -163,6 +163,34 @@ On interruption or timeout, the runner stops its own local tool process group;
 this is not evidence that the device-side app was uninstalled or terminated.
 
 ## Acceptance matrix for the usable application
+
+The selected Pixel 9a passed the ordinary application UI integration on
+2026-10-03 with actual local Go HTTP, SQLite, pending writes, controller
+close/reopen, reconnect ACK, explicit conflicts, tombstones and sign-out purge.
+The isolated native secure-storage probe also passed. Authentication used the
+signed-fixture adapter; this is not an Android Entra/Apple/Google login or Azure
+storage result. Keyboard dismissal and tapping the checkbox tile fixed only the
+integration test's small-screen interaction (`8500ad2`); no production workaround
+was required. Four attempts are retained, including the initial failures, in
+ignored private evidence. The passing marker is:
+
+```text
+COSMOS_SYNC_APP_PASS android realHttp=true realSqlite=true auth=test-adapter nativeSecureStorage=verified
+```
+
+To reproduce after selecting the same authorized physical target:
+
+```sh
+python3 tools/flutter_app_smoke.py --platform android \
+  --device-id-file .cache/devices/android.txt --authorize-install \
+  --output artifacts/physical-app-android-new-run.json
+```
+
+The runner prebuilds before starting the bounded Go fixture, reserves only its
+two ADB reverse mappings, removes those mappings on completion and refuses an
+existing evidence output. It never removes unrelated reverse mappings. This
+test does not change airplane mode or force-kill the device app; close/reopen is
+within one process.
 
 | Scenario | Required observation on each selected physical Android/iOS target |
 | --- | --- |
