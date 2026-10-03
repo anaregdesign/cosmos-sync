@@ -28,3 +28,6 @@ artifacts/
 **/*.pyc
 packages/cosmos_sync/web/*.js
 packages/cosmos_sync/web/*.js.*
+
+!packages/cosmos_sync/bin/
+!packages/cosmos_sync/bin/crash_cache_fixture.dart

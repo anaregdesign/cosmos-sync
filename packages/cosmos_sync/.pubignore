@@ -1,4 +1,5 @@
 tool/
+bin/
 .dart_tool/
 build/
 *.db

@@ -80,7 +80,12 @@ jobs:
           ref: ee80f08bbf97172ec030b8751ceab557177a34a6 # Flutter 3.44.6
           path: .ci/flutter
           persist-credentials: false
+      - name: Restore verified Flutter release metadata
+        run: |
+          git -C .ci/flutter fetch --depth=1 origin refs/tags/3.44.6:refs/tags/3.44.6
+          test "$(git -C .ci/flutter rev-parse '3.44.6^{commit}')" = ee80f08bbf97172ec030b8751ceab557177a34a6
       - run: echo "$GITHUB_WORKSPACE/.ci/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter --version
       - run: flutter config --no-analytics --enable-macos-desktop
       - run: flutter pub get
         working-directory: examples/flutter_smoke

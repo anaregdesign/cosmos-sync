@@ -14,8 +14,11 @@ def main():
         directory = Path(temporary)
         database = directory / 'cache.sqlite'
         ready = directory / 'ready'
-        executable = directory / 'fixture'
-        subprocess.run([dart, 'compile', 'exe', 'tool/crash_cache_fixture.dart', '-o', str(executable)],
+        # Keep the complete native-asset bundle next to the executable. A plain
+        # `dart compile exe` omits sqlite3's code asset on Linux.
+        executable = directory / 'bundle' / 'bin' / 'crash_cache_fixture'
+        subprocess.run([dart, 'build', 'cli', '--target=bin/crash_cache_fixture.dart',
+                        '--output=' + str(directory)],
                        cwd=root / 'packages/cosmos_sync', check=True, timeout=120)
         child = subprocess.Popen([str(executable), 'write', str(database), str(ready)])
         try:
