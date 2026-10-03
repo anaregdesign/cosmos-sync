@@ -427,8 +427,11 @@ def consumer_verify(version):
         }
 
 
-def pub_verify(version):
+def pub_verify(version, sha):
     require(SEMVER.fullmatch(version), "Invalid package version")
+    require(SHA.fullmatch(sha), "Use the full lowercase SHA of the reviewed published source")
+    require(run("git", "rev-parse", "HEAD") == sha, "Checked-out source differs from the published source SHA")
+    require(not run("git", "status", "--porcelain"), "Published source verification requires a clean working tree")
     require(metadata()["version"] == version, "Checked-out package version differs from registry version")
     info = json_url("https://pub.dev/api/packages/cosmos_sync/versions/" + version)
     require(info.get("version") == version and info.get("pubspec", {}).get("name") == "cosmos_sync", "Registry metadata differs from expected package")
@@ -439,7 +442,7 @@ def pub_verify(version):
         raw = response.read(50 * 1024 * 1024 + 1)
     require(len(raw) <= 50 * 1024 * 1024, "Published archive exceeds the reviewed transfer bound")
     evidence = validate_archive(raw, info.get("archive_sha256"))
-    evidence.update({"package": "https://pub.dev/packages/cosmos_sync/versions/" + version, "version": version, "sourceSha": run("git", "rev-parse", "HEAD")})
+    evidence.update({"package": "https://pub.dev/packages/cosmos_sync/versions/" + version, "version": version, "sourceSha": sha})
     evidence["consumer"] = consumer_verify(version)
     return evidence
 
@@ -458,6 +461,7 @@ def main():
     image.add_argument("--visibility", choices=("private", "public"), required=True)
     package = subparsers.add_parser("pub")
     package.add_argument("--version", required=True)
+    package.add_argument("--sha", required=True, help="Full reviewed published source commit SHA; must match the clean checkout")
     for command in (before, image, package):
         command.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -467,7 +471,7 @@ def main():
         elif args.command == "ghcr":
             result = ghcr_verify(args.digest, args.sha, args.version, args.visibility)
         else:
-            result = pub_verify(args.version)
+            result = pub_verify(args.version, args.sha)
         formatted = json.dumps(result, indent=2) + "\n"
         if args.output:
             args.output.write_text(formatted)

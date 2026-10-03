@@ -144,10 +144,13 @@ After upload, from the unchanged approved source run:
 
 ```sh
 python3 tools/release_verify.py pub --version 0.2.0-dev.1 \
+  --sha <approved-40-hex-sha> \
   --output /tmp/cosmos-sync-pub-release.json
 ```
 
-This downloads the public version archive, verifies the registry SHA256 when supplied,
+The verifier requires a clean checkout matching the explicit reviewed source SHA
+before any registry reads. Historical releases can be verified from their original
+commit even after main advances. It downloads the public version archive, verifies the registry SHA256 when supplied,
 and compares all library files, essential package docs and every archive file with
 the reviewed source. It rejects extra library files, development assets, links and unsafe paths.
 Record the package/version URL, ownership-verification result and archive hash on

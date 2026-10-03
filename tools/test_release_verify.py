@@ -21,6 +21,34 @@ VERSION = "0.2.0-dev.1"
 
 
 class ReleaseGuardsTest(unittest.TestCase):
+    def test_pub_verification_rejects_dirty_or_mismatched_source_before_registry_reads(self):
+        candidates = (
+            ("invalid-sha", []),
+            (SHA, ["b" * 40]),
+            (SHA, [SHA, " M packages/cosmos_sync/lib/cosmos_sync.dart"]),
+        )
+        for approved, outputs in candidates:
+            with self.subTest(approved=approved, outputs=outputs):
+                with patch.object(release, "run", side_effect=outputs), patch.object(release, "json_url") as metadata_read, patch.object(release, "safe_open") as archive_read, patch.object(release, "consumer_verify") as consumer:
+                    with self.assertRaises(release.ReleaseError):
+                        release.pub_verify(VERSION, approved)
+                    metadata_read.assert_not_called()
+                    archive_read.assert_not_called()
+                    consumer.assert_not_called()
+
+    def test_pub_verification_accepts_exact_clean_historical_source_without_main_lookup(self):
+        registry = {
+            "version": VERSION,
+            "pubspec": {"name": "cosmos_sync"},
+            "archive_url": "https://pub.dev/api/archives/cosmos_sync-" + VERSION + ".tar.gz",
+        }
+        with patch.object(release, "run", side_effect=[SHA, ""]) as commands, patch.object(release, "metadata", return_value={"version": VERSION}), patch.object(release, "json_url", return_value=registry), patch.object(release, "safe_open", return_value=io.BytesIO(b"archive")), patch.object(release, "validate_archive", return_value={"archiveSha256": "verified"}), patch.object(release, "consumer_verify", return_value={"liveCloudVerified": False}), patch.object(release, "gh", side_effect=AssertionError("Historical verification must not require current main")):
+            evidence = release.pub_verify(VERSION, SHA)
+            self.assertEqual(evidence["sourceSha"], SHA)
+            self.assertEqual(evidence["version"], VERSION)
+            self.assertEqual(commands.call_args_list[0].args, ("git", "rev-parse", "HEAD"))
+            self.assertEqual(commands.call_args_list[1].args, ("git", "status", "--porcelain"))
+
     def test_installed_consumer_requires_isolated_hosted_version_and_source_bytes(self):
         with tempfile.TemporaryDirectory(prefix="cosmos-sync-consumer ") as directory:
             cache = Path(directory) / ".pub-cache"
