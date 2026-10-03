@@ -1,0 +1,36 @@
+{
+  "displayName": "Cosmos Sync BFF API (validation)",
+  "description": "Dedicated Cosmos Sync BFF validation API. Document access is enforced by server-managed tenant/user grants.",
+  "signInAudience": "AzureADMyOrg",
+  "identifierUris": [],
+  "api": {
+    "requestedAccessTokenVersion": 2,
+    "oauth2PermissionScopes": [
+      {
+        "id": "<NEW_COSMOS_SYNC_SCOPE_UUID>",
+        "value": "Cosmos.Sync",
+        "type": "User",
+        "isEnabled": true,
+        "adminConsentDisplayName": "Access authorized Cosmos Sync documents",
+        "adminConsentDescription": "Allow the native app to read and write only Cosmos Sync documents authorized by the BFF for the signed-in user.",
+        "userConsentDisplayName": "Access your authorized Cosmos Sync documents",
+        "userConsentDescription": "Allow the native app to read and write only Cosmos Sync documents that the BFF permits you to access."
+      }
+    ],
+    "preAuthorizedApplications": [],
+    "knownClientApplications": []
+  },
+  "appRoles": [],
+  "requiredResourceAccess": [],
+  "passwordCredentials": [],
+  "keyCredentials": [],
+  "publicClient": { "redirectUris": [] },
+  "spa": { "redirectUris": [] },
+  "web": {
+    "redirectUris": [],
+    "implicitGrantSettings": {
+      "enableAccessTokenIssuance": false,
+      "enableIdTokenIssuance": false
+    }
+  }
+}

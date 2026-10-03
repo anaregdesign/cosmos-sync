@@ -1,0 +1,28 @@
+{
+  "displayName": "Cosmos Sync Native (validation)",
+  "description": "Dedicated AppAuth native public client for Cosmos Sync validation; Authorization Code with PKCE and no client secret.",
+  "signInAudience": "AzureADMyOrg",
+  "isFallbackPublicClient": false,
+  "publicClient": {
+    "redirectUris": ["com.anaregdesign.cosmossync:/oauthredirect"]
+  },
+  "requiredResourceAccess": [
+    {
+      "resourceAppId": "<BFF_API_APP_ID>",
+      "resourceAccess": [
+        { "id": "<NEW_COSMOS_SYNC_SCOPE_UUID>", "type": "Scope" }
+      ]
+    }
+  ],
+  "appRoles": [],
+  "passwordCredentials": [],
+  "keyCredentials": [],
+  "spa": { "redirectUris": [] },
+  "web": {
+    "redirectUris": [],
+    "implicitGrantSettings": {
+      "enableAccessTokenIssuance": false,
+      "enableIdTokenIssuance": false
+    }
+  }
+}
