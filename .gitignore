@@ -23,3 +23,8 @@ TestResults/
 artifacts/
 
 .issue-drafts/
+
+**/__pycache__/
+**/*.pyc
+packages/cosmos_sync/web/*.js
+packages/cosmos_sync/web/*.js.*

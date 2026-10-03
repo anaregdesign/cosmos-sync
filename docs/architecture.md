@@ -1,49 +1,41 @@
 # Architecture and supported scope
 
-Cosmos Sync is an early Go BFF and native Dart offline SDK for Azure Cosmos DB for NoSQL. It offers a small document-sync protocol; it does not claim Firestore API/behavior compatibility.
+Cosmos Sync v0.2 is an unpublished Go BFF and Dart/Flutter offline SDK for Cosmos DB for NoSQL. It provides a finite document protocol and cache query model inspired by Firestore, with explicit differences. The [product contract](spec/product-completion.md) defines the bounded completion target; [verification](verification.md) records actual evidence.
 
-## Trust and storage
+## Server boundary
 
-Apps hold OIDC access tokens for the BFF. The BFF validates signing keys, issuer, audience and time validity and then checks its current server-managed tenant/subject grants. The issuer, tenant and subject derive a stable scope/partition hash. A separate permissionVersion invalidates cached authorization context and cursors when grants change without moving stored documents. Clients cannot select a Cosmos partition or execute arbitrary Cosmos queries. User scopes are isolated; shared tenant data and per-document ACLs are future work.
+OIDC access JWT verification precedes current server grants. User and optional shared tenant modes derive a single logical partition; a separate principal identifies the caller. Each request asserts the verified principal/scope/mode/permission version, protecting against token-provider switches even between members sharing one partition. Shared scopes have whole-scope read/write roles, without per-document ACLs. Grants are read from the server file per request and must be atomically distributed to replicas.
 
-The Go adapter uses the official `azcosmos` SDK. A mutation reads a scope's metadata and current document, verifies the requested base version, then atomically writes metadata sequence, document, immutable journal event and idempotency receipt in one logical partition. An ETag condition on metadata serializes concurrent commits. Batch success and individual operation status must both be checked. A receipt binds operationId to its canonical request hash, so an acknowledged retry returns the same document and a different payload is rejected. Grants are rechecked before receipt lookup.
+The official Go `azcosmos` adapter uses ETag-conditional transactional batches to write head, document, immutable journal and principal-bound receipt atomically. Both batch and individual-operation results are checked. A head serializes writes within a partition; it creates contention for large shared scopes. Signed consistency envelopes propagate Cosmos session metadata across BFFs. Account policy rejects multi-write, missing metadata and weaker-than-Session consistency. Production requires one write region and a `/scopeId` container with TTL disabled.
 
-Clients never receive Cosmos keys, managed-identity access tokens or resource tokens. A signed `X-Cosmos-Sync-Session` envelope carries only consistency metadata to let another BFF replica request the same Cosmos session. It is scoped, integrity protected and purpose separated from sync cursors. Cosmos SDK verification against a real account/emulator is still required before production assurance.
+## Client state
 
-## Offline state machine
+A CacheStore provides loaded synchronous reads and asynchronous atomic durable mutations. Native SQLite and browser IndexedDB preserve confirmed documents, exact outbox requests/dependencies, retry state, verified identity, sync/snapshot cursors and coverage. An awaited put/delete means local acceptance. A server ACK is separate. Watches include pending/conflict/coverage changes, and local queries scan the cached authorized scope with deterministic JSON ordering and scope-bound page cursors. See [query semantics](query.md).
 
-The native SQLite cache stores confirmed server documents separately from pending local operations. A local edit is durably committed before it is exposed as pending. Reads overlay the latest pending edit on the confirmed base. The first pending edit records the confirmed version observed at enqueue; a later edit may depend on the preceding local ACK. Receiving newer server data cannot silently rebase an existing local edit. Synchronization sends mutations serially and durably locks any resolved dependency version before first send; retries retain the same operationId and payload. A late ACK updates the confirmed base and removes only its own operation, preserving later edits.
+A first edit preserves its observed version. A following edit may depend on an actual predecessor ACK. Pulls never silently rebase edits; late ACKs preserve newer overlays and confirmed versions. Unknown outcomes replay the exact operation ID and payload. Explicit conflict retry/discard is required. Authorization failure or session mismatch purges and pauses; sign-out serializes with in-flight work. Offline caches cannot detect remote revocation.
 
-A 409 version conflict stops writes for that document and exposes the current server version for explicit resolution. Discard removes the conflicting edit; retry creates a fresh operationId against the selected server version. There is no implicit last-write-wins. Network, 429 and transient server failures retain pending data for a later attempt. Retry scheduling must honor backoff/Retry-After without a busy loop.
+Native cache ownership uses file/isolate guards. Browser IndexedDB uses one lifetime Web Lock per database identity, commits mirrors only on transaction completion, and fails closed if persistent storage/locking is unavailable. Browser eviction, backups and platform storage are app/OS boundaries; logical purge is not secure erase.
 
-Before any queued data is sent, `/session` must match the SDK's expected scope and permissionVersion. Each mutation/sync also asserts that expected scope/permission in headers and the BFF compares them with its derived identity before routing or writing, closing a token-provider account switch between requests. A mismatch or 401/403 purges the cache/outbox and pauses the client under the conservative v0 policy. Applications should clear/close the old client at logout and isolate cache paths per account. Revocation cannot be known while disconnected; physical disk remanence/encryption and client compromise are outside this prototype's guarantees. Do not put secrets in document data.
+## Synchronization and capacity
 
-## Sync, deletion and ordering
+Retained journal replay supplies contiguous per-scope order and tombstones. An optional bounded snapshot folds immutable events through a fixed head H, pages deterministically and adopts a data cursor at H only after local completion; writes during bootstrap remain available after H. Each snapshot page costs O(history). Interrupted bootstrap persists progress without claiming full coverage. Generation rotation triggers safe resnapshot, retaining pending identities.
 
-Initial sync replays the retained immutable journal from sequence zero. Incremental sync resumes an opaque HMAC cursor bound to protocol generation, scope and permissionVersion. Applying a received page and its cursor is one local SQLite transaction; process failure before commit repeats the page safely. Document versions never move backward. Concurrent bootstrap writes stay in the journal and appear on a subsequent page or poll; no SQL-snapshot/change-feed cutover race is introduced.
+SSE carries hints, with periodic authorization checks and bounded connections. It never supplies durable data or replaces polling. Foreground/reconnect synchronization resumes the saved data cursor. OS background delivery is not guaranteed. Cosmos Change Feed is not the client protocol and does not repair external writers.
 
-Each committed user-partition mutation increments a sequence. No cross-user/global ordering or cross-partition atomicity is offered. Deletes append tombstones rather than physically deleting items. Delete/recreate requires the tombstone's version as the base. The v0 journal, tombstones and receipts have no TTL and grow over time. This trades RU/storage cost for restart/replay safety. Compaction, restore, retention and generation rollover require an explicit expired-cursor resync protocol and are future work. Client timestamps and Cosmos `_ts` are not resume cursors.
+History, receipts and tombstones have no TTL or GC. Conservative per-scope event/estimated-byte caps reject new writes while keeping accepted receipts replayable. Snapshot replay bounds, payload/page limits, request/stream concurrency and principal rate buckets bound runtime resources. [Performance](performance.md) explains measured local costs; no emulator result is a cloud RU or availability guarantee.
 
-Change notification in v0 is a periodic SDK poll of the authorized durable sync endpoint. It finds server changes while running and connected, without a websocket/SSE delivery guarantee. Device restart/reconnection resumes from the persisted cursor. Cosmos Change Feed is not the client protocol; future feed-driven fanout must preserve retained tombstones and per-partition constraints described in [research](research.md).
+## Feature boundary
 
-## Feature boundaries
-
-| Area | First slice | Follow-up/limit |
+| Area | Delivered preview contract | Remaining boundary |
 | --- | --- | --- |
-| Flutter use | Pure Dart API with native SQLite IO adapter | Web IndexedDB/WASM adapter and measured mobile/platform matrix |
-| Offline reads/writes | Local cached documents, pending overlay, durable outbox | Data never downloaded is unavailable offline |
-| Queries | Local document collection/read API | No Firestore query AST, collection groups, server query planner or completeness claim |
-| Conflict handling | Explicit version conflict + retry/discard | No automatic merge or implicit LWW |
-| Transactions | Server mutation atomic inside one user partition | No offline transaction or multi-document client transaction API |
-| Sync | Initial journal replay, incremental/resume, tombstones | Efficient snapshot/compaction and retention window |
-| Notifications | Periodic sync polling | Durable external fanout, push/background OS execution |
-| Authorization | OIDC access JWT + current server scope grants | External grant store, shared data, document ACLs |
-| Cache security | Identity isolation and conservative purge | OS secure storage/database encryption; purge is not secure erase |
-| Production | Adapter and failure/concurrency tests | Live Cosmos, load/RU/recovery tests and deployment approval |
+| Cache | Native SQLite; Chromium IndexedDB/Web Locks | Browser eviction and unverified browsers/platforms |
+| Documents | Durable offline put/delete, pending/ACK waits, watches | No field transforms or Firestore typed values |
+| Queries | Finite local AST, metadata, deterministic pages/watches | Full-scope network sync; no server SQL/index planner |
+| Conflicts | Explicit version conflict and retry/discard | No automatic merge/LWW/CRDT |
+| Transactions | Atomic single-document server mutation in one scope | No offline or cross-partition transaction API |
+| Sync | Journal, bounded snapshot, durable resume, tombstones | No unsafe compaction; bounded retained operations |
+| Notifications | Authenticated SSE hints with polling recovery | No guaranteed push/background execution |
+| Authorization | OIDC and current user/shared-tenant grants | Production identity/grant administration remains owner configured |
+| Operations | Local/fault/emulator/platform tests and preparation | Approved live Azure RU/replica/backup/deployment gate |
 
-## Roadmap
-
-1. Validate live Cosmos SDK behavior, session consistency across replicas, native platform distribution and crash/recovery tests in an approved emulator/account.
-2. Extend retry/background scheduling policies, snapshot/retention generation protocol, encrypted/platform cache options and operational metrics.
-3. Add explicit shared-scope ACLs and a narrow tested query model before any Firestore-like query claims.
-4. Add feed-driven notification fanout, sustained load tests and supported release/version policy.
+License, source visibility, publisher ownership and actual distribution remain owner decisions tracked in issues #14–16. No paid Azure resource, publication, merge or deployment is performed by this preview work.

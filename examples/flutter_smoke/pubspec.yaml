@@ -1,0 +1,20 @@
+name: cosmos_sync_flutter_smoke
+description: Native Flutter integration fixture for Cosmos Sync durable offline behavior.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.12.0
+dependencies:
+  flutter:
+    sdk: flutter
+  cosmos_sync:
+    path: ../../packages/cosmos_sync
+  path_provider: ^2.1.5
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true

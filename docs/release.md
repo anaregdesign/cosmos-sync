@@ -14,6 +14,14 @@ First publication is public and effectively permanent. Approve license, source v
 
 ## Azure and operations
 
-Choose tenant/identity provider and audience, server grant source and revocation process, hosting location, Cosmos account/database/container and RU/backup budget. Provisioning is deferred. Use managed identity/data-plane RBAC, a preexisting NoSQL container partitioned by `/scopeId`, no default TTL for this retained-journal prototype and one write region. Share cursor/session signing keys between replicas through an approved secret manager. Load-test partition size, hot-user throughput, history growth, retry rates and restore/recovery before production. Emulator/live Cosmos verification remains a release gate when no authorized account is available.
+Choose tenant/identity provider and audience, server grant source and revocation process, hosting location, Cosmos account/database/container and RU/backup budget. Provisioning is deferred. Use managed identity/data-plane RBAC, a preexisting NoSQL container partitioned by `/scopeId`, no default TTL for this retained-journal prototype and one write region. Share cursor/session signing keys between replicas through an approved secret manager. Load-test partition size, hot-user throughput, history growth, retry rates and restore/recovery before production. Official emulator storage/security integration now has a reproducible local/CI gate; its Eventual metadata is rejected by production policy. Live Azure replica/RU/backup/deployment verification remains issue #16 until an isolated environment is explicitly selected and authorized.
 
 Sources and current platform constraints: [research](research.md).
+
+## Remaining tracked owner gates
+
+- [#14](https://github.com/anaregdesign/cosmos-sync/issues/14): license, source visibility, pub.dev owner/publisher and initial-public-release approval.
+- [#15](https://github.com/anaregdesign/cosmos-sync/issues/15): private GHCR namespace check/access, workflow protection and authorized first distribution.
+- [#16](https://github.com/anaregdesign/cosmos-sync/issues/16): isolated Azure environment, budget/hosting, live operations and deployment approval. Existing corporate subscriptions are not assumed authorized for this work.
+
+Code/issue/PR work can finish independently. These gates remain open, and no autonomous merge or publication occurs.

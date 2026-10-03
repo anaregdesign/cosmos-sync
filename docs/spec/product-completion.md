@@ -213,7 +213,7 @@ Notification transport is authenticated and authorized for the selected scope.
 Hints expose no document body or membership information for another scope. A hint
 never advances the saved synchronization cursor by itself. The client applies
 ordered journal pages, tombstones and the returned cursor/envelope in one local
-transaction, validating contiguous sequence coverage before advancement.
+transaction. The trusted BFF validates contiguous journal sequence coverage before returning a page; the SDK validates protocol shape and monotonic document versions before its atomic cursor commit. Opaque cursors do not let the SDK independently prove a server history range.
 
 Disconnect/reconnect, duplicated hints and a changed BFF instance must all resume
 from durable state. Periodic polling supplies correctness when notifications are

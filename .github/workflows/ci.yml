@@ -42,6 +42,52 @@ jobs:
       - name: Publication readiness (dry run only; license decision remains pending)
         continue-on-error: true
         run: dart pub publish --dry-run
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/cosmos_sync
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1
+        with:
+          sdk: stable
+      - run: dart pub get
+      - run: dart test --platform chrome test/browser test/cache_conformance_test.dart test/client_capabilities_test.dart test/src/models_test.dart test/src/query_test.dart test/src/http_transport_test.dart
+      - run: python3 tools/browser_benchmark.py --documents=50
+        working-directory: .
+        env:
+          CHROME_EXECUTABLE: /usr/bin/google-chrome
+  cosmos-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: bff/go.mod
+          cache-dependency-path: bff/go.sum
+      - run: bash tools/emulator.sh test
+  flutter-macos:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: flutter/flutter
+          ref: ee80f08bbf97172ec030b8751ceab557177a34a6 # Flutter 3.44.6
+          path: .ci/flutter
+          persist-credentials: false
+      - run: echo "$GITHUB_WORKSPACE/.ci/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter config --no-analytics --enable-macos-desktop
+      - run: flutter pub get
+        working-directory: examples/flutter_smoke
+      - run: flutter analyze --fatal-infos
+        working-directory: examples/flutter_smoke
+      - run: flutter test integration_test/offline_sync_test.dart -d macos
+        working-directory: examples/flutter_smoke
   container:
     runs-on: ubuntu-latest
     steps:
@@ -67,3 +113,9 @@ jobs:
       - run: dart pub get
         working-directory: packages/cosmos_sync
       - run: python3 tools/cross_stack_smoke.py
+      - run: python3 tools/cache_crash_smoke.py
+      - run: python3 tools/browser_cross_stack_smoke.py
+        env:
+          CHROME_EXECUTABLE: /usr/bin/google-chrome
+      - run: dart run tool/benchmark.dart --documents=1000 --query-repetitions=1
+        working-directory: packages/cosmos_sync
