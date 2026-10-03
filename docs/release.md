@@ -4,7 +4,7 @@ No package has been published. The GitHub repository remains private. No public 
 
 ## GitHub Packages / GHCR
 
-Target: `ghcr.io/anaregdesign/cosmos-sync-bff`. Current CLI OAuth scopes permit repo operations but do not include `read:packages`. Listing organization containers returned HTTP 403, so existing private-name conflicts are unverified. Do not create a token or broaden OAuth scopes merely to check this. An administrator can inspect the organization's Packages UI, or explicitly authorize a narrow read permission later. If occupied by an unrelated package, use `cosmos-sync-gateway` (image) and retain the repo/Dart names, or consistently use repo `cosmos-offline`, Dart `cosmos_offline`, image `cosmos-offline-bff` after checking availability.
+Target: `ghcr.io/anaregdesign/cosmos-sync-bff`. On 2026-10-03, the existing signed-in administrator's [organization Packages UI](https://github.com/orgs/anaregdesign/packages) listed 11 packages with Type All and Visibility All; searching `cosmos-sync-bff` returned zero matches. No existing name collision was observed, and no token or OAuth permission was added. The CLI still lacks `read:packages` and its listing returned HTTP 403. Recheck immediately before publication: this observation does not reserve the name or verify future image access. If it becomes occupied by an unrelated package, use `cosmos-sync-gateway` (image) and retain the repo/Dart names, or consistently use repo `cosmos-offline`, Dart `cosmos_offline`, image `cosmos-offline-bff` after checking availability.
 
 CI builds an image without pushing. `publish-ghcr.yml` is manual and also requires repo variable `GHCR_PUBLISH_ENABLED=true`, main branch and an explicit confirmation input. The variable is not set. Before enabling, review CI, inspect package conflicts/inherited access, approve first publication and retain private visibility. Publishing uses the ephemeral `GITHUB_TOKEN` with job-only `packages:write`, not a new user token. Do not assume a required-reviewer environment gate is supported by the organization's plan. Add one only after verifying plan support. Container releases use immutable source SHA tags; deployment is a separate decision.
 
@@ -21,7 +21,7 @@ Sources and current platform constraints: [research](research.md).
 ## Remaining tracked owner gates
 
 - [#14](https://github.com/anaregdesign/cosmos-sync/issues/14): license, source visibility, pub.dev owner/publisher and initial-public-release approval.
-- [#15](https://github.com/anaregdesign/cosmos-sync/issues/15): private GHCR namespace check/access, workflow protection and authorized first distribution.
+- [#15](https://github.com/anaregdesign/cosmos-sync/issues/15): GHCR access/protection and authorized first distribution; namespace lookup passed, but private image pull/access requires an approved publication to verify.
 - [#16](https://github.com/anaregdesign/cosmos-sync/issues/16): isolated Azure environment, budget/hosting, live operations and deployment approval. Existing corporate subscriptions are not assumed authorized for this work.
 
 Code/issue/PR work can finish independently. These gates remain open, and no autonomous merge or publication occurs.
