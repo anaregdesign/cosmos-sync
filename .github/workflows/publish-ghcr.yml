@@ -1,32 +1,120 @@
-name: Publish private BFF container (disabled by default)
+name: Publish and verify staged BFF container
 on:
   workflow_dispatch:
     inputs:
+      source_sha:
+        description: 'Full approved main commit SHA with a successful Verify run'
+        required: true
+        type: string
+      version:
+        description: 'Approved SDK/BFF version, matching pubspec.yaml'
+        required: true
+        type: string
       confirm:
-        description: 'After release approval, type publish-private-container'
+        description: 'Type publish-approved-container after owner approval'
         required: true
         type: string
 permissions:
   contents: read
+concurrency:
+  group: publish-ghcr
+  cancel-in-progress: false
 jobs:
   publish:
-    if: vars.GHCR_PUBLISH_ENABLED == 'true' && github.ref == 'refs/heads/main' && inputs.confirm == 'publish-private-container'
+    if: vars.GHCR_PUBLISH_ENABLED == 'true' && github.ref == 'refs/heads/main' && inputs.confirm == 'publish-approved-container'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
+      actions: read
       packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_APPROVED_SHA: ${{ vars.RELEASE_APPROVED_SHA }}
+      RELEASE_APPROVED_VERSION: ${{ vars.RELEASE_APPROVED_VERSION }}
+      RELEASE_LICENSE_SPDX: ${{ vars.RELEASE_LICENSE_SPDX }}
+      GHCR_PUBLISH_ENABLED: ${{ vars.GHCR_PUBLISH_ENABLED }}
+      GHCR_RELEASE_VISIBILITY: ${{ vars.GHCR_RELEASE_VISIBILITY }}
+      RELEASE_SHA: ${{ inputs.source_sha }}
+      RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Verify approved source, version, license and completed main CI
+        id: preflight
+        run: |
+          mkdir -p artifacts
+          python3 tools/release_verify.py preflight --target ghcr --sha "$RELEASE_SHA" --version "$RELEASE_VERSION" --output artifacts/release-source.json
+          python3 <<'PY'
+          import json
+          import os
+          stage = json.load(open("artifacts/release-source.json"))["distribution"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("verification_visibility=" + stage["verificationVisibility"] + "\n")
+          PY
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - name: Publish source-addressed multi-platform image
+        id: image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: bff
           file: bff/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/anaregdesign/cosmos-sync-bff:sha-${{ github.sha }}
-          labels: org.opencontainers.image.source=https://github.com/anaregdesign/cosmos-sync
+          provenance: mode=min
+          sbom: true
+          tags: ghcr.io/anaregdesign/cosmos-sync-bff:sha-${{ inputs.source_sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/anaregdesign/cosmos-sync
+            org.opencontainers.image.revision=${{ inputs.source_sha }}
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.licenses=${{ vars.RELEASE_LICENSE_SPDX }}
+            org.opencontainers.image.description=OIDC authorization BFF for Cosmos DB for NoSQL offline document sync
+      - name: Retain published digest before access verification
+        env:
+          RELEASE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          image = "ghcr.io/anaregdesign/cosmos-sync-bff@" + os.environ["RELEASE_DIGEST"]
+          stage = json.load(open("artifacts/release-source.json"))["distribution"]
+          record = dict(stage, image=image, sourceSha=os.environ["RELEASE_SHA"], version=os.environ["RELEASE_VERSION"], status="pushed_verification_pending")
+          with open("artifacts/ghcr-published.json", "w") as evidence:
+              json.dump(record, evidence, indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("Published digest: `" + image + "`\n\nApproved final visibility: " + stage["approvedFinalVisibility"] + "\n")
+          PY
+      - name: Verify digest, both authenticated pulls, metadata, attestations and visibility
+        env:
+          RELEASE_DIGEST: ${{ steps.image.outputs.digest }}
+          VERIFICATION_VISIBILITY: ${{ steps.preflight.outputs.verification_visibility }}
+        run: |
+          python3 tools/release_verify.py ghcr --digest "$RELEASE_DIGEST" --sha "$RELEASE_SHA" --version "$RELEASE_VERSION" --visibility "$VERIFICATION_VISIBILITY" --output artifacts/ghcr-release.json
+          python3 <<'PY'
+          import json
+          import os
+          result = json.load(open("artifacts/ghcr-release.json"))
+          stage = json.load(open("artifacts/release-source.json"))["distribution"]
+          result.update(stage)
+          result["status"] = "verified_private_stage_public_transition_pending" if stage["visibilityTransitionRequired"] else "distribution_verified"
+          with open("artifacts/ghcr-release.json", "w") as evidence:
+              json.dump(result, evidence, indent=2)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("Verified container: `" + result["image"] + "`\n\nVisibility: " + result["visibility"] + "\n")
+              if stage["visibilityTransitionRequired"]:
+                  summary.write("\nOwner approved public distribution. Private-stage proof is complete; explicit package visibility change and verify-ghcr.yml(public) remain required.\n")
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ghcr-release-${{ github.run_id }}
+          path: artifacts/*.json
+          if-no-files-found: ignore
+          retention-days: 30

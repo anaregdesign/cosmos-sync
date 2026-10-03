@@ -18,9 +18,7 @@ dev_dependencies:
 platforms:
   android:
   ios:
-  linux:
   macos:
-  windows:
   web:
 topics:
   - offline

@@ -4,7 +4,8 @@ Dart/Flutter offline documents through an OIDC BFF for Cosmos DB for NoSQL.
 **Unpublished v0.2 preview; public licensing remains undecided.** Native SQLite and
 Chromium IndexedDB preserve confirmed data, pending overlays and exact durable
 operations. The BFF alone holds Cosmos credentials. This is a finite document API,
-with [Firestore differences](../../docs/query.md).
+with [Firestore differences](doc/query.md). Essential protocol, query and security
+documentation is included in this package; using it does not require repository access.
 
 ## Durable local writes
 
@@ -51,7 +52,7 @@ final subscription = client.watchQuery(query).listen((page) {
 Queries scan local views, including pending overlays, with a finite immutable AST,
 AND filters, explicit field segments, deterministic JSON order and ID tie-breaker.
 Query cursors bind scope and definition, and differ from server sync cursors.
-[Complete semantics](../../docs/query.md) cover null/missing/type boundaries,
+[Complete semantics](doc/query.md) cover null/missing/type boundaries,
 pagination under edits and unsupported operators. Local filtering does not reduce
 full-scope network/RU costs. Completed bootstrap establishes coverage through a
 committed cursor; offline results still cannot promise current freshness/access.
@@ -96,10 +97,29 @@ unverified until measured. Native SQLite is plaintext; logical purge cannot eras
 backups/WAL/snapshots forensically. Larger native caches should use a dedicated
 isolate; queries scan and sort rather than use a server planner.
 
-[Platform evidence](../../docs/platforms.md), [performance](../../docs/performance.md),
-[wire protocol](../../docs/protocol.md) and [security](../../docs/security.md) describe
-actual support. No Firestore compatibility, global order/cross-partition transaction,
+[Wire protocol](doc/protocol.md), [queries](doc/query.md) and
+[security](doc/security.md) describe actual support. No Firestore compatibility, global order/cross-partition transaction,
 automatic merge, external Cosmos writer ingestion or cloud RU/SLA is promised.
+
+## Preview platform support
+
+| Declared platform | Measured evidence | Remaining limits |
+| --- | --- | --- |
+| Android | Flutter app + real SQLite on Android 14/API 34 arm64 emulator | Physical device, suspension and production sign-in remain unverified. |
+| iOS | Flutter app + real SQLite on iOS 26.5 arm64 simulator | Physical device, suspension and production sign-in remain unverified. |
+| macOS | Flutter app + real SQLite on macOS 26.7 arm64 | No x86_64 or minimum-OS support claim. |
+| Web | Chromium IndexedDB/Web Locks, browser reload and actual BFF HTTP/SSE | Other browsers, persistent-storage eviction and mobile-browser behavior are unverified. |
+
+Linux and Windows are not declared supported Flutter targets until app runtime
+validation is completed. Linux CI verifies native Dart/SQLite contracts; this does
+not establish Windows or Linux Flutter app support. Dart 3.12+ is required. Tested
+Flutter 3.44.6 uses SQLite 3.5.x without dependency overrides. There is no continuous
+background-sync guarantee or automatic secure-storage/encryption integration.
+
+Local queries scan and sort the complete cache. At 10,000 documents, a measured
+native SQLite query averaged about 132 ms on one Apple Silicon host; this is a
+development benchmark, not a target-device latency guarantee. Measure on intended
+devices and coordinate a dedicated isolate for large native caches.
 
 ## Development and release preparation
 
@@ -120,4 +140,6 @@ The browser reload probe in `web/cache_reload_probe.dart` verifies exact outbox
 identities, observed bases, overlays, scope, cursor and consistency envelope after
 a full page reload. Publication
 needs owner-approved license/source/publisher/version and registry access; no command
-here publishes or creates Azure resources. See [release gates](../../docs/release.md).
+here publishes or creates Azure resources. The optional
+[source release record](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/release.md)
+requires repository access while the source remains private.

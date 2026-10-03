@@ -1,0 +1,58 @@
+name: Verify published BFF container
+on:
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: 'Published image index digest, sha256:...'
+        required: true
+        type: string
+      source_sha:
+        description: 'Full source SHA recorded in the release'
+        required: true
+        type: string
+      version:
+        description: 'Version recorded in the release'
+        required: true
+        type: string
+      visibility:
+        description: 'Expected approved package visibility'
+        required: true
+        type: choice
+        options: [private, public]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_DIGEST: ${{ inputs.digest }}
+      RELEASE_SHA: ${{ inputs.source_sha }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_VISIBILITY: ${{ inputs.visibility }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify both pulls, attestations and anonymous visibility
+        run: |
+          mkdir -p artifacts
+          python3 tools/release_verify.py ghcr --digest "$RELEASE_DIGEST" --sha "$RELEASE_SHA" --version "$RELEASE_VERSION" --visibility "$RELEASE_VISIBILITY" --output artifacts/ghcr-verification.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ghcr-verification-${{ github.run_id }}
+          path: artifacts/ghcr-verification.json
+          if-no-files-found: ignore
+          retention-days: 30
