@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import 'models.dart';
+import 'authorization.dart';
 
 /// HTTP wire transport. Durable retries belong to the offline client.
 ///
@@ -18,6 +19,7 @@ class HttpSyncTransport
     implements
         SyncTransport,
         ConsistencyTokenTransport,
+        ScopeSelectionTransport,
         SnapshotTransport,
         ChangeHintTransport {
   HttpSyncTransport({
@@ -26,6 +28,7 @@ class HttpSyncTransport
     http.Client? client,
     this.requestTimeout = const Duration(seconds: 30),
     this.scopeMode = SyncScopeMode.user,
+    this.sharedScopeId,
     bool allowInsecureLocalhost = false,
   }) : _client = client ?? http.Client() {
     final loopback = {'localhost', '127.0.0.1', '::1'};
@@ -47,6 +50,14 @@ class HttpSyncTransport
         'Must be positive.',
       );
     }
+    if (scopeMode == SyncScopeMode.shared) {
+      if (sharedScopeId == null) {
+        throw ArgumentError('A shared scope requires its BFF-issued scope ID.');
+      }
+      validateAuthorizationId(sharedScopeId!, 'sharedScopeId');
+    } else if (sharedScopeId != null) {
+      throw ArgumentError('sharedScopeId requires SyncScopeMode.shared.');
+    }
   }
 
   static const _maxBodyBytes = 32 * 1024 * 1024;
@@ -58,9 +69,14 @@ class HttpSyncTransport
   final Future<String> Function() tokenProvider;
   final Duration requestTimeout;
   final SyncScopeMode scopeMode;
+
+  /// Identifies a server-created shared scope. Membership is checked by the BFF;
+  /// this value grants no access and cannot select an arbitrary Cosmos partition.
+  final String? sharedScopeId;
   final http.Client _client;
   final Set<Completer<void>> _activeRequests = {};
   SessionInfo? _lastSession;
+  BuiltinAccount? _lastAccount;
   String? _consistencyToken;
   bool _closed = false;
 
@@ -76,14 +92,22 @@ class HttpSyncTransport
   }
 
   @override
+  bool matchesSelectedScope(SessionInfo session) =>
+      session.scopeMode == scopeMode &&
+      (scopeMode != SyncScopeMode.shared || session.scopeId == sharedScopeId);
+
+  @override
   Future<SessionInfo> sessionInfo() async {
     final response = await _request(
       'GET',
       'session',
-      queryParameters: {'scope': scopeMode.name},
+      queryParameters: {'scope': scopeMode.name, 'scopeId': ?sharedScopeId},
     );
     final session = _parse(response.json, SessionInfo.fromJson);
     if (session.scopeMode != scopeMode ||
+        (scopeMode == SyncScopeMode.shared &&
+            session.scopeId != sharedScopeId) ||
+        (scopeMode == SyncScopeMode.shared && !_validSharedSession(session)) ||
         [
           session.scopeId,
           session.principalId,
@@ -97,9 +121,88 @@ class HttpSyncTransport
     if (_lastSession != null && !_lastSession!.sameScope(session)) {
       _consistencyToken = null;
     }
+    if (_lastAccount != null &&
+        session.principalId != _lastAccount!.accountId) {
+      _lastAccount = null;
+    }
     _lastSession = session;
     return session;
   }
+
+  /// Registers/reads the currently authenticated built-in account. Available
+  /// only when the BFF enables `authorization.mode: builtin`.
+  /// The BFF derives this identity from a verified API token, never an email.
+  Future<BuiltinAccount> account() async {
+    final principal = _managementPrincipal;
+    final response = await _request(
+      'GET',
+      'account',
+      expectedPrincipal: principal,
+    );
+    final account = _parse(response.json, BuiltinAccount.fromJson);
+    if (principal != null && account.accountId != principal) {
+      throw _invalidResponse();
+    }
+    _lastAccount = account;
+    return account;
+  }
+
+  /// Creates a shared scope whose fixed owner is the authenticated account.
+  /// Retry the same immutable request after a timeout or lost response.
+  /// Management operations are online; they are not placed in the data outbox.
+  Future<SharedScope> createSharedScope(
+    CreateSharedScopeRequest request,
+  ) async {
+    final principal = _managementPrincipal;
+    final response = await _request(
+      'POST',
+      'scopes',
+      body: request.toJson(),
+      expectedPrincipal: principal,
+    );
+    final scope = _parse(response.json, SharedScope.fromJson);
+    if (principal != null && scope.ownerAccountId != principal) {
+      throw _invalidResponse();
+    }
+    return scope;
+  }
+
+  /// Returns the current policy; only the fixed owner can inspect membership.
+  Future<SharedScope> sharedScopeMembers(String scopeId) async {
+    validateAuthorizationId(scopeId, 'scopeId');
+    final response = await _request(
+      'GET',
+      'scopes/$scopeId/members',
+      expectedPrincipal: _managementPrincipal,
+    );
+    final scope = _parse(response.json, SharedScope.fromJson);
+    if (scope.scopeId != scopeId) throw _invalidResponse();
+    return scope;
+  }
+
+  /// Grants reader/writer or revokes with `none`. The target must first register
+  /// its own account. Only the fixed owner can edit membership.
+  /// A [TransportException.membershipConflict] requires re-reading the policy
+  /// and an explicit new request; a retryable unknown outcome requires reusing
+  /// this exact request. Successful idempotent replay can return an older policy.
+  Future<SharedScope> setSharedScopeMember(
+    String scopeId,
+    SetSharedScopeMemberRequest request,
+  ) async {
+    validateAuthorizationId(scopeId, 'scopeId');
+    final response = await _request(
+      'POST',
+      'scopes/$scopeId/members',
+      body: request.toJson(),
+      expectedPrincipal: _managementPrincipal,
+    );
+    final scope = _parse(response.json, SharedScope.fromJson);
+    if (scope.scopeId != scopeId) throw _invalidResponse();
+    return scope;
+  }
+
+  String? get _managementPrincipal =>
+      _lastSession?.principalId ?? _lastAccount?.accountId;
 
   @override
   Future<ServerDocument> mutate(MutationRequest request) async {
@@ -358,6 +461,11 @@ class HttpSyncTransport
       value.length <= _maxEventBytes &&
       !value.contains(RegExp(r'[\r\n\x00]'));
 
+  bool _validSharedSession(SessionInfo session) =>
+      RegExp(r'^[0-9a-f]{64}$').hasMatch(session.principalId) &&
+      RegExp(r'^[1-9][0-9]{0,4}$').hasMatch(session.permissionVersion) &&
+      int.parse(session.permissionVersion) <= SharedScope.maximumRevision;
+
   Future<void> _discardResponse(http.StreamedResponse response) async {
     final subscription = response.stream.listen(null, onError: (Object _) {});
     try {
@@ -529,6 +637,7 @@ class HttpSyncTransport
     Map<String, Object?>? body,
     Map<String, String>? queryParameters,
     bool useConsistencyToken = false,
+    String? expectedPrincipal,
   }) async {
     if (_closed) throw StateError('Transport is closed.');
     if (useConsistencyToken && _lastSession == null) {
@@ -550,6 +659,7 @@ class HttpSyncTransport
         body: body,
         expectedSession: expectedSession,
         expectedConsistencyToken: expectedConsistencyToken,
+        expectedPrincipal: expectedPrincipal,
       ).timeout(
         requestTimeout,
         onTimeout: () {
@@ -573,6 +683,7 @@ class HttpSyncTransport
     Map<String, Object?>? body,
     SessionInfo? expectedSession,
     String? expectedConsistencyToken,
+    String? expectedPrincipal,
   }) async {
     try {
       // A fresh access token is fetched for every operation, including retries.
@@ -591,6 +702,8 @@ class HttpSyncTransport
             ..headers['Accept'] = 'application/json';
       if (expectedSession != null) {
         _bindRequest(request, expectedSession, expectedConsistencyToken);
+      } else if (expectedPrincipal != null) {
+        request.headers['X-Cosmos-Sync-Principal'] = expectedPrincipal;
       }
       if (body != null) {
         final bytes = utf8.encode(jsonEncode(body));
@@ -741,6 +854,7 @@ class HttpSyncTransport
     if (_closed) return;
     _closed = true;
     _consistencyToken = null;
+    _lastAccount = null;
     for (final request in _activeRequests) {
       if (!request.isCompleted) request.complete();
     }

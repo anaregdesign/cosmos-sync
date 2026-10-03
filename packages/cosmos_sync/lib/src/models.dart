@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 /// Server-verified authorization scope. It contains no Cosmos credential.
-enum SyncScopeMode { user, tenant }
+enum SyncScopeMode { user, tenant, shared }
 
 class SessionInfo {
   const SessionInfo({
@@ -190,6 +190,12 @@ abstract interface class SyncTransport {
   void close();
 }
 
+/// Optional local check for an explicitly selected mode/shared scope.
+/// This does not verify a token's identity or learn an offline revocation.
+abstract interface class ScopeSelectionTransport {
+  bool matchesSelectedScope(SessionInfo session);
+}
+
 /// Optional opaque BFF consistency envelope, persisted alongside ACKs/pages.
 abstract interface class ConsistencyTokenTransport {
   String? get consistencyToken;
@@ -215,6 +221,10 @@ class TransportException implements Exception {
       statusCode == null || statusCode == 429 || (statusCode ?? 0) >= 500;
 
   bool get authorizationFailure => statusCode == 401 || statusCode == 403;
+
+  /// Another membership edit won. Read the current policy before a new edit.
+  bool get membershipConflict =>
+      statusCode == 409 && code == 'membership_conflict';
 
   @override
   String toString() => 'TransportException($statusCode, $code): $message';

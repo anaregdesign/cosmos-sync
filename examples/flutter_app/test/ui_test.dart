@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:cosmos_sync_example/auth/auth_session_controller.dart';
 import 'package:cosmos_sync_example/data/workspace_repository.dart';
 import 'package:cosmos_sync_example/main.dart';
@@ -9,6 +10,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'configured shared workspace has a fixed explicit scope selection',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync(
+        'cosmos-app-shared-ui-',
+      );
+      final controller = AppController(
+        auth: AuthSessionController(),
+        workspace: WorkspaceController(
+          repository: WorkspaceRepository(directory: directory),
+        ),
+        settingsFile: File('${directory.path}/connection.json'),
+        sharedScopeId: 'b' * 64,
+      );
+      await tester.pumpWidget(CosmosSyncApp(controller: controller));
+      final field = tester.widget<DropdownButtonFormField<SyncScopeMode>>(
+        find.byKey(const Key('scope-mode')),
+      );
+      expect(field.initialValue, SyncScopeMode.shared);
+      expect(field.onChanged, isNull);
+      expect(find.text('Shared workspace (owner-provided)'), findsWidgets);
+      expect(find.text('Legacy tenant scope'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await controller.close();
+      directory.deleteSync(recursive: true);
+    },
+  );
+
   testWidgets(
     'ordinary startup exposes usable configuration and rejects identity-only scopes',
     (tester) async {

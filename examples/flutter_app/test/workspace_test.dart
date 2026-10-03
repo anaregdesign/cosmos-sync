@@ -25,6 +25,83 @@ void main() {
   });
   tearDown(() async => directory.delete(recursive: true));
 
+  test(
+    'shared configuration preserves legacy keys and binds exact shared identity',
+    () {
+      expect(config.toJson(), {
+        'bffUri': 'https://bff.example.test',
+        'scopeMode': 'user',
+        'allowInsecureLocalhost': false,
+      });
+      final shared = ConnectionConfig(
+        bffUri: config.bffUri,
+        scopeMode: SyncScopeMode.shared,
+        sharedScopeId: 'b' * 64,
+      );
+      final other = ConnectionConfig(
+        bffUri: config.bffUri,
+        scopeMode: SyncScopeMode.shared,
+        sharedScopeId: 'c' * 64,
+      );
+      expect(ConnectionConfig.fromJson(shared.toJson()).key, shared.key);
+      expect(shared.key, isNot(config.key));
+      expect(shared.key, isNot(other.key));
+      for (final value in [
+        {...shared.toJson(), 'scopeMode': 'tenant'},
+        {...shared.toJson(), 'sharedScopeId': '../scope'},
+        {...shared.toJson(), 'sharedScopeId': null},
+      ]) {
+        expect(() => ConnectionConfig.fromJson(value), throwsArgumentError);
+      }
+    },
+  );
+
+  test(
+    'shared selection cannot reopen a personal verified cache offline',
+    () async {
+      final original = await repository.open(
+        config: config,
+        credentialBinding: 'same-signed-in-account',
+        tokenProvider: () async => 'api-token',
+      );
+      await original.put('private', {'text': 'personal'});
+      await original.close();
+      await expectLater(
+        repository.open(
+          config: ConnectionConfig(
+            bffUri: config.bffUri,
+            scopeMode: SyncScopeMode.shared,
+            sharedScopeId: 'b' * 64,
+          ),
+          credentialBinding: 'same-signed-in-account',
+          tokenProvider: () async =>
+              throw StateError('No offline token request.'),
+          offline: true,
+        ),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
+    'shared selection rejects a substituted server session before opening a cache',
+    () async {
+      await expectLater(
+        repository.open(
+          config: ConnectionConfig(
+            bffUri: config.bffUri,
+            scopeMode: SyncScopeMode.shared,
+            sharedScopeId: 'b' * 64,
+          ),
+          credentialBinding: 'same-signed-in-account',
+          tokenProvider: () async => 'api-token',
+        ),
+        throwsStateError,
+      );
+      expect(await Directory('${directory.path}/cache').list().isEmpty, true);
+    },
+  );
+
   test('offline reopen requires the same secure credential binding', () async {
     var client = await repository.open(
       config: config,

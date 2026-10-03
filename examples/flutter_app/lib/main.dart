@@ -14,6 +14,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final support = await getApplicationSupportDirectory();
   final root = Directory(p.join(support.path, 'cosmos-sync-example'));
+  const sharedScopeId = String.fromEnvironment('COSMOS_SYNC_SHARED_SCOPE_ID');
   final controller = AppController(
     auth: AuthSessionController(),
     workspace: WorkspaceController(
@@ -22,6 +23,7 @@ Future<void> main() async {
       ),
     ),
     settingsFile: File(p.join(root.path, 'connection.json')),
+    sharedScopeId: sharedScopeId.isEmpty ? null : sharedScopeId,
   );
   await controller.initialize();
   runApp(CosmosSyncApp(controller: controller));

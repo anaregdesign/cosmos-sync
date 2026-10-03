@@ -10,26 +10,43 @@ class ConnectionConfig {
   const ConnectionConfig({
     required this.bffUri,
     this.scopeMode = SyncScopeMode.user,
+    this.sharedScopeId,
     this.allowInsecureLocalhost = false,
   });
 
   final Uri bffUri;
   final SyncScopeMode scopeMode;
+  final String? sharedScopeId;
   final bool allowInsecureLocalhost;
 
   Map<String, Object?> toJson() => {
     'bffUri': bffUri.toString(),
     'scopeMode': scopeMode.name,
+    if (sharedScopeId != null) 'sharedScopeId': sharedScopeId,
     'allowInsecureLocalhost': allowInsecureLocalhost,
   };
 
-  factory ConnectionConfig.fromJson(Map<String, Object?> json) =>
-      ConnectionConfig(
-        bffUri: Uri.parse(json['bffUri'] as String),
-        scopeMode: SyncScopeMode.values.byName(json['scopeMode'] as String),
-        allowInsecureLocalhost:
-            json['allowInsecureLocalhost'] as bool? ?? false,
-      );
+  factory ConnectionConfig.fromJson(Map<String, Object?> json) {
+    final config = ConnectionConfig(
+      bffUri: Uri.parse(json['bffUri'] as String),
+      scopeMode: SyncScopeMode.values.byName(json['scopeMode'] as String),
+      sharedScopeId: json['sharedScopeId'] as String?,
+      allowInsecureLocalhost: json['allowInsecureLocalhost'] as bool? ?? false,
+    );
+    config.validateScopeSelection();
+    return config;
+  }
+
+  void validateScopeSelection() {
+    if (scopeMode == SyncScopeMode.shared) {
+      if (sharedScopeId == null ||
+          !RegExp(r'^[0-9a-f]{64}$').hasMatch(sharedScopeId!)) {
+        throw ArgumentError('Shared mode requires a BFF-issued scope ID.');
+      }
+    } else if (sharedScopeId != null) {
+      throw ArgumentError('A shared ID cannot be mixed with a legacy mode.');
+    }
+  }
 
   String get key =>
       sha256.convert(utf8.encode(jsonEncode(toJson()))).toString();
@@ -55,6 +72,7 @@ class WorkspaceRepository {
     baseUri: config.bffUri,
     tokenProvider: tokenProvider,
     scopeMode: config.scopeMode,
+    sharedScopeId: config.sharedScopeId,
     allowInsecureLocalhost: config.allowInsecureLocalhost,
   );
 
@@ -66,6 +84,7 @@ class WorkspaceRepository {
     required Future<String> Function() tokenProvider,
     bool offline = false,
   }) async {
+    config.validateScopeSelection();
     await directory.create(recursive: true);
     final transport = transportFactory(config, tokenProvider);
     CosmosSyncClient? opened;
@@ -85,6 +104,13 @@ class WorkspaceRepository {
         );
       } else {
         verified = await transport.sessionInfo();
+      }
+      if (verified.scopeMode != config.scopeMode ||
+          (config.scopeMode == SyncScopeMode.shared &&
+              verified.scopeId != config.sharedScopeId)) {
+        throw StateError(
+          'The verified session does not match the selected scope.',
+        );
       }
       final identity = sha256
           .convert(

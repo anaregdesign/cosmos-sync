@@ -21,7 +21,7 @@ final client = await CosmosSyncClient.open(
   transport: HttpSyncTransport(
     baseUri: Uri.parse('https://your-bff.example'),
     tokenProvider: () => auth.currentAccessToken(),
-    scopeMode: SyncScopeMode.user, // optional authorized tenant scope
+    scopeMode: SyncScopeMode.user, // personal data; shared scopes shown below
   ),
 );
 await client.sync();
@@ -43,6 +43,60 @@ committed, not that the server accepted it. Loaded get/list/query reads are
 synchronous. A new cache needs a server session; a verified cache can reopen
 fully offline. IDs and data are bounded JSON, with exact safe integers. put
 replaces the whole document; delete retains a tombstone, excluded from list/query.
+
+## Personal and shared authorization
+
+With `authorization.mode: builtin` on the BFF, a verified API identity gets its
+own personal scope without an operator grant file. Authentication remains with
+the OIDC provider; Cosmos Sync stores the account and data memberships. The fixed
+creator of a shared scope can grant registered accounts `reader` or `writer`,
+and revoke with `none`. Readers cannot write or edit memberships; members cannot
+grant themselves a role. Provider emails, groups and self-claimed roles are not
+data permissions. Legacy `tenant` scopes remain separate from built-in `shared`.
+
+```dart
+final account = await ownerTransport.account();
+// The reader signs in separately and shares their own account().accountId.
+final create = CreateSharedScopeRequest.create();
+final shared = await ownerTransport.createSharedScope(create);
+final edit = SetSharedScopeMemberRequest.create(
+  accountId: registeredReaderAccountId,
+  role: SharedScopeRole.reader,
+  baseRevision: shared.revision,
+);
+await ownerTransport.setSharedScopeMember(shared.scopeId, edit);
+
+final sharedClient = await CosmosSyncClient.open(
+  path: sharedCacheIdentity, // dedicated to this principal/shared scope
+  transport: HttpSyncTransport(
+    baseUri: Uri.parse('https://your-bff.example'),
+    tokenProvider: () => auth.currentAccessToken(),
+    scopeMode: SyncScopeMode.shared,
+    sharedScopeId: shared.scopeId,
+  ),
+);
+await sharedClient.sync();
+```
+
+Management calls require a network connection and a fresh API token. They do not
+enter the document outbox. Save the immutable request's `toJson()` before sending
+if recovery must survive an application exit; restore with `fromJson()` and retry
+the same request after an unknown outcome. An exact replay can return its recorded
+older policy: fetch `sharedScopeMembers(scopeId)` before the next membership edit.
+On `TransportException.membershipConflict`, read the current revision and obtain
+an explicit new edit/request rather than overwriting a concurrent owner's change.
+The owner is immutable; invitations, ownership transfer and account deletion are
+not implemented. Preview policies retain revoked entries and support up to 128
+member identities and 10,000 revisions per shared scope; capacity exhaustion
+requires operator action, never silently reuses a revoked permission generation.
+See the [authorization contract](doc/protocol.md).
+
+The shared ID only selects a server-created scope; it grants no permission or
+Cosmos credential. The SDK requires the server session to match that selected ID
+and binds data requests to the current principal and member permission generation.
+Selecting a different explicit mode/shared ID purges an incompatible offline
+cache and pauses it before displaying old data. A token identity switch or remote
+revocation still requires reconnecting to the BFF to be detected.
 
 ## Queries and coverage
 

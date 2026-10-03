@@ -37,7 +37,7 @@ credentials and signing changes need the owner's concrete approval.
 ## Connect a real account
 
 The owner must first approve/register a public native OIDC client and BFF API,
-configure the BFF's issuer/audience/delegated API scope and server-side grants,
+configure the BFF's issuer/audience/delegated API scope and authorization mode,
 and supply an HTTPS BFF endpoint. See [native auth setup](../../docs/native-auth.md)
 and the [dedicated Entra proposal](../../docs/entra-setup.md), plus
 [Azure operations](../../docs/azure-operations.md) for the remaining account gates.
@@ -57,8 +57,23 @@ roadmap implementation and actual acceptance are complete.
 `Save and sign in` opens the system browser. The adapter uses the returned access
 token for the BFF; it never substitutes an ID token. The BFF's verified `/session`
 establishes the principal and personal/shared scope before the cache is opened.
-Selecting shared tenant scope requests only the server-authorized tenant mode,
-not an arbitrary partition or tenant identifier.
+With the BFF's built-in authorization, `Personal` registers a private account
+scope without a grants file. To open an existing shared workspace, its fixed
+owner first grants your registered account reader/writer using the
+[typed SDK management API](../../packages/cosmos_sync/README.md#personal-and-shared-authorization).
+Build the sample with the returned non-secret scope ID:
+
+```sh
+flutter run -d macos --dart-define=COSMOS_SYNC_SHARED_SCOPE_ID=<bff-issued-scope-id>
+```
+
+The sample then shows a fixed `Shared workspace (owner-provided)` selection.
+Its verified session must match that ID and current membership; selecting an ID
+cannot grant access or select an arbitrary Cosmos partition. Changing the build's
+shared selection requires online verification; a prior personal/other-scope cache
+cannot reopen offline. `Legacy tenant scope` is the separate grant-file mode,
+and is unavailable when a shared workspace is configured. Membership management
+has an SDK example; the sample does not provide invitations or an owner admin UI.
 
 After a saved session is restored, use `Connect online` or `Open verified cache
 offline`. Offline reopening requires both an existing BFF-verified cache and the

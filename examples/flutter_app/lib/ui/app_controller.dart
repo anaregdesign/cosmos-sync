@@ -50,6 +50,7 @@ class AppController extends ChangeNotifier {
     required this.auth,
     required this.workspace,
     required this.settingsFile,
+    this.sharedScopeId,
   }) {
     auth.addListener(_authChanged);
     workspace.addListener(_changed);
@@ -58,6 +59,10 @@ class AppController extends ChangeNotifier {
   final AuthSessionController auth;
   final WorkspaceController workspace;
   final File settingsFile;
+
+  /// Optional build-selected, server-created shared scope. The BFF still checks
+  /// current membership; this identifier grants no permission.
+  final String? sharedScopeId;
   AppSettings? settings;
   bool _actionBusy = false;
   bool _disposed = false;
@@ -70,9 +75,11 @@ class AppController extends ChangeNotifier {
 
   Future<void> initialize() => _run(() async {
     if (!await settingsFile.exists()) return;
-    settings = AppSettings.fromJson(
-      (jsonDecode(await settingsFile.readAsString()) as Map)
-          .cast<String, Object?>(),
+    settings = _selectedSettings(
+      AppSettings.fromJson(
+        (jsonDecode(await settingsFile.readAsString()) as Map)
+            .cast<String, Object?>(),
+      ),
     );
     auth.configure(settings!.oidc);
     await auth.restore();
@@ -85,23 +92,42 @@ class AppController extends ChangeNotifier {
     if (workspace.connected) {
       throw StateError('Sign out before changing the connection.');
     }
+    final selected = _selectedSettings(value);
     // Validate the transport URL without requesting credentials or data.
     final check = HttpSyncTransport(
-      baseUri: value.connection.bffUri,
-      scopeMode: value.connection.scopeMode,
-      allowInsecureLocalhost: value.connection.allowInsecureLocalhost,
+      baseUri: selected.connection.bffUri,
+      scopeMode: selected.connection.scopeMode,
+      sharedScopeId: selected.connection.sharedScopeId,
+      allowInsecureLocalhost: selected.connection.allowInsecureLocalhost,
       tokenProvider: () async => throw StateError('Validation only.'),
     );
     check.close();
-    auth.configure(value.oidc);
-    settings = value;
+    auth.configure(selected.oidc);
+    settings = selected;
     await settingsFile.parent.create(recursive: true);
     final temporary = File('${settingsFile.path}.tmp');
-    await temporary.writeAsString(jsonEncode(value.toJson()), flush: true);
+    await temporary.writeAsString(jsonEncode(selected.toJson()), flush: true);
     await temporary.rename(settingsFile.path);
     await auth.signIn();
     if (auth.credentialSessionId != null) await _connect(offline: false);
   });
+
+  AppSettings _selectedSettings(AppSettings value) {
+    value.connection.validateScopeSelection();
+    final selected = sharedScopeId == null
+        ? value
+        : AppSettings(
+            connection: ConnectionConfig(
+              bffUri: value.connection.bffUri,
+              scopeMode: SyncScopeMode.shared,
+              sharedScopeId: sharedScopeId,
+              allowInsecureLocalhost: value.connection.allowInsecureLocalhost,
+            ),
+            oidc: value.oidc,
+          );
+    selected.connection.validateScopeSelection();
+    return selected;
+  }
 
   Future<void> connect({bool offline = false}) =>
       _run(() => _connect(offline: offline));

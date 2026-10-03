@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:cosmos_sync/cosmos_sync.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 import 'support/cache_location.dart';
@@ -39,6 +41,46 @@ void main() {
     clients.clear();
     await location.cleanup();
   });
+
+  test(
+    'selected shared scope purges incompatible persistent data while offline',
+    () async {
+      final shared = SessionInfo(
+        principalId: 'a' * 64,
+        scopeId: 'b' * 64,
+        permissionVersion: '2',
+        scopeMode: SyncScopeMode.shared,
+      );
+      final first = await CosmosSyncClient.open(
+        cache: await location.open(),
+        transport: TestTransport(server),
+        session: shared,
+      );
+      clients.add(first);
+      await first.put('private', {'text': 'old scope'});
+      await first.close();
+      var requests = 0;
+      final reopened = await CosmosSyncClient.open(
+        cache: await location.open(),
+        transport: HttpSyncTransport(
+          baseUri: Uri.parse('https://bff.example.test'),
+          tokenProvider: () async => 'api-token',
+          scopeMode: SyncScopeMode.shared,
+          sharedScopeId: 'c' * 64,
+          client: MockClient((_) async {
+            requests++;
+            throw http.ClientException('offline');
+          }),
+        ),
+      );
+      clients.add(reopened);
+      expect(requests, 0);
+      expect(reopened.status.paused, isTrue);
+      expect(reopened.get('private'), isNull);
+      expect(reopened.pending, isEmpty);
+      expect(reopened.cache.cursor, isNull);
+    },
+  );
 
   test(
     'snapshot partial cursor resumes after reopen and final cutover precedes deltas',

@@ -27,6 +27,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
   );
   final _scopes = TextEditingController(text: 'openid offline_access');
   SyncScopeMode _scope = SyncScopeMode.user;
+  String? _sharedScopeId;
   bool _localHttp = false;
   String? _formError;
 
@@ -38,12 +39,15 @@ class _WorkspaceViewState extends State<WorkspaceView>
     if (settings != null) {
       _bff.text = settings.connection.bffUri.toString();
       _scope = settings.connection.scopeMode;
+      _sharedScopeId = settings.connection.sharedScopeId;
       _localHttp = settings.connection.allowInsecureLocalhost;
       _issuer.text = settings.oidc.issuer;
       _clientId.text = settings.oidc.clientId;
       _redirect.text = settings.oidc.redirectUrl;
       _scopes.text = settings.oidc.scopes.join(' ');
     }
+    _sharedScopeId = widget.controller.sharedScopeId ?? _sharedScopeId;
+    if (_sharedScopeId != null) _scope = SyncScopeMode.shared;
   }
 
   @override
@@ -261,17 +265,24 @@ class _WorkspaceViewState extends State<WorkspaceView>
           key: const Key('scope-mode'),
           initialValue: _scope,
           decoration: const InputDecoration(labelText: 'Authorized scope'),
-          items: const [
-            DropdownMenuItem(
-              value: SyncScopeMode.user,
-              child: Text('Personal'),
-            ),
-            DropdownMenuItem(
-              value: SyncScopeMode.tenant,
-              child: Text('Shared tenant'),
-            ),
-          ],
-          onChanged: working
+          items: _sharedScopeId != null
+              ? const [
+                  DropdownMenuItem(
+                    value: SyncScopeMode.shared,
+                    child: Text('Shared workspace (owner-provided)'),
+                  ),
+                ]
+              : const [
+                  DropdownMenuItem(
+                    value: SyncScopeMode.user,
+                    child: Text('Personal'),
+                  ),
+                  DropdownMenuItem(
+                    value: SyncScopeMode.tenant,
+                    child: Text('Legacy tenant scope'),
+                  ),
+                ],
+          onChanged: working || _sharedScopeId != null
               ? null
               : (value) => setState(() => _scope = value!),
         ),
@@ -438,6 +449,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
         connection: ConnectionConfig(
           bffUri: Uri.parse(_bff.text.trim()),
           scopeMode: _scope,
+          sharedScopeId: _scope == SyncScopeMode.shared ? _sharedScopeId : null,
           allowInsecureLocalhost: _localHttp,
         ),
         oidc: OidcConfig(
