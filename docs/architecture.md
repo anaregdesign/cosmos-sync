@@ -38,4 +38,10 @@ History, receipts and tombstones have no TTL or GC. Conservative per-scope event
 | Authorization | OIDC and current user/shared-tenant grants | Production identity/grant administration remains owner configured |
 | Operations | Local/fault/emulator/platform tests and preparation | Approved live Azure RU/replica/backup/deployment gate |
 
-License, source visibility, publisher ownership and actual distribution remain owner decisions tracked in issues #14–16. No paid Azure resource, publication, merge or deployment is performed by this preview work.
+The owner approved MIT, public GitHub/GHCR visibility, personal pub.dev ownership
+and the experimental `0.2.0-dev.1` preview. The foundation is merged; subsequent
+main integration and distribution are authorized and tracked in
+[Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). Actual registry,
+provider, Azure and device results remain separate verification gates. The
+cheapest live Azure proposal uses a disposable isolated account and local BFF;
+no hosted deployment or production SLA follows from that proposal.

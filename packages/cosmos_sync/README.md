@@ -105,7 +105,7 @@ automatic merge, external Cosmos writer ingestion or cloud RU/SLA is promised.
 
 | Declared platform | Measured evidence | Remaining limits |
 | --- | --- | --- |
-| Android | Flutter app + real SQLite on Android 14/API 34 arm64 emulator | Physical device, suspension and production sign-in remain unverified. |
+| Android | Real SQLite SDK fixture on Android 14/API 34 arm64 emulator and physical Pixel 9a Android 17/API 37 | Physical fixture uses deterministic transport; production sign-in, suspension and cloud app flow remain unverified. |
 | iOS | Flutter app + real SQLite on iOS 26.5 arm64 simulator | Physical device, suspension and production sign-in remain unverified. |
 | macOS | Flutter app + real SQLite on macOS 26.7 arm64 | No x86_64 or minimum-OS support claim. |
 | Web | Chromium IndexedDB/Web Locks, browser reload and actual BFF HTTP/SSE | Other browsers, persistent-storage eviction and mobile-browser behavior are unverified. |
