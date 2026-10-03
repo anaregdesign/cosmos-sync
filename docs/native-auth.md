@@ -36,7 +36,7 @@ Provide the following non-secret values in the app's connection form:
 | BFF URL | Owner-approved HTTPS deployment endpoint |
 | Issuer | Exact tenant-specific OIDC issuer |
 | Client ID | Registered native public-client ID |
-| Redirect URL | Exact registered native redirect; default `com.anaregdesign.cosmossync:/oauthredirect` |
+| Redirect URL | Exact registered native redirect; default `com.anaregdesign.cosmossync://auth/oauthredirect` |
 | Scopes | `openid`, optional identity scopes, `offline_access`, and the BFF's delegated API scope |
 | Optional discovery URL | HTTPS discovery document on the issuer's origin; otherwise derived from issuer |
 | Optional logout redirect | Exact registered native post-logout URL, such as `com.anaregdesign.cosmossync:/logout` |

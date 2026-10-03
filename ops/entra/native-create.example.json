@@ -4,7 +4,7 @@
   "signInAudience": "AzureADMyOrg",
   "isFallbackPublicClient": false,
   "publicClient": {
-    "redirectUris": ["com.anaregdesign.cosmossync:/oauthredirect"]
+    "redirectUris": ["com.anaregdesign.cosmossync://auth/oauthredirect"]
   },
   "requiredResourceAccess": [
     {

@@ -23,7 +23,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
   final _issuer = TextEditingController();
   final _clientId = TextEditingController();
   final _redirect = TextEditingController(
-    text: 'com.anaregdesign.cosmossync:/oauthredirect',
+    text: 'com.anaregdesign.cosmossync://auth/oauthredirect',
   );
   final _scopes = TextEditingController(text: 'openid offline_access');
   SyncScopeMode _scope = SyncScopeMode.user;

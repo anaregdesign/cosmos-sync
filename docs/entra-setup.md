@@ -4,8 +4,8 @@ This is the reviewable proposal for the native Flutter sample and BFF. It create
 two new, single-tenant app registrations in the owner's selected tenant. It does
 not reuse another product's registrations. Tenant IDs, account names, user object
 IDs, issued tokens and populated manifests belong in local ignored configuration,
-not this document or GitHub Issues. No registrations, consent grants or directory
-role changes have been executed by preparing these files.
+not this document or GitHub Issues. These request examples do not execute changes;
+the operator records applied object IDs and verification privately.
 
 ## Proposed changes for approval
 
@@ -17,7 +17,7 @@ role changes have been executed by preparing these files.
 | Delegated permission | One enabled scope named **Cosmos.Sync**, consent type **Admins and users** (`type: User`) |
 | Scope description | Read and write only Cosmos Sync documents authorized by the BFF for the signed-in user |
 | Native app registration | **Cosmos Sync Native (validation)**; `signInAudience: AzureADMyOrg`; native public client, Authorization Code + PKCE |
-| Native callback | Exact `com.anaregdesign.cosmossync:/oauthredirect` under **Mobile and desktop applications** |
+| Native callback | Exact `com.anaregdesign.cosmossync://auth/oauthredirect` under **Mobile and desktop applications** |
 | Native API permission | Only the new API's delegated `Cosmos.Sync` scope; no Microsoft Graph data permissions or application permissions |
 | Enterprise applications | Corresponding API and native service principals in the same selected tenant |
 | Ownership | The owner's explicitly selected account(s) on both new registrations |
@@ -89,7 +89,7 @@ and [platform guidance](https://learn.microsoft.com/en-us/entra/identity-platfor
 | macOS | Bundle ID `com.anaregdesign.cosmosSyncExample`; same callback scheme | URL Types must match; local ad-hoc builds do not prove signed distribution behavior |
 
 The bundled UI fixes the callback to
-`com.anaregdesign.cosmossync:/oauthredirect`. A registration change alone cannot
+`com.anaregdesign.cosmossync://auth/oauthredirect`. A registration change alone cannot
 change the native build's URL handler. No wildcard or alternate spelling,
 capitalization, trailing slash or `://` variant is proposed. Production application
 IDs, signing and callback ownership need a separate release decision.
@@ -124,7 +124,7 @@ Flutter connection form:
 BFF URL:       https://<OWNER_APPROVED_BFF_HOST>
 Issuer:        https://login.microsoftonline.com/<TENANT_ID>/v2.0
 Client ID:     <NATIVE_APP_ID>
-Redirect URL:  com.anaregdesign.cosmossync:/oauthredirect
+Redirect URL:  com.anaregdesign.cosmossync://auth/oauthredirect
 Scopes:        openid profile offline_access api://<BFF_API_APP_ID>/Cosmos.Sync
 Discovery URL: https://login.microsoftonline.com/<TENANT_ID>/v2.0/.well-known/openid-configuration
 ```
@@ -159,12 +159,17 @@ See [Authorization Code + PKCE](https://learn.microsoft.com/en-us/entra/identity
 
 ## Consent and test identities
 
-Choose two distinct existing users in the selected tenant (explicitly approved
-guests also require their identity to exist there). **Writer** receives BFF read
-and write access to the isolated fixture; **reader** receives read-only access.
-Neither test user needs an Entra directory administrator role. The owner's admin
-account is not automatically both test identities. Creating/inviting users or
-assigning directory roles is outside this proposal.
+Initial real-provider validation can use one explicitly selected existing
+account. It proves that account's login, API admission and authorized lifecycle;
+it does not prove multi-account isolation or read-only user behavior. Defer those
+real-provider acceptance cases when additional accounts are unavailable.
+
+For complete multi-principal validation, use distinct existing users in the
+selected tenant (explicitly approved guests must exist there). **Writer** receives
+BFF read and write access to the isolated fixture; **reader** receives read-only
+access. Test users need no Entra directory administrator role. The owner's admin
+account cannot represent both identities. Creating/inviting users or assigning
+directory roles is outside this setup.
 
 Scope `type: User` permits user consent only where the existing tenant policy
 allows it. If blocked, use the approved administrator's **single-user Principal
@@ -207,8 +212,8 @@ identity in production.
 ## Owner inputs and acceptance
 
 Before applying this proposal, record locally the selected tenant GUID/domain,
-approved registration names and owners, the two test users' exact directory
-object IDs, and whether user or administrator Principal consent will be used.
+approved registration names and owners, the selected initial account's directory
+object ID, and whether user or administrator Principal consent will be used.
 The operator needs authorized access to that tenant and sufficient existing
 application-management/consent permissions. If the current CLI account cannot
 access it, the owner signs in interactively; do not switch accounts, open a login

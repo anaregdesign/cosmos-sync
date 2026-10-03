@@ -34,7 +34,7 @@ and the [dedicated Entra proposal](../../docs/entra-setup.md), plus
 
 Enter the BFF URL, OIDC issuer URL, public client ID, and space-separated scopes
 including `openid`, your delegated BFF API scope, and normally `offline_access`.
-The default callback is `com.anaregdesign.cosmossync:/oauthredirect`. The exact
+The default callback is `com.anaregdesign.cosmossync://auth/oauthredirect`. The exact
 callback must be registered with the provider. Its scheme is registered in all
 three native platform projects; changing it requires a corresponding build
 configuration change. The sample has no client-secret or token-input field.

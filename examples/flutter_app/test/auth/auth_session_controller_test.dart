@@ -14,7 +14,7 @@ void main() {
   OidcConfig config({String clientId = 'native-public-client'}) => OidcConfig(
     issuer: 'https://login.example.test/tenant',
     clientId: clientId,
-    redirectUrl: 'com.anaregdesign.cosmossync:/oauthredirect',
+    redirectUrl: 'com.anaregdesign.cosmossync://auth/oauthredirect',
     scopes: ['openid', 'offline_access', 'api://bff/Cosmos.Sync'],
     postLogoutRedirectUrl: 'com.anaregdesign.cosmossync:/logout',
   );

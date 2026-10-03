@@ -22,7 +22,7 @@ void main() {
     oidc: OidcConfig(
       issuer: 'https://issuer.example.test',
       clientId: 'native-public',
-      redirectUrl: 'com.anaregdesign.cosmossync:/oauthredirect',
+      redirectUrl: 'com.anaregdesign.cosmossync://auth/oauthredirect',
       scopes: ['openid', 'offline_access', 'cosmos_sync'],
     ),
   );
