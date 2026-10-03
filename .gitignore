@@ -21,3 +21,5 @@ bff/grants.json
 **/*.key
 TestResults/
 artifacts/
+
+.issue-drafts/
