@@ -1,0 +1,31 @@
+# These are placeholders, not an approved deployment or a working image digest.
+deployment = {
+  subscription_id     = "00000000-0000-0000-0000-000000000001"
+  tenant_id           = "00000000-0000-0000-0000-000000000002"
+  resource_group_name = "cosmos-sync-hosting"
+  location            = "westus2"
+  name_prefix         = "cosmos-sync-validation"
+}
+cosmos = {
+  account_id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/cosmos-sync-data/providers/Microsoft.DocumentDB/databaseAccounts/cosmos-sync-example"
+  endpoint   = "https://cosmos-sync-example.documents.azure.com:443/"
+  database   = "cosmos-sync"
+  container  = "sync"
+}
+oidc = {
+  issuer         = "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000002/v2.0"
+  audience       = "00000000-0000-0000-0000-000000000003"
+  required_scope = "Cosmos.Sync"
+}
+image = "ghcr.io/anaregdesign/cosmos-sync-bff@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+key_vault = {
+  vault_id           = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/cosmos-sync-secrets/providers/Microsoft.KeyVault/vaults/cosmos-sync-example"
+  vault_url          = "https://cosmos-sync-example.vault.azure.net"
+  cursor_secret_uri  = "https://cosmos-sync-example.vault.azure.net/secrets/cosmos-sync-cursor/00000000000000000000000000000001"
+}
+scale = { min_replicas = 0, max_replicas = 1 }
+tags  = { purpose = "validation" }
+# New deployment only. Verify the actual published image's builtin authz evidence
+# and intentional new namespace before changing this assertion to true.
+authorization_mode                   = "builtin"
+builtin_authorization_image_verified = false
