@@ -40,6 +40,7 @@
     "egressIpv4": "198.51.100.1",
     "dataPrincipalObjectId": "00000000-0000-0000-0000-000000000000",
     "billingMode": "free-tier-preferred",
-    "teardownApprovalReference": ""
+    "teardownApprovalReference": "",
+    "retentionPolicy": "retain-for-reuse"
   }
 }

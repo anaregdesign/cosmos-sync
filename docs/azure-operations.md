@@ -10,8 +10,8 @@ Provide the following nonsecret selections, and place credentials in a private l
 
 | Selection | Minimum needed |
 | --- | --- |
-| Isolated Azure target | Tenant ID, subscription ID, resource group, existing NoSQL account endpoint/name, database and container. If none exists, separately approve creating an isolated account/container, location, billing mode and teardown policy. |
-| Test authorization and budget | Explicit permission for the selected container's test scope, three expected accepted mutations (create/update/tombstone), retained journal and receipts, maximum duration, currency and who monitors/tears down the environment. Record a positive spending ceiling, or `ceilingAmount: null` plus `unboundedCostApproved: true` only when the owner explicitly approves no upper limit. Runtime/request bounds do not enforce monetary billing. |
+| Isolated Azure target | Tenant ID, subscription ID, resource group, existing NoSQL account endpoint/name, database and container. If none exists, approve an isolated account/container, location and billing mode. The current owner decision retains this dedicated validation environment for future reuse. |
+| Test authorization and budget | Explicit permission for the selected container's test scope, three expected accepted mutations (create/update/tombstone), retained journal and receipts, maximum duration, currency and who monitors/reuses the environment. Record a positive spending ceiling, or `ceilingAmount: null` plus `unboundedCostApproved: true` only when the owner explicitly approves no upper limit. Runtime/request bounds do not enforce monetary billing. |
 | Azure data identity | An existing approved developer identity for the local gate, with the narrow container role below. Later select the hosting managed identity separately. No account key, broad subscription Contributor role or new client secret is needed by the local gate. |
 | End-user identity | Trusted HTTPS OIDC issuer, exact API audience, delegated access scope, tenant claim and optional `token_use`; a fresh API access JWT in a current-user-owned `0600` file for the owner's selected single account. ID tokens are unsuitable. Distinct-account JWTs are needed only if the owner later chooses full three-principal evidence. |
 | Current grants | Exact authorized JWT tenant-claim and signature-verified API `sub` for the selected account. The local harness creates only its own temporary grant file and changes that one principal from writer to reader to inactive. The original three-principal mode remains available without requesting more accounts for the current gate. |
@@ -70,7 +70,24 @@ az cosmosdb sql container create --subscription "$COSMOS_TEST_SUBSCRIPTION_ID" \
 
 Verify the resulting account capabilities/free-tier status, one region, Session consistency, `/scopeId` and absent `defaultTtl`, then grant only the container-scoped role below. Selected-IP firewall propagation can take up to 15 minutes; inspect failures rather than opening access to all addresses. Do not add the `0.0.0.0` Azure-services bypass. [Firewall behavior](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-configure-firewall).
 
-Keep the resource until the approved app/device chain has collected its evidence. After explicit teardown approval, delete only the newly created temporary group, confirm completion and check the recorded usage/cost. A spending alert does not stop Azure resources, and paid backup restore or regional failure injection remains outside this cheapest gate.
+**Current owner decision: retain the validation resource group, Cosmos account/database/container/data role and dedicated Entra apps for future use.** There is no automatic deletion. The private manifest uses `retentionPolicy: retain-for-reuse` and an empty `teardownApprovalReference`; this blocks the cleanup command even if a superseded delete reference is supplied. If free tier is ineligible, serverless retained data/indexes continue to incur storage charges. Record billing mode and refresh network/TLS/token configuration before reuse. A spending alert does not stop Azure resources, and paid backup restore or regional failure injection remains outside this cheapest gate.
+
+The [guarded environment tool](../tools/azure_verification_environment.py) defaults to an offline plan. Its explicitly authorized create mode checks the isolated CLI subscription/tenant and exact current admin object, then creates or safely reuses only the matching tagged resources, database/container and deterministic narrow role/assignment. It records a private `0600` attempt receipt before mutations, stops on unknown cloud outcomes and does not silently retry a failed free-tier creation as paid serverless. If the offer rejects free tier, review that failure and select the already-approved serverless fallback before resuming the same owned target. Existing wider configuration, unowned groups or unexpected resources are refused. These commands use a completed private manifest and the existing isolated `AZURE_CONFIG_DIR`; no JWT is needed for ARM setup:
+
+```sh
+python3 tools/azure_verification_environment.py \
+  --manifest ops/azure/environment.single-account.example.json
+python3 tools/azure_verification_environment.py \
+  --manifest /absolute/private/path/approved-environment.json --create-approved
+```
+
+Only a **future explicit owner deletion request** may change the private policy to `delete-after-explicit-owner-request` and fill `teardownApprovalReference`. That guarded cleanup accepts matching successful or partial contract evidence, or its matching private setup-attempt receipt for pre-contract failure. It verifies exact ownership/context, generic ARM IDs and separate databases/containers/native roles/assignments; unexpected children or unavailable inventory stop deletion. It can discard only the newly owned validation group's test data, and it verifies group deletion completion. The current retention decision does not authorize running it:
+
+```sh
+python3 tools/azure_verification_environment.py \
+  --manifest /absolute/private/path/future-delete-approved-environment.json \
+  --teardown-approved
+```
 
 ## Least privilege and network access
 
