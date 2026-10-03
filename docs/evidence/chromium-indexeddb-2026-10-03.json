@@ -1,0 +1,94 @@
+{
+  "status": "PASS",
+  "benchmark": "chromium-indexeddb-offline-v1",
+  "timestampUtc": "2026-10-03T12:09:35.707Z",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "secureContext": true
+  },
+  "fixture": {
+    "documents": 1000,
+    "outboxPeak": 1000,
+    "textBytes": 256,
+    "sampleJsonBytes": 287,
+    "queryRepetitions": 10,
+    "queryWarmup": 1,
+    "queryLimit": 100,
+    "acks": "direct fixture cache commits, no server transport"
+  },
+  "phases": [
+    {
+      "phase": "open_empty",
+      "operations": 1,
+      "milliseconds": 46.9
+    },
+    {
+      "phase": "durable_enqueue",
+      "operations": 1000,
+      "milliseconds": 1332.8
+    },
+    {
+      "phase": "close_pending",
+      "operations": 1,
+      "milliseconds": 0.201
+    },
+    {
+      "phase": "reopen_pending",
+      "operations": 1,
+      "milliseconds": 10.9
+    },
+    {
+      "phase": "prepare_and_commit_fixture_acks",
+      "operations": 1000,
+      "milliseconds": 1522.6
+    },
+    {
+      "phase": "commit_journal_pages",
+      "operations": 1000,
+      "milliseconds": 7.401
+    },
+    {
+      "phase": "close_confirmed",
+      "operations": 1,
+      "milliseconds": 0.2
+    },
+    {
+      "phase": "reopen_confirmed",
+      "operations": 1,
+      "milliseconds": 8.8
+    }
+  ],
+  "queryMilliseconds": {
+    "samples": [
+      4.299,
+      3.601,
+      3.4,
+      3.699,
+      3.7,
+      3.8,
+      3.301,
+      3.5,
+      3.6,
+      3.5
+    ],
+    "median": 3.6005000000000003,
+    "min": 3.301,
+    "max": 4.299
+  },
+  "originStorageEstimate": {
+    "before": {
+      "usageBytes": 4560,
+      "quotaBytes": 10737422800
+    },
+    "pending": {
+      "usageBytes": 2023553,
+      "quotaBytes": 10739441793
+    },
+    "confirmed": {
+      "usageBytes": 2867612,
+      "quotaBytes": 10740285852
+    },
+    "meaning": "approximate entire origin usage/quota, not isolated IndexedDB file size"
+  },
+  "checks": "exact reopened outbox, original base, ACK count, views, versions, cursor, query rows and coverage passed"
+}

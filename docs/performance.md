@@ -186,7 +186,7 @@ measurements.
 
 ## Real Chromium IndexedDB measurements
 
-A separate benchmark ran on 2026-10-03 at 11:33:24 UTC in real headless Chromium
+A separate benchmark ran on 2026-10-03 at 12:09:35 UTC in real headless Chromium
 154 on the macOS/Apple Silicon host above. Dart compiled the fixture to JavaScript
 with `-O2`; compilation and browser startup are outside phase timing. Chromium's
 reduced user-agent string reports Intel/macOS 10.15.7 and is not an independent
@@ -194,6 +194,9 @@ measurement of the actual host OS or CPU. The Python runner uses a fresh tempora
 profile and an ephemeral loopback-only HTTP origin, waits up to 60 real seconds,
 then stops the browser/process group and removes the profile. It does not use
 virtual-time advancement.
+
+The measured phases, query samples, storage estimates and correctness result are
+preserved in the [raw JSON result](evidence/chromium-indexeddb-2026-10-03.json).
 
 The fixture uses the actual IndexedDB adapter, its strict-durability transactions
 and synchronous loaded mirror. It enqueues 1,000 unique document edits
@@ -208,14 +211,16 @@ network synchronization, RU or server throughput in these timings.
 
 | Phase, one browser run | 1,000 documents and peak pending edits |
 | --- | ---: |
-| First empty cache open | 173.615 ms | 183.213 ms |
-| Sequential durable enqueue | 165.573 ms | 911.885 ms |
-| Pending cache reopen | 10.301 ms |
-| Prepare and commit fixture ACKs | 2,921.500 ms |
-| Commit journal pages of 100 | 9.900 ms |
-| Confirmed cache reopen | 8.699 ms |
-| Local scan/filter/sort query median, ten samples | 2.800 ms |
-| Local query sample minimum / maximum | 2.599 / 3.700 ms |
+| First empty cache open | 46.900 ms |
+| Sequential durable enqueue | 1,332.800 ms |
+| Close cache with pending writes | 0.201 ms |
+| Pending cache reopen | 10.900 ms |
+| Prepare and commit fixture ACKs | 1,522.600 ms |
+| Commit journal pages of 100 | 7.401 ms |
+| Close confirmed cache | 0.200 ms |
+| Confirmed cache reopen | 8.800 ms |
+| Local scan/filter/sort query median, ten samples | 3.601 ms |
+| Local query sample minimum / maximum | 3.301 / 4.299 ms |
 
 The query scans all loaded document views, filters `group == 3`, sorts descending
 score with ID tie-breaking and returns at most 100. One explicit warmup query is
@@ -225,10 +230,11 @@ concurrent machine activity may influence them. These are observed timings,
 not responsiveness guarantees, a hardware-neutral rate or a production SLA.
 
 `navigator.storage.estimate()` reported approximate whole-origin usage of
-4,560 bytes before edits, 2,023,500 bytes with pending edits and 2,863,426 bytes
-after confirmation/journal commits. These are not physical IndexedDB file sizes
-or an isolated cache allocation. They include origin storage overhead and may
-reflect allocation retained after outbox deletion. The reported quota is
+4,560 bytes before edits, 2,023,553 bytes with pending edits and 2,867,612 bytes
+after confirmation/journal commits. Corresponding quota estimates were
+10,737,422,800, 10,739,441,793 and 10,740,285,852 bytes. These are not physical
+IndexedDB file sizes or an isolated cache allocation. They include origin storage
+overhead and may reflect allocation retained after outbox deletion. The reported quota is
 browser/profile policy, not an application entitlement or a promise that storage
 will persist. No persistence permission was requested. The benchmark deletes its
 own database before delivering its result; the runner also deletes the entire
@@ -257,9 +263,10 @@ CHROME_EXECUTABLE=/path/to/chromium \
 correctness and cleanup failures or a 60-second timeout fail the runner. Do not
 use the development-machine timing values as CI pass/fail thresholds.
 
-The 50-document smoke also passed in real Chromium at 11:36:24 UTC. The standalone
-Dart benchmark passed `dart analyze` with no issues and formatter verification;
-the Python runner passed syntax compilation. Both browser runs returned `PASS`
-after their database cleanup, and the runner stopped its dedicated browser and
-removed the temporary profile on exit. The tools remain opt-in and contain no
-elapsed-time acceptance threshold.
+This 1,000-document rerun returned `PASS` after its database cleanup, and the
+runner exited with code 0, stopped its dedicated browser and removed the
+temporary profile. The standalone Dart benchmark passed `dart analyze` with no
+issues and formatter verification; the Python runner passed syntax compilation.
+CI uses a separate 50-document correctness smoke; its timing is not represented
+in this table. The tools remain opt-in and contain no elapsed-time acceptance
+threshold.
