@@ -84,7 +84,8 @@ deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
 | --- | --- |
 | Flutter analysis and full app suite | No issues; latest 50 tests, including shared-scope selection plus auth lifecycle/native-adapter/secure-store tests |
 | Latest native SDK suite | No analysis issues; all 165 tests passed, including typed account/membership management and shared-cache selection |
-| Release/environment control tools | All 79 tests passed; no actual cloud resource or registry write is performed by these unit tests |
+| Latest Chromium SDK suite | All 146 tests passed with actual IndexedDB/Web Locks and shared authorization/cache selection coverage |
+| Release/environment control tools | All 81 tests passed; no actual cloud resource or registry write is performed by these unit tests |
 | macOS app integration | Actual Go HTTP BFF, disposable signed JWT/JWKS issuer, SQLite, document/conflict/pending UI and an isolated native Keychain key; provider is a test adapter |
 | Android physical SDK fixture | Pixel 9a / Android 17 API 37; actual SQLite and deterministic transport; cache close/reopen within the test process |
 | Android physical application | Pixel 9a / Android 17 API 37; actual Go HTTP BFF, SQLite, offline reconnect/conflict/delete/purge UI and isolated native secure storage; signed-fixture auth adapter |
@@ -123,8 +124,12 @@ Go/Dart TLS fixture in `tools/authorization_cross_stack_smoke.py` exercises sign
 RSA/JWKS identities, SQLite persistence, membership CAS/idempotency, reader and
 nonowner denial, pending purge on demotion, connected SSE revocation, old cursors,
 regrant and delete replay. Its identities are test fixtures, not actual Entra
-users. The latest full CI must pass again after the final Cosmos authorization
-consistency fixes; older green runs do not validate those changes.
+users. The final official-SDK race/vet checks and seven emulator subtests passed,
+including two-client policy fencing. Independent reproductions verified that
+authorization reads preserve the client's data minimum, post-read checks deny
+causally observed revocation, failed batches cannot release a revoked receipt,
+and each physical query page/error retains its observed minimum. The final full
+CI must pass for the release source; older green runs do not validate new changes.
 
 The Container Apps preparation adds trusted HTTPS-ingress runtime mode,
 non-secret bounded JSON configuration, graceful process drain and a pinned

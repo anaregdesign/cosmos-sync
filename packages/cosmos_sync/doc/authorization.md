@@ -119,9 +119,23 @@ A write can commit before revocation and lose its acknowledgement afterward. A
 
 Policy is loaded for every request. SSE rechecks before and after reads and on
 heartbeats; ordinary sync, snapshots and document/conflict responses recheck after
-potentially slow storage work. Request-scoped Cosmos session tokens preserve
-observations within that request; no permissions cache is used. Cosmos Session
-consistency does **not** establish immediate globally linearizable policy reads
+potentially slow storage work. Authorization and document operations keep
+separate opaque session-token chains: an earlier policy read cannot replace the
+validated client document consistency envelope. Document operations carry their
+latest observed token through receipt reads, batch retries and every physical
+query page, including empty pages and service errors.
+
+Before accessing data and when rechecking a data response, the BFF reads policy
+against both the authorization chain and the validated/latest document minimum.
+It selects the higher application policy revision and its matching ETag;
+Cosmos tokens themselves are never parsed, compared or merged. Missing or
+incompatible policy observations, changed immutable owner/mode, and different
+content at the same revision fail closed. A bounded request-local high-water
+guard also rejects a later policy revision regression. Every check still reads
+policy; this guard never supplies a cached permission decision. The guards hold
+at most eight partitions per request and never persist across requests.
+
+Cosmos Session consistency does **not** establish immediate globally linearizable policy reads
 across independent BFF replicas. A policy check rejects access after that replica
 observes the change. The conditional write fence remains effective against a
 stale policy read. There is also an unavoidable interval between a final check and
