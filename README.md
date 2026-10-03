@@ -1,6 +1,6 @@
 # Cosmos Sync
 
-A Go OIDC authentication/authorization BFF for **Azure Cosmos DB for NoSQL**, with a Dart/Flutter SDK for durable offline documents. Private, unpublished v0.2 preview. Firestore inspires the offline experience; this is a separate API with [documented query and guarantee differences](docs/query.md).
+A Go OIDC authentication/authorization BFF for **Azure Cosmos DB for NoSQL**, with a Dart/Flutter SDK for durable offline documents. Experimental v0.2 preview under the MIT license. Firestore inspires the offline experience; this is a separate API with [documented query and guarantee differences](docs/query.md).
 
 Native SQLite and Chromium IndexedDB store confirmed documents and a durable outbox. Awaited local edits survive reopen; server ACKs are separate. The SDK provides local document/query watches, deterministic cached queries, pending/conflict metadata, retry-safe operation identities, explicit conflicts, tombstones and resumable sync. Optional shared tenant scopes and authenticated SSE hints use the same server authorization boundary. Polling recovers lost hints. Apps receive no Cosmos keys or privileged tokens.
 
@@ -10,10 +10,18 @@ Development is tracked by [epic #2](https://github.com/anaregdesign/cosmos-sync/
 
 - `bff/`: Go service, official Azure SDK, security/atomicity tests and opt-in emulator integration.
 - `packages/cosmos_sync/`: native/browser SDK, cache/query/HTTP tests and examples.
-- `examples/flutter_smoke/`: platform integration fixture.
+- `examples/flutter_app/`: normally runnable native Flutter sample with OIDC login, real BFF transport and document/offline/conflict UI. See its [setup guide](examples/flutter_app/README.md) and [native authentication](docs/native-auth.md).
+- `examples/flutter_smoke/`: separate deterministic native platform integration fixture; its test-injected transport does not demonstrate a real provider login or live Azure connection.
 - `docs/`: [product scope](docs/spec/product-completion.md), [protocol](docs/protocol.md), [architecture](docs/architecture.md), [security](docs/security.md), [platforms](docs/platforms.md), [performance](docs/performance.md), [release](docs/release.md).
 
 Use Go 1.26+ and Dart 3.12+; Flutter 3.44.6 is the measured native fixture baseline.
+
+The SDK is a pure Dart package usable from Flutter; it does not contain widgets.
+Flutter application code lives in `examples/flutter_app/lib/`. Configure the
+selected HTTPS BFF and native public OIDC client in that app. Credentials belong
+in the OS browser and native secure store, never source code or a pasted token.
+Actual provider/cloud/physical-device acceptance is tracked separately from the
+existing local signed-fixture and simulator evidence.
 
 ```sh
 cd bff
@@ -73,4 +81,6 @@ Startup validates an existing container and never provisions one. Mutation/head/
 
 ## Release status
 
-No package/image has been published, no merge/deployment performed, and no paid Azure resource created. Planned image: `ghcr.io/anaregdesign/cosmos-sync-bff`; Dart package: `cosmos_sync`. Repo visibility remains private. License, public source/publisher decisions, GHCR distribution/access and an isolated live Azure environment are owner gates in [#14](https://github.com/anaregdesign/cosmos-sync/issues/14), [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and [#16](https://github.com/anaregdesign/cosmos-sync/issues/16). The existing signed-in administrator's Packages UI showed no `cosmos-sync-bff` collision on 2026-10-03; CLI authentication still lacks `read:packages`, and no permission was expanded. Name checks and a dry run do not reserve or publish a package.
+The foundation was merged to main in [PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1); all seven main checks passed. The remaining publication work is tracked in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2), including the usable Flutter app/auth, release artifacts, live Azure and physical devices. The owner approved MIT, public GitHub/GHCR distribution and the first `cosmos_sync` 0.2.0-dev.1 preview. Actual registry publication and final access checks are tracked in [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and [#23](https://github.com/anaregdesign/cosmos-sync/issues/23); a name check or dry run does not reserve or publish a package. Planned image: `ghcr.io/anaregdesign/cosmos-sync-bff`.
+
+Dedicated Entra registration is being prepared for the selected tenant. An isolated Azure account, operating budget and hosting target remain required in [#16](https://github.com/anaregdesign/cosmos-sync/issues/16). No paid Azure resource or hosted deployment has been created. [Physical-device acceptance](docs/physical-devices.md) separates Android runtime evidence from the owner's unsigned iOS build choice: an unsigned iOS build cannot establish physical iPhone execution. Provider/cloud/physical-device checks remain open until their actual acceptance evidence is recorded.

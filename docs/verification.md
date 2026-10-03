@@ -1,9 +1,14 @@
 # Verification
 
-Local v0.2 checks on 2026-10-03, macOS 26.7 arm64. Production BFF and SDK source
+Foundation v0.2 checks on 2026-10-03, macOS 26.7 arm64. Production BFF and SDK source
 commits are `9c2bdb8` and `a7998fe`. Go 1.26.5, Dart 3.12.2, Flutter 3.44.6,
 SQLite package 3.5.2 and Docker 29.5.3 were used. No paid Azure resource,
-publication, merge or deployment was performed.
+publication or deployment was performed. The foundation was subsequently merged
+by explicit owner instruction in [PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1),
+with all seven [main CI jobs](https://github.com/anaregdesign/cosmos-sync/actions/runs/37122828485)
+passing at `8d52024`. The new publication work in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2)
+is a separate delivery and its real provider/cloud/device checks are not inferred
+from these foundation fixtures.
 
 | Check | Actual result |
 | --- | --- |
@@ -60,9 +65,33 @@ unverified. See [platforms](platforms.md) and [performance](performance.md).
 
 GitHub verification runs Go, native Dart, Chromium, official emulator, macOS
 Flutter, container build and native/browser cross-stack/crash smoke checks.
-Current remote outcomes are attached to [draft PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1).
+Foundation remote outcomes are attached to [merged PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1).
 Publication workflows remain disabled/gated and are not exercised by verification.
 Owner gates [#14](https://github.com/anaregdesign/cosmos-sync/issues/14),
 [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and
 [#16](https://github.com/anaregdesign/cosmos-sync/issues/16) remain open. A successful
-pub dry-run does not approve the pending LICENSE, source disclosure or publication.
+pub dry-run does not establish actual publication. The owner has now approved MIT,
+public GitHub/GHCR visibility, the selected pub.dev account and the proposed
+0.2.0-dev.1 preview. Actual artifact publication/access, provider/cloud operations
+and physical device results remain separate evidence.
+
+## Publication readiness checks
+
+The new ordinary application is `examples/flutter_app`, separate from the
+deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
+
+| Check | Evidence scope |
+| --- | --- |
+| Flutter analysis and full app suite | No issues; 46 tests, including 37 auth lifecycle/native-adapter/secure-store tests |
+| macOS app integration | Actual Go HTTP BFF, disposable signed JWT/JWKS issuer, SQLite, document/conflict/pending UI and an isolated native Keychain key; provider is a test adapter |
+| Android physical SDK fixture | Pixel 9a / Android 17 API 37; actual SQLite and deterministic transport; cache close/reopen within the test process |
+| MIT archive | 72 KB strict pub publish dry-run, zero warnings; no upload |
+| Multiarch OCI artifact | Linux amd64/arm64, nonroot runtime, checked provenance/SBOM subjects, MIT and Go/module license notices; local build, no push |
+| Independent review | Auth reentry/purge defects and Azure request/deadline/partial-evidence defects reproduced, fixed and independently rechecked |
+
+These checks do not establish real Entra callback acceptance, live Cosmos data
+operations, physical iPhone runtime or registry distribution. The owner chose
+unsigned iOS verification and one-account live tests. Different-user isolation
+remains an important live-provider gap even though independent signed-fixture
+and emulator principal/partition tests pass. Keep actual release/CI links and
+remaining scope in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2).
