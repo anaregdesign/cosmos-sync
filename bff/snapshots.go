@@ -36,7 +36,7 @@ func (s *CosmosStore) Head(ctx context.Context, scope, session string) (int64, s
 	return head.Sequence, session, nil
 }
 
-func (s *Server) serveSnapshot(w http.ResponseWriter, r *http.Request, scope Scope, session string) {
+func (s *Server) serveSnapshot(w http.ResponseWriter, r *http.Request, scope Scope, accessToken, session string) {
 	if !s.config.Snapshots.Enabled {
 		s.writeError(w, protocolError(404, "not_found"))
 		return
@@ -109,6 +109,10 @@ func (s *Server) serveSnapshot(w http.ResponseWriter, r *http.Request, scope Sco
 		return
 	}
 	hasMore := end < len(documents)
+	if err := s.reauthorizeScope(ctx, accessToken, scope, session); err != nil {
+		s.writeError(w, err)
+		return
+	}
 	value := s.boundContext(scope, cutover)
 	value.Offset = end
 	cursor := s.sign("snapshot-v1", value)

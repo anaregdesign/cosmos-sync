@@ -1,0 +1,8 @@
+# Already-approved Azure Blob state storage, separate from the Cosmos container.
+resource_group_name  = "existing-state-group"
+storage_account_name = "existingtfstate"
+container_name       = "terraform-state"
+key                  = "cosmos-sync/validation.tfstate"
+use_azuread_auth     = true
+# Authentication comes from an approved CLI/managed/workload identity, not keys
+# in this file. Add `backend "azurerm" {}` to versions.tf before migration.

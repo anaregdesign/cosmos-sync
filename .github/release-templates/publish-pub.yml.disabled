@@ -1,12 +1,41 @@
-# Not an active workflow. After license/visibility/first-publication approval,
-# copy to .github/workflows/publish-pub.yml and configure pub.dev automation.
+# Not an active workflow. First publish is manual and this stays disabled until
+# the owner configures pub.dev for anaregdesign/cosmos-sync and cosmos_sync-v{{version}}.
+# Copy only after publication/ownership/protection approval; no stored pub credentials.
 name: Publish cosmos_sync
 on:
   push:
     tags: ['cosmos_sync-v[0-9]+.[0-9]+.[0-9]+*']
+permissions:
+  contents: read
+concurrency:
+  group: publish-pub
+  cancel-in-progress: false
 jobs:
-  publish:
+  verify:
+    if: vars.PUB_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
     permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_APPROVED_SHA: ${{ vars.RELEASE_APPROVED_SHA }}
+      RELEASE_APPROVED_VERSION: ${{ vars.RELEASE_APPROVED_VERSION }}
+      RELEASE_LICENSE_SPDX: ${{ vars.RELEASE_LICENSE_SPDX }}
+      PUB_PUBLICATION_APPROVED: ${{ vars.PUB_PUBLICATION_APPROVED }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Verify approved commit, exact version tag and completed main CI
+        run: |
+          VERSION=$(python3 -c 'import sys; sys.path.insert(0, "tools"); import release_verify; print(release_verify.metadata()["version"])')
+          test "$GITHUB_REF_NAME" = "cosmos_sync-v$VERSION"
+          python3 tools/release_verify.py preflight --target pub --sha "$GITHUB_SHA" --version "$VERSION"
+  publish:
+    needs: verify
+    permissions:
+      contents: read
       id-token: write
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@6afc89df92d6eb3834022f73cd65adc8cdfcb92d
     with:

@@ -4,7 +4,7 @@ Go HTTP BFF for **Azure Cosmos DB for NoSQL**, using the official `azcosmos` Go 
 
 ## Run
 
-Copy `config.example.json` to an untracked configuration and mount a grants file using `grants.example.json`. Set `COSMOS_SYNC_CURSOR_KEY_BASE64` to at least 32 cryptographically random bytes encoded as base64; all replicas must use the same secret. Use separate keys for separate environments. Rotation invalidates saved cursors and consistency envelopes and requires client resynchronization. Never ship this secret to an app.
+For a new deployment, copy `config.builtin.example.json` to an untracked configuration. Its explicit `authorization.mode=builtin` persists account/personal/shared membership policy in the existing Cosmos container. For an existing legacy deployment, retain `config.example.json` and its server grants file based on `grants.example.json`; no data or grant migration is automatic. Set `COSMOS_SYNC_CURSOR_KEY_BASE64` to at least 32 cryptographically random bytes encoded as base64; all replicas must use the same secret. Use separate keys for separate environments. Rotation invalidates saved cursors and consistency envelopes and requires client resynchronization. Never ship this secret to an app.
 
 ```sh
 go test -race ./...
@@ -12,13 +12,46 @@ go build -o cosmos-sync-bff ./cmd/cosmos-sync-bff
 ./cosmos-sync-bff -config /run/config/config.json
 ```
 
-Production requires `COSMOS_SYNC_TLS_CERT` and `COSMOS_SYNC_TLS_KEY` paths for direct TLS. A TLS ingress must re-encrypt its connection to the BFF. Forwarded headers are not trusted. `development: true` requires a loopback listener such as `127.0.0.1:8080`; it does not bypass JWT verification. Memory storage is allowed only with this development setting and is deliberately volatile.
+Production defaults to direct TLS and requires both `COSMOS_SYNC_TLS_CERT` and `COSMOS_SYNC_TLS_KEY` paths. An ordinary TLS ingress must re-encrypt its connection to the BFF. Forwarded headers are ignored in this mode. `development: true` requires a loopback listener such as `127.0.0.1:8080`; it does not bypass JWT verification. Memory storage is allowed only with this development setting and is deliberately volatile.
 
-The OIDC issuer must use HTTPS and expose discovery/JWKS. Use a dedicated API audience and an access-token scope (`cosmos_sync` by default). Tokens need `sub`, a configured tenant claim (`tid` by default), valid issuer/audience/signature/expiry, and a complete space-delimited required scope. `nbf` is enforced. For issuers such as Cognito, configure `tokenUse: "access"` when that claim is available. The BFF never exchanges credentials or accepts ID tokens lacking the API scope.
+### Azure Container Apps runtime
 
-The external grants JSON is read into fresh local storage on every request and before each SSE hint or heartbeat, allowing active-token revocation and permission-version changes. Replace the file atomically and update all replicas together. An unreadable or invalid grants source fails closed. Bump `permissionVersion` whenever access policy changes. Removing a grant or setting `active: false` returns 403; previously issued cursors cannot survive a version change. Revocation cannot be discovered by an offline client until reconnection.
+Set `COSMOS_SYNC_TLS_MODE=container-apps` only when using Azure Container Apps HTTP ingress with insecure ingress disabled. This production mode requires the platform-provided `CONTAINER_APP_NAME` and `CONTAINER_APP_REVISION`; do not manufacture those markers in a local deployment. It accepts protected requests only when the ingress supplies exactly one `X-Forwarded-Proto: https` header. Container Apps [terminates HTTPS and overwrites the client-supplied protocol header](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview). The marker checks are a deployment guard, not remote platform attestation. Keep the environment dedicated to trusted workloads, expose no additional TCP port, and prevent callers from bypassing the trusted ingress. Configure environment peer traffic encryption separately; this mode does not perform TLS inside the Go process. Direct TLS certificate settings cannot be combined with this mode.
 
-## Personal and shared tenant scopes
+`COSMOS_SYNC_CONFIG_JSON` supplies the same JSON configuration as the file. An explicitly selected `-config` file cannot be combined with that variable. Both sources are bounded to 1 MiB and reject unknown fields; errors never include configuration values. Keep the JSON to nonsecret resource identifiers, OIDC settings and operational limits. Inject the shared cursor key and optional metrics token using platform secret references. The runtime never provisions identity providers or Cosmos resources. Explicit builtin authorization creates only its own account/policy/audit/receipt records inside the configured container after trusted API authentication.
+
+Configure startup/readiness probes as `GET /readyz` and liveness as `GET /healthz` on the target HTTP port. Only these two GET routes permit an HTTP probe without the forwarded protocol header in Container Apps mode. They expose fixed status values. Readiness means OIDC discovery, Cosmos container initialization and server configuration completed successfully before listening; it does not continuously test remote dependencies. JWT/session routes and metrics retain their existing authorization checks. The process waits for active requests to drain on SIGTERM/SIGINT, then forcibly closes remaining requests after a 10-second grace period. SSE clients must reconnect and retrieve durable changes from their applied cursor.
+
+The OIDC issuer must use HTTPS and expose discovery/JWKS. Use a dedicated API audience and an access-token scope (`cosmos_sync` by default). Tokens need `sub`, valid issuer/audience/signature/expiry, and a complete space-delimited required scope. Only legacy grants require the configured tenant claim (`tid` by default). `nbf` is enforced. Provider roles, groups and email never assign application data access. For issuers such as Cognito, configure `tokenUse: "access"` when that claim is available. The BFF never exchanges credentials or accepts ID tokens lacking the API scope.
+
+In legacy mode the external grants JSON is read into fresh local storage on every request and before each SSE hint or heartbeat. Replace the file atomically and update all replicas together. An unreadable or invalid grants source fails closed. Bump `permissionVersion` whenever access policy changes. Removing a grant or setting `active: false` returns 403 at the next observed authorization check; legacy writes already authorized can still commit. Previously issued cursors cannot survive a version change. Revocation cannot be discovered by an offline client until reconnection.
+
+## Builtin personal and shared authorization
+
+With explicit builtin mode, `GET /v1/account` durably registers the verified
+issuer/subject and returns `{accountId,personalScopeId}`. The personal
+`/v1/session?scope=user` requires no manual grant and belongs only to that account.
+`POST /v1/scopes` with an operation UUID creates a shared scope whose creator is
+the immutable owner. Only that owner can use `/v1/scopes/{id}/members` to assign
+already registered account IDs reader/writer membership or revoke with `none`.
+Use `/v1/session?scope=shared&scopeId=<created ID>` for that authorized scope.
+Management edits use optimistic revision checks, immutable audit entries and
+idempotent receipts. A caller's token role or `owner` document property cannot
+assign permissions. Ownership cannot be transferred/removed in this preview.
+
+Policies retain at most 128 distinct member accounts including revoked
+tombstones. Revisions 9,744 onward reserve 256 rights-reduction operations before
+the 10,000 maximum, so storage capacity cannot prevent revoking active members.
+Individual permission generations avoid purging unrelated members. Builtin data
+batches also assert the policy ETag: once revocation commits, a write using the
+old policy cannot commit afterward. Reads deny access after the replica observes
+the change; Cosmos Session does not guarantee instant global read revocation.
+Slow document/conflict, sync, snapshot and SSE responses recheck authorization.
+An earlier commit can lose its acknowledgement after revocation; 403 is not proof
+of rollback. See [the complete authorization contract](../docs/authorization.md)
+for APIs, costs, limits and fail-closed migration.
+
+## Legacy personal and shared tenant scopes
 
 `GET /v1/session?scope=user` selects a personal grant; `scope=tenant` selects a server-managed shared tenant membership. An omitted mode defaults to `user`. A principal can have both grants. Tenant members share documents, but their operation receipts and signed contexts remain bound to the verified actor. Supported roles are denied (neither capability), read-only, and read-write. Denied roles cannot establish a session. Write capability requires read capability: an invalid write-only inline grant prevents server startup, and an invalid live grants file fails closed. Read-only membership can synchronize but cannot mutate. No membership management endpoint accepts client-selected tenant IDs.
 
@@ -32,7 +65,7 @@ The BFF never provisions databases or containers. Grant its Azure managed/worklo
 
 Use `/scopeId` as the single logical partition path, enable range indexing of `sequence`, and use **single-write mode with Session or stronger consistency**. `singleWriteRegion: true` is an explicit deployment declaration; an SDK pipeline policy also requires explicit `enableMultipleWriteLocations: false`, a nonempty advertised writable location list, and Session, Bounded Staleness or Strong consistency. It does not infer multi-write mode from the list's cardinality. Container metadata is checked for the required partition key and no default TTL expiry. Disable external hard deletion, per-item TTL, and out-of-band modifications: retained documents, immutable journal entries, receipts and partition head must be owned exclusively by the BFF.
 
-Each mutation uses one four-operation transactional batch: conditional sequence head, conditional document replacement/create, immutable journal event, and idempotency receipt. Head and document ETags prevent lost updates; canonical request hash, verified actor and operation ID detect replay and payload reuse. The receipt is reread after an overlapping retry to distinguish an accepted operation from a version conflict. Deletes retain tombstones. Journal replay begins at sequence zero, so initial loading has no separate snapshot/feed race. A sequence gap returns a retryable failure instead of advancing the cursor. A SDK per-call policy compacts batch JSON without HTML escaping and checks the actual 2 MiB wire limit, protecting the 256 KiB canonical document boundary even for strings filled with `<` or `>`; a fake-transport test checks the final SDK body. The mutation wire limit is 512 KiB. Nested JSON numbers must be finite, non-underflowing doubles; both exact integral values and fractions rounded to integral doubles must remain inside ±(2^53−1). Numeric spellings remain significant in idempotency hashes.
+Each mutation uses one transactional batch: conditional sequence head, conditional document replacement/create, immutable journal event, and idempotency receipt; builtin authorization adds a fifth policy ETag assertion. Head and document ETags prevent lost updates; canonical request hash, verified actor and operation ID detect replay and payload reuse. The receipt is reread after an overlapping retry to distinguish an accepted operation from a version conflict. Deletes retain tombstones. Journal replay begins at sequence zero, so initial loading has no separate snapshot/feed race. A sequence gap returns a retryable failure instead of advancing the cursor. A SDK per-call policy compacts batch JSON without HTML escaping and checks the actual 2 MiB wire limit, protecting the 256 KiB canonical document boundary even for strings filled with `<` or `>`; a fake-transport test checks the final SDK body. The mutation wire limit is 512 KiB. Nested JSON numbers must be finite, non-underflowing doubles; both exact integral values and fractions rounded to integral doubles must remain inside ±(2^53−1). Numeric spellings remain significant in idempotency hashes.
 
 Neither cross-partition transactions nor global order are provided. A head item serializes writes within each scope's partition and limits throughput. There is no Cosmos Change Feed dependency or claim that it reports every deletion: the BFF's own immutable journal contains tombstones and defines the per-scope order.
 
@@ -52,10 +85,17 @@ Journals, receipts and tombstones never expire or get garbage-collected. Capacit
 
 Configure `allowedOrigins` as exact HTTPS origins to support browser fetch-based SSE with Authorization and expectation headers. Only HTTP loopback origins are permitted in development. No wildcard or credentialed CORS is provided. Approved preflight requests require no JWT, and response headers expose consistency envelopes and `Retry-After`.
 
-Set a separate `COSMOS_SYNC_METRICS_TOKEN` to enable protected `/metrics`; omission disables it. Metrics use bounded route/method/status labels and aggregate request counts/duration, with no principals, tenant IDs, document IDs, query strings, bearer tokens or payloads. Runtime responses and logs avoid credential contents. Configure TLS ingress, monitoring and deployment quotas separately; the sample performs no cloud deployment.
+Set a separate `COSMOS_SYNC_METRICS_TOKEN` to enable protected `/metrics`; omission disables it. Metrics use bounded route/method/status labels and aggregate request counts/duration, with no principals, tenant IDs, document IDs, query strings, bearer tokens or payloads. Runtime responses and logs avoid credential contents. Configure TLS ingress, monitoring and deployment quotas separately; the runtime performs no cloud deployment.
 
 ## Verification status
 
 Tests use real RSA-signed JWTs and TLS OIDC discovery/JWKS, plus deterministic memory storage. Coverage includes shared membership, actor collisions, account switching, JWT/grant revocation during SSE, snapshot restart/cutover/tombstones, cursor purposes/epochs, nonlossy capacity bounds, numeric validation, concurrency, CORS and redacted metrics. Cosmos adapter tests drive the official SDK through a fake transport to verify the overlapping-receipt race, scoped requests, session headers, actual batch bytes, causal failures and account consistency checks. Opt-in local emulator tests are documented in [the emulator guide](../docs/emulator.md); the tested emulator advertises Eventual consistency and is correctly rejected by the production account guard. Its isolated test factory bypasses that guard solely to exercise storage behavior. Cloud Session semantics and Azure identity/RBAC require deployment validation.
+
+Builtin tests additionally cover provider-independent personal registration,
+owner-only membership administration, known-account/default-deny boundaries,
+administration CAS/replay, remove/readd generations, reserved revocation capacity,
+legacy data isolation, and post-store response revocation. The real emulator
+uses two SDK clients and holds a stale five-operation write while another client
+revokes membership, then verifies no head/document/journal/receipt committed.
 
 `TestDartFixture` in `tests` is skipped normally. Set `COSMOS_SYNC_E2E_READY_FILE` and `COSMOS_SYNC_E2E_STOP_FILE` for a bounded, local HTTP fixture with real signed JWT verification and enabled snapshot/SSE endpoints. Optional `COSMOS_SYNC_E2E_ORIGIN` permits one exact local browser origin. The fixture writes a disposable token into a mode-0600 ready file and stops after the stop file or 89 seconds.

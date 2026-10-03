@@ -1,9 +1,14 @@
 # Verification
 
-Local v0.2 checks on 2026-10-03, macOS 26.7 arm64. Production BFF and SDK source
+Foundation v0.2 checks on 2026-10-03, macOS 26.7 arm64. Production BFF and SDK source
 commits are `9c2bdb8` and `a7998fe`. Go 1.26.5, Dart 3.12.2, Flutter 3.44.6,
 SQLite package 3.5.2 and Docker 29.5.3 were used. No paid Azure resource,
-publication, merge or deployment was performed.
+publication or deployment was performed. The foundation was subsequently merged
+by explicit owner instruction in [PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1),
+with all seven [main CI jobs](https://github.com/anaregdesign/cosmos-sync/actions/runs/37122828485)
+passing at `8d52024`. The new publication work in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2)
+is a separate delivery and its real provider/cloud/device checks are not inferred
+from these foundation fixtures.
 
 | Check | Actual result |
 | --- | --- |
@@ -60,9 +65,83 @@ unverified. See [platforms](platforms.md) and [performance](performance.md).
 
 GitHub verification runs Go, native Dart, Chromium, official emulator, macOS
 Flutter, container build and native/browser cross-stack/crash smoke checks.
-Current remote outcomes are attached to [draft PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1).
+Foundation remote outcomes are attached to [merged PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1).
 Publication workflows remain disabled/gated and are not exercised by verification.
 Owner gates [#14](https://github.com/anaregdesign/cosmos-sync/issues/14),
 [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and
 [#16](https://github.com/anaregdesign/cosmos-sync/issues/16) remain open. A successful
-pub dry-run does not approve the pending LICENSE, source disclosure or publication.
+pub dry-run does not establish actual publication. The owner has now approved MIT,
+public GitHub/GHCR visibility, the selected pub.dev account and the proposed
+0.2.0-dev.1 preview. Actual artifact publication/access, provider/cloud operations
+and physical device results remain separate evidence.
+
+## Publication readiness checks
+
+The new ordinary application is `examples/flutter_app`, separate from the
+deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
+
+| Check | Evidence scope |
+| --- | --- |
+| Flutter analysis and full app suite | No issues; latest 50 tests, including shared-scope selection plus auth lifecycle/native-adapter/secure-store tests |
+| Latest native SDK suite | No analysis issues; all 165 tests passed, including typed account/membership management and shared-cache selection |
+| Latest Chromium SDK suite | All 146 tests passed with actual IndexedDB/Web Locks and shared authorization/cache selection coverage |
+| Release/environment control tools | All 81 tests passed; no actual cloud resource or registry write is performed by these unit tests |
+| macOS app integration | Actual Go HTTP BFF, disposable signed JWT/JWKS issuer, SQLite, document/conflict/pending UI and an isolated native Keychain key; provider is a test adapter |
+| Android physical SDK fixture | Pixel 9a / Android 17 API 37; actual SQLite and deterministic transport; cache close/reopen within the test process |
+| Android physical application | Pixel 9a / Android 17 API 37; actual Go HTTP BFF, SQLite, offline reconnect/conflict/delete/purge UI and isolated native secure storage; signed-fixture auth adapter |
+| Actual Entra native authentication | macOS system-browser AppAuth PKCE, callback, Keychain controller restore, provider refresh and local sign-out passed; both API JWTs independently verified against issuer/JWKS/audience/scope/tenant/approved owner |
+| Normal iOS release build | Unsigned arm64 build passed from core `e7fa4ccb`; no physical install or Apple portal operation |
+| iOS simulator app integration | iPhone 16 Pro / iOS 26.5; actual HTTP BFF, SQLite and isolated Keychain probe; local ad-hoc simulator signing and ephemeral arm64 workaround, test auth adapter |
+| MIT archive | Latest 85 KB strict pub publish dry-run, zero warnings, with protocol/query/security/authorization documents; no upload |
+| Multiarch OCI artifact | Linux amd64/arm64, nonroot runtime, checked provenance/SBOM subjects, MIT and Go/module license notices; local build, no push |
+| Independent review | Auth reentry/purge defects and Azure request/deadline/partial-evidence defects reproduced, fixed and independently rechecked |
+
+The Entra check used the approved native client and the owner's one account.
+It verifies a controller restore within the process, not an OS process restart.
+Its local sign-out cleared the isolated credential but does not revoke an
+already-issued API access token. The Android application check ran reviewed
+test-only small-screen interaction changes, subsequently committed in `8500ad2`;
+the production app core was unchanged. Both physical Android fixtures use
+test authentication, independently of the actual macOS provider check.
+
+These checks do not establish live Cosmos data operations, physical iPhone
+runtime, actual Android provider sign-in or registry distribution. The owner chose
+unsigned iOS verification and one-account live tests. Different-user isolation
+remains an important live-provider gap even though independent signed-fixture
+and emulator principal/partition tests pass. Keep actual release/CI links and
+remaining scope in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2).
+The exact unsigned/simulator commands and toolchain workaround are recorded in
+[iOS validation](ios-validation.md). The owner approved the isolated East US
+Cosmos validation target, current developer egress and container-scoped data
+role, then explicitly required retaining the reusable Cosmos/Entra environment.
+That retention instruction supersedes the earlier after-test deletion approval.
+
+## Built-in authorization and Container Apps preparation
+
+The subsequent preview source adds durable issuer/subject accounts, personal
+self-access scopes and fixed-owner shared reader/writer membership. The actual
+Go/Dart TLS fixture in `tools/authorization_cross_stack_smoke.py` exercises signed
+RSA/JWKS identities, SQLite persistence, membership CAS/idempotency, reader and
+nonowner denial, pending purge on demotion, connected SSE revocation, old cursors,
+regrant and delete replay. Its identities are test fixtures, not actual Entra
+users. The final official-SDK race/vet checks and seven emulator subtests passed,
+including two-client policy fencing. Independent reproductions verified that
+authorization reads preserve the client's data minimum, post-read checks deny
+causally observed revocation, failed batches cannot release a revoked receipt,
+and each physical query page/error retains its observed minimum. The final full
+CI must pass for the release source; older green runs do not validate new changes.
+
+The Container Apps preparation adds trusted HTTPS-ingress runtime mode,
+non-secret bounded JSON configuration, graceful process drain and a pinned
+Terraform reference. Format/init/validate, 15 mock-only plan tests and TFLint
+passed. No ACA environment/application, managed identity, Key Vault or hosted
+role assignment was created. The reference uses container-scoped Cosmos native
+RBAC and versioned Key Vault secret references; a reviewed real plan and the
+owner's exact resource/network authorization are still required for deployment.
+
+The reusable Azure validation target currently contains only its owned tagged
+empty resource group. No Cosmos account, database, container or data-role
+assignment exists yet. Free-tier creation was rejected by the subscription
+offer and the approved East US serverless attempt failed for capacity. The
+requested region-only alternative awaits approval. No actual cloud data result
+or hosted clean-checkout onboarding is inferred from local/emulator evidence.

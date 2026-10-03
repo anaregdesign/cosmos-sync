@@ -2,9 +2,12 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cosmos_sync/cosmos_sync.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 import '../support/testing_transport.dart' show TestServer, TestTransport;
@@ -274,6 +277,116 @@ void main() {
   );
 
   test(
+    'explicit shared selection purges a different offline cache before display',
+    () async {
+      final sharedA = SessionInfo(
+        principalId: 'a' * 64,
+        scopeId: 'b' * 64,
+        permissionVersion: '2',
+        scopeMode: SyncScopeMode.shared,
+      );
+      final original = await open(session: sharedA);
+      await original.put('private', {'text': 'only shared A'});
+      await original.close();
+      var requests = 0;
+      final transport = HttpSyncTransport(
+        baseUri: Uri.parse('https://bff.example.test'),
+        tokenProvider: () async => 'api-token',
+        scopeMode: SyncScopeMode.shared,
+        sharedScopeId: 'c' * 64,
+        client: MockClient((_) async {
+          requests++;
+          throw http.ClientException('offline');
+        }),
+      );
+      final selected = await CosmosSyncClient.open(
+        path: path,
+        transport: transport,
+      );
+      clients.add(selected);
+      expect(requests, 0);
+      expect(selected.status.paused, isTrue);
+      expect(selected.status.reason, 'scope_changed');
+      expect(selected.get('private'), isNull);
+      expect(selected.pending, isEmpty);
+      expect(selected.cache.cursor, isNull);
+    },
+  );
+
+  test(
+    'explicit shared mode purges a supplied legacy personal session offline',
+    () async {
+      var requests = 0;
+      final transport = HttpSyncTransport(
+        baseUri: Uri.parse('https://bff.example.test'),
+        tokenProvider: () async => 'api-token',
+        scopeMode: SyncScopeMode.shared,
+        sharedScopeId: 'b' * 64,
+        client: MockClient((_) async {
+          requests++;
+          throw http.ClientException('offline');
+        }),
+      );
+      final selected = await CosmosSyncClient.open(
+        path: path,
+        transport: transport,
+        session: scope,
+      );
+      clients.add(selected);
+      expect(requests, 0);
+      expect(selected.status.paused, isTrue);
+      expect(
+        () => selected.put('private', {'text': 'wrong mode'}),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
+    'matching offline shared selection retains data, generation changes purge before replay',
+    () async {
+      final shared = SessionInfo(
+        principalId: 'a' * 64,
+        scopeId: 'b' * 64,
+        permissionVersion: '2',
+        scopeMode: SyncScopeMode.shared,
+      );
+      final original = await open(session: shared);
+      await original.put('note', {'text': 'available offline'});
+      final operation = original.pending.single.operationId;
+      await original.close();
+      var requests = 0;
+      final transport = HttpSyncTransport(
+        baseUri: Uri.parse('https://bff.example.test'),
+        tokenProvider: () async => 'api-token',
+        scopeMode: SyncScopeMode.shared,
+        sharedScopeId: shared.scopeId,
+        client: MockClient((request) async {
+          requests++;
+          expect(request.url.path, '/v1/session');
+          return http.Response(
+            jsonEncode({...shared.toJson(), 'permissionVersion': '4'}),
+            200,
+          );
+        }),
+      );
+      final reopened = await CosmosSyncClient.open(
+        path: path,
+        transport: transport,
+      );
+      clients.add(reopened);
+      expect(requests, 0);
+      expect(reopened.get('note')!.data!['text'], 'available offline');
+      expect(reopened.pending.single.operationId, operation);
+      await expectLater(reopened.flush(), throwsStateError);
+      expect(requests, 1);
+      expect(reopened.status.paused, isTrue);
+      expect(reopened.get('note'), isNull);
+      expect(reopened.pending, isEmpty);
+    },
+  );
+
+  test(
     '401 and 403 at preflight or mutation conservatively purge and pause',
     () async {
       for (final code in [401, 403]) {
@@ -355,6 +468,46 @@ void main() {
       expect(client.pending.single.errorCode, 'invalid_request');
       await client.discard(id);
       expect(client.get('note'), isNull);
+    },
+  );
+
+  test(
+    '507 capacity preserves retry deadline and exact request across restart',
+    () async {
+      final transport = TestTransport(server)
+        ..mutationFailure = const TransportException(
+          statusCode: 507,
+          code: 'scope_capacity_exceeded',
+          message: 'Operator must restore capacity.',
+          retryAfter: Duration(seconds: 20),
+        );
+      var client = await open(transport: transport);
+      final id = await client.put('note', {'text': 'durable capacity wait'});
+      final deferred = await client.flush();
+      final exact = transport.requests.single.toJson();
+      expect(deferred.acknowledged, 0);
+      expect(deferred.retryAt, now.add(const Duration(seconds: 20)));
+      expect(client.pending.single.operationId, id);
+      expect(client.pending.single.state, MutationState.queued);
+      expect(client.pending.single.errorCode, 'scope_capacity_exceeded');
+      expect(client.get('note')!.hasPendingWrites, isTrue);
+      expect(server.sequence, 0);
+      expect(() => client.discard(id), throwsStateError);
+      await client.close();
+
+      final recovered = TestTransport(server);
+      client = await open(transport: recovered);
+      expect(client.pending.single.operationId, id);
+      expect(client.pending.single.attempts, 1);
+      expect(client.pending.single.errorCode, 'scope_capacity_exceeded');
+      await client.flush();
+      expect(recovered.requests, isEmpty);
+      now = now.add(const Duration(seconds: 21));
+      expect((await client.flush()).acknowledged, 1);
+      expect(recovered.requests.single.toJson(), exact);
+      expect(server.sequence, 1);
+      expect(client.pending, isEmpty);
+      expect(client.get('note')!.hasPendingWrites, isFalse);
     },
   );
 

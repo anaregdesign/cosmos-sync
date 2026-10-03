@@ -11,15 +11,18 @@ edit and delete authorized documents while disconnected, retain accepted local
 edits across restart, and converge after reconnect without silently discarding an
 edit, crossing an authorization boundary, or skipping a deletion. It provides
 documented local query semantics, native and Chromium browser persistence,
-optional shared tenant scopes, and resumable change notifications. It does not
+optional server-managed shared scopes, and resumable change notifications. It does not
 claim Firestore API, query, transaction, conflict or billing compatibility.
 
 ## Definitions and supported boundary
 
 - A **scope** is a server-authorized set of documents stored in one logical Cosmos
-  partition. A personal scope is derived from validated identity. A shared scope
-  is selected by an optional user/tenant session mode and current server grants,
-  never authorized by a client claim or an unvalidated partition ID. General
+  partition. In explicit built-in mode, a personal scope belongs to a durable
+  issuer/subject account and a shared scope has a fixed creator/owner with
+  conditional reader/writer membership administration. Its server-issued opaque
+  selector does not authorize access. Legacy mode retains existing user/tenant
+  server grants without automatic migration. Neither mode authorizes access
+  from a client ownership claim or an unvalidated partition ID. General
   group/organization membership discovery is outside this target.
 - A **local acceptance** means the cache and exact durable outbox mutation have
   committed together. It does not mean the server has accepted the mutation.

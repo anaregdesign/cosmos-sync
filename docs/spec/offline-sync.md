@@ -9,7 +9,12 @@ Build a private monorepo for an authenticated Azure Cosmos DB for NoSQL BFF and 
 - Concurrent writes use optimistic concurrency. Atomic document, journal and receipt writes occur in one Cosmos logical partition. No cross-partition transaction or global ordering is promised.
 - Revoked or mismatched identity clears local data and pauses synchronization. Offline permission revocation cannot be detected without reconnection.
 - Automated BFF and Dart tests, Docker build, CI, publish preparation, examples, operational/security documentation and feature limitations accompany the slice.
-- Repository is private. Code is pushed on an independent branch with a draft PR. No Azure paid resources, visibility changes, package publication, merge, deployment or license selection occur.
+- The initial development repository was private and isolated from other work.
+  The owner subsequently authorized main integration, MIT, public GitHub/GHCR,
+  the first pub.dev preview and cheapest isolated Azure validation. Execution and
+  actual evidence are tracked in English [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2).
+  Exact cloud targets/data roles and user authentication remain separately gated;
+  do not infer production deployment or unrelated resource access.
 
 ## Later milestones
 

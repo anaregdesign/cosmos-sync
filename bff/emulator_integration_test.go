@@ -27,6 +27,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/coreos/go-oidc/v3/oidc"
 )
@@ -65,6 +66,41 @@ func (p emulatorMetadataObserver) Do(request *policy.Request) (*http.Response, e
 type emulatorSessionProbe struct {
 	token    string
 	observed *atomic.Bool
+}
+
+// Pause only this test's first five-item data batch after its policy read. A
+// second real client can revoke membership before the stale batch reaches Cosmos.
+type emulatorAuthorizationFence struct {
+	scopeID string
+	entered chan struct{}
+	release chan struct{}
+	blocked atomic.Bool
+}
+
+func (p *emulatorAuthorizationFence) Do(request *policy.Request) (*http.Response, error) {
+	if !strings.EqualFold(request.Raw().Header.Get("x-ms-cosmos-is-batch-request"), "true") || request.Raw().Header.Get("x-ms-documentdb-partitionkey") != `["`+p.scopeID+`"]` {
+		return request.Next()
+	}
+	body, err := io.ReadAll(request.Raw().Body)
+	if err != nil {
+		return nil, err
+	}
+	if err := request.SetBody(streaming.NopCloser(bytes.NewReader(body)), "application/json"); err != nil {
+		return nil, err
+	}
+	var operations []struct {
+		Item storedItem `json:"resourceBody"`
+	}
+	if json.Unmarshal(body, &operations) != nil || len(operations) != 5 || operations[4].Item.Kind != "authorization" || !p.blocked.CompareAndSwap(false, true) {
+		return request.Next()
+	}
+	close(p.entered)
+	select {
+	case <-p.release:
+		return request.Next()
+	case <-request.Raw().Context().Done():
+		return nil, request.Raw().Context().Err()
+	}
 }
 
 func (p emulatorSessionProbe) Do(request *policy.Request) (*http.Response, error) {
@@ -157,6 +193,200 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 			t.Fatalf("want protocol error %s, got %v", code, err)
 		}
 	}
+
+	t.Run("builtin durable account membership replay and revocation fence", func(t *testing.T) {
+		first, second := newStore(), newStore()
+		identity := AccountIdentity{Issuer: "https://builtin-emulator.test", Subject: "owner"}
+		type accountResult struct {
+			account Account
+			err     error
+		}
+		results := make(chan accountResult, 2)
+		start := make(chan struct{})
+		for _, store := range []*CosmosStore{first, second} {
+			go func(store *CosmosStore) {
+				<-start
+				account, err := store.EnsureAccount(ctx, identity)
+				results <- accountResult{account, err}
+			}(store)
+		}
+		close(start)
+		a, b := <-results, <-results
+		if a.err != nil || b.err != nil || a.account != b.account {
+			t.Fatalf("concurrent account registration: %+v %+v", a, b)
+		}
+		owner := a.account
+		member, err := first.EnsureAccount(ctx, AccountIdentity{Issuer: identity.Issuer, Subject: "member"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		outsider, err := second.EnsureAccount(ctx, AccountIdentity{Issuer: identity.Issuer, Subject: "outsider"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		otherIssuer, err := second.EnsureAccount(ctx, AccountIdentity{Issuer: "https://other-builtin-emulator.test", Subject: identity.Subject})
+		if err != nil || otherIssuer.AccountID == owner.AccountID || otherIssuer.PersonalScopeID == owner.PersonalScopeID {
+			t.Fatalf("issuer namespaces must not merge accounts: %v", err)
+		}
+		personal, err := second.LoadAuthorizationPolicy(ctx, owner.PersonalScopeID)
+		if err != nil || personal == nil || personal.Mode != "user" || personal.OwnerAccountID != owner.AccountID {
+			t.Fatalf("durable personal policy: %+v %v", personal, err)
+		}
+		_, err = personal.scope(member.AccountID)
+		assertCode(t, err, "forbidden")
+
+		creationID := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+		type scopeResult struct {
+			scope SharedScope
+			err   error
+		}
+		scopes := make(chan scopeResult, 2)
+		start = make(chan struct{})
+		for _, store := range []*CosmosStore{first, second} {
+			go func(store *CosmosStore) {
+				<-start
+				scope, err := store.CreateSharedScope(ctx, owner.AccountID, creationID)
+				scopes <- scopeResult{scope, err}
+			}(store)
+		}
+		close(start)
+		x, y := <-scopes, <-scopes
+		if x.err != nil || y.err != nil || !reflect.DeepEqual(x.scope, y.scope) || x.scope.Revision != 1 || len(x.scope.Members) != 0 {
+			t.Fatalf("concurrent shared create replay: %+v %+v", x, y)
+		}
+		shared := x.scope
+		if _, err := first.CreateSharedScope(ctx, namespacedID("unknown"), creationID); err == nil {
+			t.Fatal("unknown account created shared scope")
+		} else {
+			assertCode(t, err, "account_not_found")
+		}
+		_, err = second.ChangeMembership(ctx, shared.ScopeID, outsider.AccountID, MembershipChange{OperationID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", AccountID: member.AccountID, Role: "writer", BaseRevision: 1})
+		assertCode(t, err, "forbidden")
+		_, err = second.ChangeMembership(ctx, shared.ScopeID, owner.AccountID, MembershipChange{OperationID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", AccountID: namespacedID("unregistered"), Role: "writer", BaseRevision: 1})
+		assertCode(t, err, "account_not_found")
+		_, err = second.ChangeMembership(ctx, shared.ScopeID, owner.AccountID, MembershipChange{OperationID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", AccountID: owner.AccountID, Role: "none", BaseRevision: 1})
+		assertCode(t, err, "immutable_owner")
+
+		change := MembershipChange{OperationID: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", AccountID: member.AccountID, Role: "reader", BaseRevision: 1}
+		scopes = make(chan scopeResult, 2)
+		start = make(chan struct{})
+		for _, store := range []*CosmosStore{first, second} {
+			go func(store *CosmosStore) {
+				<-start
+				result, err := store.ChangeMembership(ctx, shared.ScopeID, owner.AccountID, change)
+				scopes <- scopeResult{result, err}
+			}(store)
+		}
+		close(start)
+		x, y = <-scopes, <-scopes
+		if x.err != nil || y.err != nil || !reflect.DeepEqual(x.scope, y.scope) || x.scope.Revision != 2 {
+			t.Fatalf("concurrent membership exact replay: %+v %+v", x, y)
+		}
+		mismatch := change
+		mismatch.Role = "writer"
+		_, err = second.ChangeMembership(ctx, shared.ScopeID, owner.AccountID, mismatch)
+		assertCode(t, err, "idempotency_mismatch")
+		stale := change
+		stale.OperationID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+		_, err = second.ChangeMembership(ctx, shared.ScopeID, owner.AccountID, stale)
+		assertCode(t, err, "membership_conflict")
+		policy, err := second.LoadAuthorizationPolicy(ctx, shared.ScopeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		readerScope, err := policy.scope(member.AccountID)
+		if err != nil || !readerScope.CanRead || readerScope.CanWrite || readerScope.PermissionVersion != "2" {
+			t.Fatalf("reader authority: %+v %v", readerScope, err)
+		}
+		_, err = policy.scope(outsider.AccountID)
+		assertCode(t, err, "forbidden")
+		readerMutation := operation(810, "reader-forbidden", "put", 0, `{"n":1}`)
+		readerMutation.PrincipalID = member.AccountID
+		readerMutation.AuthorizationVersion = "2"
+		hash, _ := validateMutation(&readerMutation, shared.ScopeID)
+		_, _, err = second.Mutate(ctx, shared.ScopeID, readerMutation, hash, "")
+		assertCode(t, err, "forbidden")
+
+		writerChange := MembershipChange{OperationID: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", AccountID: member.AccountID, Role: "writer", BaseRevision: 2}
+		writerGrant, err := first.ChangeMembership(ctx, shared.ScopeID, owner.AccountID, writerChange)
+		if err != nil || writerGrant.Revision != 3 {
+			t.Fatalf("grant writer: %+v %v", writerGrant, err)
+		}
+		barrier := &emulatorAuthorizationFence{scopeID: shared.ScopeID, entered: make(chan struct{}), release: make(chan struct{})}
+		fencedClient := emulatorClient(t, endpoint, barrier)
+		fencedContainer, err := fencedClient.NewContainer(databaseID, "sync")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fenced := &CosmosStore{client: fencedClient, container: fencedContainer}
+		blockedMutation := operation(811, "revoked-before-commit", "put", 0, `{"private":true}`)
+		blockedMutation.PrincipalID = member.AccountID
+		blockedMutation.AuthorizationVersion = "3"
+		hash, _ = validateMutation(&blockedMutation, shared.ScopeID)
+		mutationErrors := make(chan error, 1)
+		go func() {
+			_, _, err := fenced.Mutate(ctx, shared.ScopeID, blockedMutation, hash, "")
+			mutationErrors <- err
+		}()
+		select {
+		case <-barrier.entered:
+		case <-ctx.Done():
+			t.Fatal("data batch did not reach the policy fence", ctx.Err())
+		}
+		revoke := MembershipChange{OperationID: "ffffffff-ffff-4fff-8fff-ffffffffffff", AccountID: member.AccountID, Role: "none", BaseRevision: 3}
+		revoked, revokeErr := second.ChangeMembership(ctx, shared.ScopeID, owner.AccountID, revoke)
+		close(barrier.release)
+		if revokeErr != nil || revoked.Revision != 4 {
+			t.Fatalf("second-client revoke: %+v %v", revoked, revokeErr)
+		}
+		select {
+		case err := <-mutationErrors:
+			assertCode(t, err, "forbidden")
+		case <-ctx.Done():
+			t.Fatal("fenced mutation did not finish", ctx.Err())
+		}
+		for _, id := range []string{"head", "d:" + blockedMutation.DocumentID, "c:0000000000000001", "r:" + mutationReceiptKey(blockedMutation)} {
+			item, _, _, err := first.read(ctx, shared.ScopeID, id, "")
+			if err != nil || item != nil {
+				t.Fatalf("revocation fence failed to roll back %s: %+v %v", id, item, err)
+			}
+		}
+		policy, err = first.LoadAuthorizationPolicy(ctx, shared.ScopeID)
+		if err != nil || policy.Members[member.AccountID].Role != "none" || policy.Members[member.AccountID].PermissionVersion != "4" {
+			t.Fatalf("revocation generation tombstone lost: %+v %v", policy, err)
+		}
+		regrant := writerChange
+		regrant.OperationID = "11111111-aaaa-4aaa-8aaa-111111111111"
+		regrant.BaseRevision = 4
+		if _, err := first.ChangeMembership(ctx, shared.ScopeID, owner.AccountID, regrant); err != nil {
+			t.Fatal(err)
+		}
+		_, _, err = second.Mutate(ctx, shared.ScopeID, blockedMutation, hash, "")
+		assertCode(t, err, "forbidden")
+		ownerMutation := operation(812, "owner-note", "put", 0, `{"ok":true}`)
+		ownerMutation.PrincipalID = owner.AccountID
+		ownerMutation.AuthorizationVersion = "1"
+		_, session := mutate(t, first, shared.ScopeID, ownerMutation, "")
+		page, _, err := second.Sync(ctx, shared.ScopeID, 0, 10, session)
+		if err != nil || len(page.Changes) != 1 || page.Sequence != 1 || page.Changes[0].ID != "owner-note" {
+			t.Fatalf("authorization metadata leaked into data journal: %+v %v", page, err)
+		}
+		replayed, err := second.CreateSharedScope(ctx, owner.AccountID, creationID)
+		if err != nil || !reflect.DeepEqual(replayed, shared) {
+			t.Fatalf("creation replay changed after policy edits: %+v %v", replayed, err)
+		}
+		for _, id := range []string{"a:policy", "a:audit:00001", "a:audit:00002", "a:audit:00003", "a:audit:00004", "a:audit:00005", "a:r:" + owner.AccountID + ":" + change.OperationID} {
+			item, _, _, err := first.read(ctx, shared.ScopeID, id, session)
+			if err != nil || item == nil {
+				t.Fatalf("missing durable authorization metadata %s: %v", id, err)
+			}
+			if item.Audit != nil {
+				if _, err := time.Parse(time.RFC3339Nano, item.Audit.OccurredAt); err != nil {
+					t.Fatalf("authorization audit lacks durable time: %v", err)
+				}
+			}
+		}
+	})
 
 	t.Run("production guard rejects Eventual emulator metadata", func(t *testing.T) {
 		guarded := emulatorClient(t, endpoint, accountGuard{})

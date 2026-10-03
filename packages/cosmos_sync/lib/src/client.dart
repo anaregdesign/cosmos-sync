@@ -45,7 +45,11 @@ class CosmosSyncClient {
     try {
       final scope = session ?? store.session ?? await transport.sessionInfo();
       final saved = store.session;
-      if (saved == null) {
+      final selection = transport;
+      if (selection is ScopeSelectionTransport &&
+          !(selection as ScopeSelectionTransport).matchesSelectedScope(scope)) {
+        await store.purgeAndPause('scope_changed');
+      } else if (saved == null) {
         await store.initialize(scope);
       } else if (!saved.sameScope(scope)) {
         await store.purgeAndPause('scope_changed');

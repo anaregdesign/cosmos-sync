@@ -17,9 +17,13 @@ type memoryPartition struct {
 	EstimatedRetainedBytes int64
 }
 type MemoryStore struct {
-	mu         sync.Mutex
-	partitions map[string]*memoryPartition
-	retention  retentionControls
+	mu                    sync.Mutex
+	partitions            map[string]*memoryPartition
+	retention             retentionControls
+	accounts              map[string]accountRecord
+	policies              map[string]*AuthorizationPolicy
+	authorizationReceipts map[string]map[string]authorizationReceipt
+	authorizationAudits   map[string][]authorizationAudit
 }
 
 func NewMemoryStore() *MemoryStore { return &MemoryStore{partitions: map[string]*memoryPartition{}} }
@@ -40,6 +44,9 @@ func (s *MemoryStore) Mutate(ctx context.Context, scope string, m Mutation, hash
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := checkAuthorizationWrite(s.policies[scope], scope, m); err != nil {
+		return Document{}, session, err
+	}
 	p := s.partition(scope)
 	if receipt, ok := p.Receipts[mutationReceiptKey(m)]; ok {
 		if receipt.Hash != hash {

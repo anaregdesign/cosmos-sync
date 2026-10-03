@@ -1,0 +1,15 @@
+{
+  "RoleName": "Cosmos Sync BFF bounded item and journal access",
+  "Type": "CustomRole",
+  "AssignableScopes": ["/dbs/OWNER_SELECTED_DATABASE/colls/OWNER_SELECTED_CONTAINER"],
+  "Permissions": [{
+    "DataActions": [
+      "Microsoft.DocumentDB/databaseAccounts/readMetadata",
+      "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/create",
+      "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/read",
+      "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/items/replace",
+      "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/executeQuery",
+      "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers/readChangeFeed"
+    ]
+  }]
+}

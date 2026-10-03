@@ -1,19 +1,48 @@
 # Cosmos Sync
 
-A Go OIDC authentication/authorization BFF for **Azure Cosmos DB for NoSQL**, with a Dart/Flutter SDK for durable offline documents. Private, unpublished v0.2 preview. Firestore inspires the offline experience; this is a separate API with [documented query and guarantee differences](docs/query.md).
+A Go OIDC authentication/authorization BFF for **Azure Cosmos DB for NoSQL**, with a Dart/Flutter SDK for durable offline documents. Experimental v0.2 preview under the MIT license. Firestore inspires the offline experience; this is a separate API with [documented query and guarantee differences](docs/query.md).
 
-Native SQLite and Chromium IndexedDB store confirmed documents and a durable outbox. Awaited local edits survive reopen; server ACKs are separate. The SDK provides local document/query watches, deterministic cached queries, pending/conflict metadata, retry-safe operation identities, explicit conflicts, tombstones and resumable sync. Optional shared tenant scopes and authenticated SSE hints use the same server authorization boundary. Polling recovers lost hints. Apps receive no Cosmos keys or privileged tokens.
+Native SQLite and Chromium IndexedDB store confirmed documents and a durable outbox. Awaited local edits survive reopen; server ACKs are separate. The SDK provides local document/query watches, deterministic cached queries, pending/conflict metadata, retry-safe operation identities, explicit conflicts, tombstones and resumable sync. Built-in personal scopes and fixed-owner shared scopes use durable BFF authorization. Authenticated SSE hints supplement polling. Apps receive no Cosmos keys or privileged tokens.
 
 Development is tracked by [epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). [Verification](docs/verification.md) reports actual results; owner-controlled distribution and live-cloud gates remain explicit.
+
+The product goal is a Firestore-like developer experience for the supported
+document subset: deploy the supplied BFF on Azure Container Apps, configure the
+identity provider and compatible Cosmos storage, then connect the Dart SDK for authenticated
+CRUD, watches, durable offline edits, reconnect and explicit conflicts. Application
+developers should not have to implement a synchronization or security gateway.
+The [onboarding guide](docs/developer-onboarding.md) distinguishes Terraform
+resources, operator configuration and remaining acceptance work. Container Apps
+Terraform and its runbook are tracked in [#31](https://github.com/anaregdesign/cosmos-sync/issues/31);
+clean-checkout hosted onboarding is tracked in [#32](https://github.com/anaregdesign/cosmos-sync/issues/32).
+
+**Apple and Google are the intended practical end-user login providers.** The
+current Flutter adapter implements native OIDC/PKCE with a dedicated Entra API
+access-token validation path; Apple/Google login, account linking and provider
+acceptance are additional work, not delivered support. The [social-login design
+and roadmap](docs/social-auth.md) compares an API-token identity broker with
+native provider login followed by a backend session exchange. Raw Apple/Google
+ID tokens are not Cosmos Sync API credentials. BFF account and membership policy controls
+document access, and matching email addresses must never automatically merge
+accounts.
 
 ## Layout and verification
 
 - `bff/`: Go service, official Azure SDK, security/atomicity tests and opt-in emulator integration.
 - `packages/cosmos_sync/`: native/browser SDK, cache/query/HTTP tests and examples.
-- `examples/flutter_smoke/`: platform integration fixture.
+- `examples/flutter_app/`: normally runnable native Flutter sample with OIDC login, real BFF transport and document/offline/conflict UI. See its [setup guide](examples/flutter_app/README.md) and [native authentication](docs/native-auth.md).
+- `examples/flutter_smoke/`: separate deterministic native platform integration fixture; its test-injected transport does not demonstrate a real provider login or live Azure connection.
+- `infra/terraform/azure-container-apps/`: pinned, locally validated hosting template and mock-only plan checks; actual Azure deployment needs an approved plan.
 - `docs/`: [product scope](docs/spec/product-completion.md), [protocol](docs/protocol.md), [architecture](docs/architecture.md), [security](docs/security.md), [platforms](docs/platforms.md), [performance](docs/performance.md), [release](docs/release.md).
 
 Use Go 1.26+ and Dart 3.12+; Flutter 3.44.6 is the measured native fixture baseline.
+
+The SDK is a pure Dart package usable from Flutter; it does not contain widgets.
+Flutter application code lives in `examples/flutter_app/lib/`. Configure the
+selected HTTPS BFF and native public OIDC client in that app. Credentials belong
+in the OS browser and native secure store, never source code or a pasted token.
+Actual provider/cloud/physical-device acceptance is tracked separately from the
+existing local signed-fixture and simulator evidence.
 
 ```sh
 cd bff
@@ -28,6 +57,8 @@ dart test --platform chrome test/browser test/cache_conformance_test.dart test/s
 dart pub publish --dry-run
 cd ../..
 python3 tools/cross_stack_smoke.py
+python3 tools/authorization_cross_stack_smoke.py
+bash infra/terraform/azure-container-apps/verify.sh
 bash tools/emulator.sh test
 docker build -t cosmos-sync-bff:check bff
 ```
@@ -40,7 +71,7 @@ The local authenticated HTTP fixture needs no Azure account. The emulator runner
 final transport = HttpSyncTransport(
   baseUri: Uri.parse('https://your-bff.example'),
   tokenProvider: () async => identityProviderAccessToken(),
-  scopeMode: SyncScopeMode.user, // tenant requires a current server grant
+  scopeMode: SyncScopeMode.user, // own personal scope in built-in mode
 );
 final client = await CosmosSyncClient.open(
   path: '/app-private/per-principal-scope-cache.db',
@@ -62,7 +93,24 @@ On web, `path` identifies an origin-local IndexedDB database. The default cache 
 
 ## Server and operational boundary
 
-Start with `bff/config.example.json` and `bff/grants.example.json`. Configure a trusted HTTPS OIDC issuer, API audience/scope, authoritative grants and an existing `/scopeId` Cosmos container with TTL disabled, one write region and Session-or-stronger consistency. Cosmos uses server `DefaultAzureCredential`. Supply a shared random signing key through `COSMOS_SYNC_CURSOR_KEY_BASE64` and TLS paths through `COSMOS_SYNC_TLS_CERT`/`COSMOS_SYNC_TLS_KEY` using approved secret storage. The server serves TLS directly; ingress re-encrypts to it. Grant changes must be distributed atomically to every replica.
+For new deployments, start with `bff/config.builtin.example.json` and the
+[Container Apps runbook](docs/azure-container-apps.md). Configure a trusted HTTPS
+OIDC issuer, API audience/scope and an existing `/scopeId` Cosmos container with
+TTL disabled, one write region and Session-or-stronger consistency. A verified
+API token establishes a durable account and personal scope. The supplied
+owner-only membership APIs authorize shared reader/writer access independently
+of Entra groups or provider roles; see [authorization](docs/authorization.md).
+Use the SDK's typed management API and
+[shared-scope example](packages/cosmos_sync/example/shared_scope_example.dart).
+
+Cosmos uses server `DefaultAzureCredential`; Container Apps uses a dedicated
+managed identity with container-scoped data permissions. Supply a shared random
+cursor key through approved secret storage. Standalone hosting serves TLS with
+`COSMOS_SYNC_TLS_CERT`/`COSMOS_SYNC_TLS_KEY`; the explicit Container Apps mode
+accepts its trusted HTTPS ingress boundary and Key Vault secret reference.
+Existing deployments can retain `config.example.json` and explicit legacy
+grants. That mode requires atomic grant distribution to every replica and is
+not automatically migrated to built-in ownership.
 
 ```sh
 cd bff
@@ -73,4 +121,16 @@ Startup validates an existing container and never provisions one. Mutation/head/
 
 ## Release status
 
-No package/image has been published, no merge/deployment performed, and no paid Azure resource created. Planned image: `ghcr.io/anaregdesign/cosmos-sync-bff`; Dart package: `cosmos_sync`. Repo visibility remains private. License, public source/publisher decisions, GHCR distribution/access and an isolated live Azure environment are owner gates in [#14](https://github.com/anaregdesign/cosmos-sync/issues/14), [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and [#16](https://github.com/anaregdesign/cosmos-sync/issues/16). The existing signed-in administrator's Packages UI showed no `cosmos-sync-bff` collision on 2026-10-03; CLI authentication still lacks `read:packages`, and no permission was expanded. Name checks and a dry run do not reserve or publish a package.
+The foundation was merged to main in [PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1); all seven main checks passed. The remaining publication work is tracked in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2), including the usable Flutter app/auth, release artifacts, live Azure and physical devices. The owner approved MIT, public GitHub/GHCR distribution and the first `cosmos_sync` 0.2.0-dev.1 preview. Actual registry publication and final access checks are tracked in [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and [#23](https://github.com/anaregdesign/cosmos-sync/issues/23); a name check or dry run does not reserve or publish a package. Planned image: `ghcr.io/anaregdesign/cosmos-sync-bff`.
+
+Dedicated Entra registration and actual macOS browser PKCE, API-token validation,
+secure credential restore, refresh and local sign-out passed. Physical Android
+app integration also passed real HTTP/SQLite with fixture authentication. The
+approved reusable Azure environment currently contains an empty tagged resource
+group; free-tier creation was rejected by the subscription offer and East US
+serverless creation failed because of capacity. Cosmos data operations await
+approval of an alternative region. Reusable Cosmos/Entra resources will be
+retained. Container Apps is the intended hosted target; its Terraform preparation
+does not authorize an actual deployment. [Physical-device acceptance](docs/physical-devices.md)
+records the owner's unsigned iOS build choice: the build and simulator passed,
+while unsigned physical iPhone execution cannot be verified.

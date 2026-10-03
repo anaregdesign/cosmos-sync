@@ -1,27 +1,208 @@
-# Release preparation
+# Release and distribution
 
-No package has been published. The GitHub repository remains private. No public license has been selected; first release requires the owner's legal/license decision. The package's LICENSE is an explicit pending/UNLICENSED placeholder and must be replaced with the approved license before release, regardless of whether pub tooling accepts it. The package name was unregistered at `https://pub.dev/api/packages/cosmos_sync` (HTTP 404 on 2026-10-03); that does not reserve it.
+No package has been published yet. On 2026-10-03 the owner explicitly approved
+**MIT**, copyright 2026 anaregdesign, **public GitHub source and public GHCR**, and
+the initial prerelease **0.2.0-dev.1**. The chosen pub.dev Google account is kept
+private in the owner's local authentication flow; no personal email is recorded here.
+Repository, BFF and SDK include identical approved MIT licenses. Actual visibility
+changes, owner sign-in and registry publication remain execution steps until their
+evidence is recorded. The prerelease has measured Android/iOS emulator, macOS and
+Chromium coverage and no production SLA. A verified publisher/domain has not been
+selected; that does not prevent the approved first personal-account publication.
 
-## GitHub Packages / GHCR
+## Prepare the exact candidate
 
-Target: `ghcr.io/anaregdesign/cosmos-sync-bff`. On 2026-10-03, the existing signed-in administrator's [organization Packages UI](https://github.com/orgs/anaregdesign/packages) listed 11 packages with Type All and Visibility All; searching `cosmos-sync-bff` returned zero matches. No existing name collision was observed, and no token or OAuth permission was added. The CLI still lacks `read:packages` and its listing returned HTTP 403. Recheck immediately before publication: this observation does not reserve the name or verify future image access. If it becomes occupied by an unrelated package, use `cosmos-sync-gateway` (image) and retain the repo/Dart names, or consistently use repo `cosmos-offline`, Dart `cosmos_offline`, image `cosmos-offline-bff` after checking availability.
+1. Record the resolved owner decisions on [#14](https://github.com/anaregdesign/cosmos-sync/issues/14)
+   without publishing the personal account identity. Preserve matching MIT notices
+   in the repository, BFF and SDK. The container includes its project license, the
+   Go license and downloaded dependency LICENSE/NOTICE files under `/licenses`.
+2. Run `python3 tools/package_docs.py` after any protocol/query/security/authorization edit. The
+   archive includes those documents under `packages/cosmos_sync/doc`; optional source
+   links can remain private without blocking package usage or safety documentation.
+3. Merge the reviewed candidate and require the **latest completed successful main
+   push CI** for its exact SHA, including every configured job. PR success alone is
+   insufficient. Run `dart pub publish --dry-run` with no warnings and inspect the list.
+4. Record owner approval on the issue, then configure these non-secret repository
+   variables for the exact candidate: `RELEASE_APPROVED_SHA`,
+   `RELEASE_APPROVED_VERSION`, and `RELEASE_LICENSE_SPDX` (an approved SPDX identifier).
+   This workflow does not choose a license or infer approval from a variable alone.
 
-CI builds an image without pushing. `publish-ghcr.yml` is manual and also requires repo variable `GHCR_PUBLISH_ENABLED=true`, main branch and an explicit confirmation input. The variable is not set. Before enabling, review CI, inspect package conflicts/inherited access, approve first publication and retain private visibility. Publishing uses the ephemeral `GITHUB_TOKEN` with job-only `packages:write`, not a new user token. Do not assume a required-reviewer environment gate is supported by the organization's plan. Add one only after verifying plan support. Container releases use immutable source SHA tags; deployment is a separate decision.
+`python3 tools/release_verify.py preflight` reports candidate metadata and pending
+license files without publishing. The `--target ghcr|pub --sha <40-hex> --version <version>`
+mode additionally rejects dirty/mismatched sources, pending/mismatched MIT licenses, missing approval
+variables, stale main commits, missing/skipped/failed CI jobs and incomplete latest CI.
+Successful checks provide the exact run URL. New main commits require new review and
+new SHA approval. Distribution uses a digest; a source-SHA tag is still a mutable registry tag.
 
-## pub.dev
+## GHCR: publish, then verify access
 
-First publication is public and effectively permanent. Approve license, source visibility/disclosure, package owner/publisher, API/version and support commitments first. Recheck naming, run package analyze/tests and `dart pub publish --dry-run`, then perform an explicitly approved first manual publish. For later automation, configure pub.dev's authorized GitHub repository, workflow/tag pattern and subdirectory. A disabled OIDC workflow template is in `.github/release-templates`; it has not been installed as an active publication workflow. Version tags must match `pubspec.yaml` and the configured pub.dev pattern. No long-lived pub credential should be committed.
+Target: `ghcr.io/anaregdesign/cosmos-sync-bff`. On 2026-10-03 the existing signed-in
+organization administrator's [Packages UI](https://github.com/orgs/anaregdesign/packages)
+showed Type All / Visibility All and zero `cosmos-sync-bff` matches. The CLI lacks
+`read:packages`; no OAuth expansion or new token was requested. Recheck the namespace
+before publication. This observation does not reserve a name. An unrelated collision
+would require the owner to approve the alternate image name `cosmos-sync-gateway`.
 
-## Azure and operations
+The manual `publish-ghcr.yml` runs only on main with `GHCR_PUBLISH_ENABLED=true`
+and confirmation `publish-approved-container`. It requires explicit SHA/version
+inputs plus the matching approval variables above. Set `GHCR_RELEASE_VISIBILITY`
+to the owner's approved **final** visibility. Authentication uses the job's temporary
+`GITHUB_TOKEN` with `packages:write`; no user token or registry secret is required.
 
-Choose tenant/identity provider and audience, server grant source and revocation process, hosting location, Cosmos account/database/container and RU/backup budget. Provisioning is deferred. Use managed identity/data-plane RBAC, a preexisting NoSQL container partitioned by `/scopeId`, no default TTL for this retained-journal prototype and one write region. Share cursor/session signing keys between replicas through an approved secret manager. Load-test partition size, hot-user throughput, history growth, retry rates and restore/recovery before production. Official emulator storage/security integration now has a reproducible local/CI gate; its Eventual metadata is rejected by production policy. Live Azure replica/RU/backup/deployment verification remains issue #16 until an isolated environment is explicitly selected and authorized.
+New GHCR packages start **private**. For an approved public first distribution,
+the workflow retains the owner-approved final value `public`, discovers the current
+package state (a missing initial package means `private`), verifies that private
+stage and reports `verified_private_stage_public_transition_pending`. It records
+the digest before verification and retains it even if a later access check fails.
+Then explicitly change only this package to public in GitHub's package settings and
+run `verify-ghcr.yml` with visibility `public`. Existing public packages verify
+public directly. The workflow never changes package visibility or treats a private
+stage as completed public distribution.
+Repository access inheritance and Actions access must also be inspected; public
+source alone does not make a GHCR package public. [Official GHCR access rules](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 
-Sources and current platform constraints: [research](research.md).
+After approval and a green main run, dispatch the workflow with the reviewed values:
 
-## Remaining tracked owner gates
+```sh
+gh workflow run publish-ghcr.yml --ref main \
+  -f source_sha=<approved-40-hex-sha> -f version=0.2.0-dev.1 \
+  -f confirm=publish-approved-container
+```
 
-- [#14](https://github.com/anaregdesign/cosmos-sync/issues/14): license, source visibility, pub.dev owner/publisher and initial-public-release approval.
-- [#15](https://github.com/anaregdesign/cosmos-sync/issues/15): GHCR access/protection and authorized first distribution; namespace lookup passed, but private image pull/access requires an approved publication to verify.
-- [#16](https://github.com/anaregdesign/cosmos-sync/issues/16): isolated Azure environment, budget/hosting, live operations and deployment approval. Existing corporate subscriptions are not assumed authorized for this work.
+The workflow cross-compiles Linux amd64/arm64 with pinned base images, pushes the
+SHA tag, then verifies authenticated digest pulls of both variants, nonroot/entrypoint
+and source/version labels, registry-attached BuildKit provenance and SPDX SBOM,
+linked repository, package visibility and anonymous read/denial. The JSON evidence
+and digest are retained as an Actions artifact and run summary. Verification failure
+after push does not undo publication; record the partial result and fix access checks.
 
-Code/issue/PR work can finish independently. These gates remain open, and no autonomous merge or publication occurs.
+To recheck access after an approved visibility change using the repository's
+temporary read-only token, dispatch `verify-ghcr.yml`. This makes no package or
+visibility writes and avoids expanding the current CLI token's scopes:
+
+```sh
+gh workflow run verify-ghcr.yml --ref main \
+  -f digest=sha256:<index-digest> -f source_sha=<source-sha> \
+  -f version=0.2.0-dev.1 -f visibility=public
+```
+
+An already authorized package/API reader can also run the verifier locally;
+private registry pulls additionally need an existing authorized registry login:
+
+```sh
+python3 tools/release_verify.py ghcr --digest sha256:<index-digest> \
+  --sha <source-sha> --version 0.2.0-dev.1 --visibility public \
+  --output /tmp/cosmos-sync-ghcr-release.json
+```
+
+Private images require an authorized existing registry credential or a repository
+Actions job with package access. If neither exists, request access from the owner;
+do not expand a user token silently. Keep deployments pinned to the recorded index
+digest. Publication is independent of deployment.
+
+BuildKit's registry-attached attestations are **not signed GitHub attestations**.
+They can be inspected with `docker buildx imagetools inspect` but do not establish a
+cryptographic GitHub identity. Signed GitHub attestations for a private repository
+require Enterprise Cloud; source publication or verified plan eligibility is required
+before adding that feature. [BuildKit attestations](https://docs.docker.com/build/metadata/attestations/),
+[GitHub availability](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
+
+## pub.dev: first manual publication and ownership
+
+The public package API returned HTTP 404 for `cosmos_sync` again on 2026-10-03;
+the name is not reserved. Recheck immediately before the first upload. First
+publication is effectively permanent. [Publication policy and requirements](https://dart.dev/tools/pub/publishing)
+
+The **first version must be published manually** using the owner's selected Google
+account. The owner completes the browser authorization themselves. Do not send
+credentials through chat, copy refresh-token files or place them in GitHub secrets.
+Set `PUB_PUBLICATION_APPROVED=true` only after explicit approval, then run:
+
+Before uploading, run official `dart pub login` with its stdout/stderr captured
+only in a private local file and compare the returned Google email against the
+owner's privately selected account. Record only `identityMatchesOwner: true` in
+public evidence. Normal existing credential refresh is sufficient; if the CLI
+requests new authorization, stop and hand the browser step to the owner. Do not
+print the account email, raw CLI output or OAuth authorization URL in CI/Issues.
+
+```sh
+python3 tools/release_verify.py preflight --target pub \
+  --sha <approved-40-hex-sha> --version 0.2.0-dev.1
+cd packages/cosmos_sync
+dart pub publish --dry-run
+dart pub publish
+```
+
+Only the final command uploads. It presents the archive and any required sign-in.
+The first uploader becomes the initial package owner. A new package cannot be
+uploaded directly to a verified publisher; after first upload the owner transfers
+it from the package Admin tab to their chosen verified publisher. Publisher creation
+requires a controlled domain and, if needed, Google Search Console domain verification.
+Do not guess a publisher ID or email address. [Verified publishers](https://dart.dev/tools/pub/verified-publishers)
+
+After upload, from the unchanged approved source run:
+
+```sh
+python3 tools/release_verify.py pub --version 0.2.0-dev.1 \
+  --sha <approved-40-hex-sha> \
+  --output /tmp/cosmos-sync-pub-release.json
+```
+
+The verifier requires a clean checkout matching the explicit reviewed source SHA
+before any registry reads. Historical releases can be verified from their original
+commit even after main advances. It downloads the public version archive, verifies the registry SHA256 when supplied,
+and compares all library files, essential package docs and every archive file with
+the reviewed source. It rejects extra library files, development assets, links and unsafe paths.
+Record the package/version URL, ownership-verification result and archive hash on
+[#23](https://github.com/anaregdesign/cosmos-sync/issues/23). Also resolve the SDK
+from pub.dev into an isolated temporary pub cache in the same verification command.
+It checks the exact hosted version and installed library bytes, runs the public
+Dart example with native SQLite offline/reopen/ACK/tombstone behavior, and creates
+a clean Flutter consumer. That consumer analyzes the public imports, runs native
+SQLite and Chromium IndexedDB offline/reopen/tombstone tests, and builds release web.
+Install Dart, Flutter and Chrome/Chromium first; set `DART`, `FLUTTER` or
+`CHROME_EXECUTABLE` when their executable paths differ from tool defaults. These
+local storage tests use a synthetic session/demo transport; they do not prove
+live Azure or production OIDC acceptance. Path dependencies and dry-run results
+cannot satisfy installed-registry verification.
+
+## Later OIDC publication
+
+`.github/release-templates/publish-pub.yml.disabled` remains inactive. After first
+publication and ownership verification, configure the package Admin tab for repository
+`anaregdesign/cosmos-sync` and tag pattern `cosmos_sync-v{{version}}`; only then install
+the template and set `PUB_PUBLISH_ENABLED=true`. The tag must point to the reviewed
+current main commit and match `pubspec.yaml` exactly. Pub.dev accepts GitHub OIDC
+publication only from **tag-push** events, not workflow_dispatch or branch pushes.
+The template uses the pinned official Dart reusable publisher, with short-lived OIDC
+and no stored pub credentials. [Official automation constraints](https://dart.dev/tools/pub/automated-publishing)
+
+Protect release tags and use a required GitHub environment reviewer when the plan
+supports it. Do not assume private-repository environment protection eligibility.
+If enabled, configure the identical environment name on pub.dev and in the reusable
+publisher input after checking its supported inputs. Approval variables provide an
+explicit candidate binding; they are not a substitute for controlling who may edit
+workflows, variables or release tags.
+
+## Security and live operations
+
+Before public release, establish a private vulnerability reporting route. A public
+GitHub repository can enable private vulnerability reporting; verify the Security
+tab's reporting flow afterward. If source stays private, the owner must designate
+a private support/security contact for SDK consumers. Do not publish an invented
+email. Keep personal account details out of public Issues and logs. Keep deployment,
+incident response, physical-device and live Azure acceptance
+separate from registry upload. [Security boundaries](security.md) remain mandatory.
+
+Azure work needs an explicitly selected isolated subscription/resource group,
+identity provider/audience, authorized accounts, Cosmos NoSQL account/container and
+RU/backup/hosting budget. Use managed identity/data-plane RBAC, `/scopeId`, one write
+region, acceptable production consistency and no automatic TTL/GC. Cursor/session
+signing keys must be shared through the approved secret manager. Test live replicas,
+revocation, RU limits, restore and target devices before production; emulator results
+do not prove cloud cost, availability or backup behavior.
+
+Tracked gates: [#14](https://github.com/anaregdesign/cosmos-sync/issues/14) owner/license,
+[#15](https://github.com/anaregdesign/cosmos-sync/issues/15) GHCR distribution,
+[#23](https://github.com/anaregdesign/cosmos-sync/issues/23) pub.dev,
+[#16](https://github.com/anaregdesign/cosmos-sync/issues/16) live Azure.

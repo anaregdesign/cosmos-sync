@@ -26,12 +26,13 @@ type Document struct {
 	Deleted bool            `json:"deleted"`
 }
 type Mutation struct {
-	OperationID string          `json:"operationId"`
-	DocumentID  string          `json:"documentId"`
-	Kind        string          `json:"kind"`
-	Data        json.RawMessage `json:"data"`
-	BaseVersion int64           `json:"baseVersion"`
-	PrincipalID string          `json:"-"`
+	OperationID          string          `json:"operationId"`
+	DocumentID           string          `json:"documentId"`
+	Kind                 string          `json:"kind"`
+	Data                 json.RawMessage `json:"data"`
+	BaseVersion          int64           `json:"baseVersion"`
+	PrincipalID          string          `json:"-"`
+	AuthorizationVersion string          `json:"-"`
 }
 type StorePage struct {
 	Changes  []Document
