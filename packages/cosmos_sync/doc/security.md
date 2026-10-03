@@ -6,6 +6,15 @@ Clients cannot provide an arbitrary owner, partition key, Cosmos SQL expression 
 
 The scope policy provides personal or shared tenant documents with current whole-scope read/write grants; tenant mode never implies document-specific ACLs. It is not a general row-level ACL engine. Keep grants on the server, review administrator changes and advance permissionVersion for changed authorization. For static configuration, distribute changes/restart all replicas before claiming revocation is effective. A production dynamic grant service, audit history and change propagation are separate follow-up work. Never let clients edit grants. Do not share a user's cache path with another account.
 
+Current enforcement rejects a request at its next authorization check after the
+server observes a changed grant. An already-authorized request can still finish:
+the document transaction does not currently contain a membership/version fence.
+This differs from guaranteeing that no write commits after a revocation response.
+SSE rechecks grants while polling and before delivering changes; ordinary sync and
+snapshot requests authorize before their storage read. The SDK's learned-revocation
+purge and in-flight drain prevent late responses from repopulating its revoked
+cache, but cannot retract a response already received by another client.
+
 Before delivery of an outbox, the client verifies `/session` and asserts the same identity on every mutation/sync. A scope/permission mismatch or HTTP 401/403 purges local cache/outbox and pauses the client. This is intentionally conservative and may discard unsent edits on expired credentials; applications should refresh tokens before delivery. Offline revocation cannot erase data or notify disconnected devices immediately. SQLite plaintext on disk, backups, disk remanence, OS compromise and malicious apps are not solved by a logical purge. Choose device encryption and sensitive-data retention policies before production.
 
 Use a managed identity or an authorized server `TokenCredential` with a container-scoped Cosmos data-plane role. Never embed account keys in apps, source, example configuration, CI logs or package artifacts. Runtime signing keys must have high entropy, be secret-managed and shared between replicas; rotation or history restoration must invalidate/renew cursors deliberately. A signed consistency envelope is opaque transport metadata, not a Cosmos access credential. Monitor API authentication failures, conflict/retry rates, RU usage and journal/receipt growth without logging access tokens or full document payloads.
