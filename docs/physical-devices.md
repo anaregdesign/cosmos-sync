@@ -13,15 +13,49 @@ background execution.
 
 ## Current inventory and pending owner actions
 
-Read-only discovery on 2026-10-03 found no attached Android device. Apple
+Initial read-only discovery on 2026-10-03 found no attached Android device. Apple
 CoreDevice remembers a paired iPhone 16 Pro and an iPad (`iPad17,2`): the iPhone
 was booted with Developer Mode enabled but its local-network tunnel was
 disconnected; the iPad was unavailable. Remembered pairing is not a usable
 connection or permission to install. Four shutdown simulators were omitted from
-the physical inventory. No physical-device installation, pairing, trust,
-signing, launch or network change has been performed.
+the physical inventory.
 
-The owner must provide these non-secret decisions and perform the device prompts:
+After the owner selected the iPhone 16 Pro and Android phone, Flutter recognized
+both supported physical targets: a Pixel 9a running Android 17 / API 37 and the
+iPhone 16 Pro running iOS 26.7.1. Their exact identities were matched locally and
+stored only in ignored `0600` files. The owner authorized test-app installation
+and launch, then chose **unsigned iOS verification**. Consequently, no iOS
+signing, Apple portal updates, profiles, certificate creation or physical iOS
+installation is authorized. Android SDK runtime verification passed on the
+selected phone; iOS physical runtime remains blocked by the operating system's
+development-signing requirement.
+
+## Current iOS verification choice: unsigned build
+
+Respect the owner's current unsigned-only choice. A compilation check such as
+the following can produce an unsigned device-target artifact without an Apple
+team or provisioning operation:
+
+```sh
+cd examples/flutter_app
+flutter build ios --release --no-codesign
+```
+
+This command is a build check, not an iPhone installation or runtime test. A
+normal physical iOS device requires a signed development app and provisioning;
+the generated unsigned `.app` cannot satisfy that requirement. Simulator
+execution can provide separate iOS runtime evidence without Apple portal
+provisioning, but it does not replace physical-device evidence. Do not attempt a
+physical iOS install, invent a team, enable provisioning or treat an unsigned
+build/Simulator pass as a physical-device pass.
+
+The physical iOS gate can proceed only if the owner later explicitly changes
+this decision and supplies the signing/provisioning authorization described
+below. The Android gate is independent of that decision.
+
+The following prerequisites apply to any future authorized physical run. The
+Android target/install grant is already supplied; iOS signing and provisioning
+are currently declined:
 
 | Gate | Required action |
 | --- | --- |
@@ -108,7 +142,8 @@ uninstall it only with the owner's approval. They never create a signing team or
 change its project settings. The explicitly authorized iOS signing step may
 create/update provisioning profiles, app IDs and certificates and register the
 selected device through the existing Xcode account. Do not run before these
-authorizations. The fixture
+authorizations. The documented iOS command is not authorized by the current
+unsigned-only instruction. The fixture
 uses a deterministic authorized transport and temporary app-private SQLite,
 with no Azure connection. Passing evidence requires both a successful Flutter
 test exit and the exact platform runtime marker. Evidence records commit,
@@ -143,6 +178,29 @@ Linux/Windows Flutter apps, alternate browsers, backup policy, encrypted cache
 and long background execution remain outside the recorded physical matrix
 unless separately exercised and documented.
 
-No physical runtime result is recorded yet. Close the physical-device gate only
-after both selected platforms pass the agreed matrix and any supported-platform
-exceptions are explicitly approved by the owner.
+## Recorded physical runtime evidence
+
+| Target and scope | Actual result |
+| --- | --- |
+| Pixel 9a, Android 17 / API 37, physical arm64; SDK fixture | PASS on 2026-10-03 at 22:33 JST. Flutter 3.44.6 / Dart 3.12.2; test exit `0` and exact `COSMOS_SYNC_NATIVE_PASS android` marker. Real app-private SQLite, debug app, deterministic authorized transport. |
+| Pixel 9a; usable app UI with local real HTTP BFF/OIDC fixture | Pending separate app-fixture evidence. This is distinct from the SDK fixture above and from the production identity provider. |
+| iPhone 16 Pro, iOS 26.7.1, physical device | Not run. The owner chose unsigned verification; physical installation requires signing/provisioning that is currently not authorized. |
+
+The Android SDK fixture exercised offline writes, cache close/reopen, exact
+replay after a lost response, explicit stale-version conflict resolution, query
+watches, delete/recreate and learned-permission-loss purge. Cache close/reopen
+occurred inside the test process; this was not an OS crash, power-loss test or
+manual foreground/background lifecycle test. The test used no live BFF,
+production OIDC provider or Azure resource.
+
+Redacted local evidence is `artifacts/physical-sdk-android.json` with permissions
+`0600`; it contains no device identity or raw logs. Its recorded HEAD was
+`b4b87386de5cc06856620dbadccbae64179b42e1` and `source_tree_dirty: true` because
+implementation/documentation work and local test edits were active. This is
+actual runtime evidence for the tested workspace, not a claim that the entire
+final release commit has been physically validated. The sample smoke app may
+remain installed; no uninstallation or device connectivity change was made.
+
+Close the physical-device gate only after the agreed matrix passes on the
+selected platforms, or the owner explicitly approves a narrower release scope.
+The unsigned-only iOS decision must remain visible in supported-platform claims.

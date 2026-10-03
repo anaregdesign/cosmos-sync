@@ -74,10 +74,13 @@ gate in the selected tenant, not something JSON syntax validation proves.
 ## Callback and signing constraints
 
 The current adapter is **AppAuth**, not MSAL or a Microsoft broker integration.
-Microsoft's redirect guidance explicitly routes AppAuth and Flutter iOS apps to
-**Mobile and desktop applications**. Register the private scheme there and
-verify the exact callback through the OS browser on each supported platform.
-See [redirect platform guidance](https://learn.microsoft.com/en-us/entra/identity-platform/reply-url).
+Microsoft's current registration guidance routes mobile apps using neither MSAL
+nor a broker to **Mobile and desktop applications**, including custom callbacks.
+Its platform guidance also explicitly lists AppAuth and Flutter iOS apps there.
+Register the private scheme there and verify the exact callback through the OS
+browser on each supported platform. See
+[redirect setup](https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-redirect-uri)
+and [platform guidance](https://learn.microsoft.com/en-us/entra/identity-platform/reply-url).
 
 | Platform | Current checked-in identifiers | Registration/testing constraint |
 | --- | --- | --- |
