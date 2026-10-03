@@ -20,8 +20,9 @@ import time
 from urllib.parse import urlencode
 import uuid
 
-from live_azure_preflight import (GateError, MIN_PROTOCOL_REQUESTS, check_cli_default, inspect_target,
-                                  load_manifest, manifest_digest, nonempty, require,
+from live_azure_preflight import (GateError, check_cli_default, fixture_mode, inspect_target,
+                                  load_manifest, manifest_digest, nonempty, principal_roles,
+                                  protocol_request_plan, require,
                                   require_target_approval)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,13 +64,17 @@ def require_write_approval(manifest):
             "owner must explicitly authorize retained test writes in this target")
     budget = manifest["budget"]
     require(type(budget["maxProtocolRequests"]) is int
-            and MIN_PROTOCOL_REQUESTS <= budget["maxProtocolRequests"] <= 50,
-            "full live contract requires at least 31 protocol requests before credentials or Azure access")
-    require(budget["ceilingAmount"] > 0 and budget["testDataRetentionAcknowledged"] is True,
-            "owner must approve a positive cost ceiling and retained journal/receipt/tombstone test data")
+            and protocol_request_plan(manifest) <= budget["maxProtocolRequests"] <= 50,
+            "live fixture request plan exceeds the approved bound before credentials or Azure access")
+    ceiling = budget["ceilingAmount"]
+    require(((type(ceiling) in (int, float) and ceiling > 0)
+             or (ceiling is None and budget.get("unboundedCostApproved") is True))
+            and budget["testDataRetentionAcknowledged"] is True,
+            "owner must approve costs and retained journal/receipt/tombstone test data")
     for key, value in manifest["oidc"].items():
         require("owner-selected" not in str(value), "replace OIDC placeholders with the approved API configuration")
-    for principal in manifest["testPrincipals"].values():
+    for role in principal_roles(manifest):
+        principal = manifest["testPrincipals"][role]
         require(not any("owner-selected" in str(value) for value in principal.values()),
                 "replace test-principal placeholders after owner approval")
 
@@ -287,7 +292,7 @@ class Client:
 
 def grants_for(manifest, permission):
     grants = []
-    for role in ("writer", "reader"):
+    for role in (("writer",) if fixture_mode(manifest) == "single-account" else ("writer", "reader")):
         principal = manifest["testPrincipals"][role]
         for mode in ("tenant", "user"):
             grants.append({"tenant": principal["tenant"], "subject": principal["subject"],
@@ -296,36 +301,43 @@ def grants_for(manifest, permission):
     return grants
 
 
-def exercise_contract(client, tokens, grants, grants_path, prefix, *, outsider_same_tenant=True):
+def exercise_contract(client, tokens, grants, grants_path, prefix, *, outsider_same_tenant=True,
+                      single_account=False):
     client.request(0, "GET", "/v1/session", expected=401, code="unauthorized")
     client.request(0, "GET", "/v1/session", token="invalid.jwt.fixture", expected=401, code="unauthorized")
     client.record("missing-and-invalid-access-jwt-rejected")
     writer = client.session(0, tokens["writer"])
     require(client.session(1, tokens["writer"]) == writer, "replicas returned different server-managed sessions")
-    reader = client.session(1, tokens["reader"])
-    require(writer["scopeId"] == reader["scopeId"] and writer["principalId"] != reader["principalId"],
-            "shared tenant scope did not retain distinct principal identity")
-    personal_reader = client.session(1, tokens["reader"], "user")
     personal_writer = client.session(0, tokens["writer"], "user")
-    require(personal_reader["scopeId"] != personal_writer["scopeId"]
-            and personal_writer["scopeId"] != writer["scopeId"], "personal partition isolation failed")
-    client.record("two-replica-personal-and-shared-tenant-sessions")
+    if single_account:
+        tokens = {**tokens, "reader": tokens["writer"]}
+        reader, personal_reader = writer, personal_writer
+        require(personal_writer["scopeId"] != writer["scopeId"], "personal versus tenant scope isolation failed")
+        client.record("two-local-replica-one-principal-personal-and-tenant-sessions")
+    else:
+        reader = client.session(1, tokens["reader"])
+        require(writer["scopeId"] == reader["scopeId"] and writer["principalId"] != reader["principalId"],
+                "shared tenant scope did not retain distinct principal identity")
+        personal_reader = client.session(1, tokens["reader"], "user")
+        require(personal_reader["scopeId"] != personal_writer["scopeId"]
+                and personal_writer["scopeId"] != writer["scopeId"], "personal partition isolation failed")
+        client.record("two-replica-personal-and-shared-tenant-sessions")
     baseline = client.sync(0, tokens["writer"], writer)
     require(baseline["changes"] == [], "selected test tenant scope must be empty; no test writes were attempted")
-    reader_baseline = client.sync(1, tokens["reader"], reader)
+    reader_baseline = baseline if single_account else client.sync(1, tokens["reader"], reader)
     require(reader_baseline["changes"] == [], "selected shared test scope changed before test writes")
     create = {"operationId": str(uuid.uuid4()), "documentId": prefix,
               "kind": "put", "data": {"fixture": "cosmos-sync-live-contract", "value": "created"}, "baseVersion": 0}
-    client.request(1, "POST", "/v1/mutations", token=tokens["reader"], session=reader,
-                   payload=create, expected=403, code="forbidden")
-    # A selected same-tenant negative principal must have a valid API access JWT
-    # to prove grant denial. Foreign-issuer rejection is weaker, separate evidence.
-    client.request(0, "GET", "/v1/session", token=tokens["outsider"],
-                   expected=403 if outsider_same_tenant else (401, 403))
+    if not single_account:
+        client.request(1, "POST", "/v1/mutations", token=tokens["reader"], session=reader,
+                       payload=create, expected=403, code="forbidden")
+        # A trusted same-tenant ungranted principal must prove 403, not a JWT error.
+        client.request(0, "GET", "/v1/session", token=tokens["outsider"],
+                       expected=403 if outsider_same_tenant else (401, 403))
     forged = client.headers(tokens["writer"], writer)
     forged[SESSION_HEADERS["scopeId"]] = personal_reader["scopeId"]
     client.request(1, "GET", "/v1/sync", headers=forged, expected=403, code="session_mismatch")
-    client.record("reader-write-ungranted-jwt-and-forged-partition-denied")
+    client.record("forged-partition-denied" if single_account else "reader-write-ungranted-jwt-and-forged-partition-denied")
     first = client.request(0, "POST", "/v1/mutations", token=tokens["writer"], session=writer, payload=create)["document"]
     require(first["id"] == prefix and first["version"] == 1 and first["deleted"] is False,
             "fresh test scope create was not sequence one")
@@ -358,9 +370,11 @@ def exercise_contract(client, tokens, grants, grants_path, prefix, *, outsider_s
     page = client.sync(0, tokens["writer"], writer, baseline["cursor"])
     require(page["changes"] == [first, second], "journal was not contiguous and ordered inside the test partition")
     require(client.sync(1, tokens["writer"], writer, page["cursor"])["changes"] == [], "cross-replica resume repeated acknowledged changes")
-    client.request(1, "GET", "/v1/sync?" + urlencode({"cursor": page["cursor"]}),
-                   token=tokens["reader"], session=reader, expected=410, code="resync_required")
-    client.record("etag-conflict-contiguous-journal-resume-and-cross-principal-cursor-denial")
+    if not single_account:
+        client.request(1, "GET", "/v1/sync?" + urlencode({"cursor": page["cursor"]}),
+                       token=tokens["reader"], session=reader, expected=410, code="resync_required")
+    client.record("etag-conflict-contiguous-journal-resume" if single_account
+                  else "etag-conflict-contiguous-journal-resume-and-cross-principal-cursor-denial")
     deletion = {**create, "operationId": str(uuid.uuid4()), "kind": "delete", "data": None, "baseVersion": 2}
     tombstone = client.request(0, "POST", "/v1/mutations", token=tokens["writer"], session=writer, payload=deletion)["document"]
     require(tombstone["version"] == 3 and tombstone["deleted"] is True and tombstone["data"] is None,
@@ -370,6 +384,25 @@ def exercise_contract(client, tokens, grants, grants_path, prefix, *, outsider_s
     require(client.sync(1, tokens["writer"], writer, page["cursor"])["changes"] == [tombstone],
             "resumed journal did not contain exactly the deletion tombstone")
     client.record("ordered-tombstone-and-durable-delete-receipt")
+    if single_account:
+        grants[:] = [{**grant, "canWrite": False, "permissionVersion": prefix + "-reader"}
+                     for grant in grants]
+        private_json(grants_path, grants)
+        reader = client.session(1, tokens["writer"])
+        require(reader["principalId"] == writer["principalId"] and reader["scopeId"] == writer["scopeId"]
+                and reader["permissionVersion"] != writer["permissionVersion"],
+                "same-principal writer-to-reader transition did not change permission version")
+        # A new grant version invalidates the old signed consistency envelope.
+        # Acquire a fresh reader envelope from its subsequent successful sync.
+        client.consistency.pop(reader["principalId"] + reader["scopeMode"], None)
+        client.request(0, "GET", "/v1/sync", token=tokens["writer"], session=writer,
+                       expected=403, code="session_mismatch")
+        client.request(1, "POST", "/v1/mutations", token=tokens["reader"], session=reader,
+                       payload={**create, "operationId": str(uuid.uuid4()), "baseVersion": 3},
+                       expected=403, code="forbidden")
+        client.request(1, "GET", "/v1/sync?" + urlencode({"cursor": page["cursor"]}),
+                       token=tokens["reader"], session=reader, expected=410, code="resync_required")
+        client.record("same-principal-writer-to-reader-denies-write-and-old-permission-context")
     reader_end = client.sync(1, tokens["reader"], reader)
     require(reader_end["changes"] == [first, second, tombstone], "read-only tenant member could not synchronize the committed history")
 
@@ -413,8 +446,8 @@ def execute(manifest, binary=None):
     try:
         # These read-only/local preparation phases precede the timed BFF phase.
         # They have individual CLI/build timeouts and never start a Cosmos store.
-        tokens = {role: load_private_token(principal["accessTokenFile"])
-                  for role, principal in manifest["testPrincipals"].items()}
+        tokens = {role: load_private_token(manifest["testPrincipals"][role]["accessTokenFile"])
+                  for role in principal_roles(manifest)}
         check_cli_default(manifest)
         preflight = inspect_target(manifest)
         with tempfile.TemporaryDirectory(prefix="cosmos-sync-live-") as folder, ExitStack() as stack:
@@ -480,13 +513,17 @@ def execute(manifest, binary=None):
                         break
                     client.timeout()
                     time.sleep(0.25)
+            single_account = fixture_mode(manifest) == "single-account"
             exercise_contract(client, tokens, grants, grants_path, prefix,
-                              outsider_same_tenant=(manifest["testPrincipals"]["outsider"]["tenant"]
-                                                    == manifest["testPrincipals"]["writer"]["tenant"]))
+                              single_account=single_account,
+                              outsider_same_tenant=single_account or (
+                                  manifest["testPrincipals"]["outsider"]["tenant"]
+                                  == manifest["testPrincipals"]["writer"]["tenant"]))
             client.timeout()
             live_finished = time.monotonic()
             result = {"schemaVersion": 1, "targetDigest": manifest_digest(manifest),
                     "mode": "approved-live-cosmos-contract", "productionFactory": "NewCosmosStore",
+                    "fixtureMode": fixture_mode(manifest),
                     "development": False, "credentialMode": "AzureCLICredential",
                     "tlsVerification": "ephemeral-loopback-certificate-pinned-as-trust-anchor",
                     "passed": client.results, "acceptedNewMutations": 3,
@@ -497,6 +534,9 @@ def execute(manifest, binary=None):
                                     "measured RU and service-generated 429 under load",
                                     "regional failover and paid point-in-time restore",
                                     "physical Flutter devices and live browser CORS"]}
+            if single_account:
+                result["notVerified"].extend(["cross-principal real-Entra tenant/personal isolation",
+                                              "cross-principal cursor binding and simultaneous distinct-user grants"])
             cleanup_started = time.monotonic()
         result["durationsSeconds"] = {"preparation": round(live_started - preparation_started, 3),
                                       "liveBffPhase": round(live_finished - live_started, 3),
@@ -511,6 +551,7 @@ def execute(manifest, binary=None):
         safe = GateError(message)
         safe.exit_code = 130 if isinstance(error, KeyboardInterrupt) else 2
         safe.evidence = {"mode": "incomplete-approved-live-contract",
+                         "fixtureMode": fixture_mode(manifest),
                          "targetDigest": manifest_digest(manifest),
                          "retainedTestDocumentId": prefix,
                          "testDataMayBeRetained": bool(client and client.write_attempted),
@@ -533,17 +574,25 @@ def main():
         if args.execute_approved_write_contract:
             result = execute(manifest, args.bff_binary)
         else:
+            single_account = fixture_mode(manifest) == "single-account"
             result = {"schemaVersion": 1, "mode": "offline-contract-plan",
                       "targetDigest": manifest_digest(manifest), "azureContacted": False,
                       "credentialsRead": False, "resourcesModified": False,
                       "expectedAcceptedMutations": 3,
-                      "plannedProtocolRequests": MIN_PROTOCOL_REQUESTS,
+                      "fixtureMode": fixture_mode(manifest),
+                      "plannedProtocolRequests": protocol_request_plan(manifest),
                       "runtimeScope": "BFF startup and contract; read-only/local preparation and cleanup measured separately",
                       "remainingGates": ["owner target selection, credentials, retained writes and cost approval"],
-                      "plannedChecks": ["production TLS/OIDC/current grants", "two actual Cosmos-backed BFF replicas",
-                                        "shared and personal partition isolation", "atomic replay and ETag conflict",
+                      "plannedChecks": ["production TLS/OIDC/current grants", "two actual Cosmos-backed local BFF replicas",
+                                        "one-principal tenant/personal scope and writer-to-reader grant transition"
+                                        if single_account else "distinct-principal shared and personal partition isolation",
+                                        "atomic replay and ETag conflict",
                                         "fixed-cutover snapshot and contiguous incremental cursor",
                                         "authenticated SSE and grant revocation", "retained delete tombstone"]}
+            if single_account:
+                result["evidenceLimitations"] = ["distinct real-Entra principals not exercised",
+                                                 "cross-principal cursor binding not exercised",
+                                                 "hosted multi-replica managed identity not exercised"]
         print(json.dumps(result, indent=2))
     except GateError as error:
         if hasattr(error, "evidence"):

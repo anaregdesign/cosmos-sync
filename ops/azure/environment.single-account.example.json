@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "targetApprovalReference": "",
+  "liveWriteApprovalReference": "",
+  "azure": {
+    "tenantId": "00000000-0000-0000-0000-000000000000",
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "resourceGroup": "owner-selected-isolated-group",
+    "account": "owner-selected-isolated-account",
+    "endpoint": "https://owner-selected-isolated-account.documents.azure.com/",
+    "database": "cosmos-sync-live-test",
+    "container": "sync"
+  },
+  "oidc": {
+    "issuer": "https://owner-selected-issuer.example/",
+    "audience": "owner-selected-api-audience",
+    "tenantClaim": "tid",
+    "requiredScope": "cosmos_sync",
+    "tokenUse": ""
+  },
+  "testPrincipals": {
+    "writer": {
+      "tenant": "owner-selected-test-tenant",
+      "subject": "owner-selected-writer-subject",
+      "accessTokenFile": "/absolute/private/path/writer.jwt"
+    }
+  },
+  "budget": {
+    "ceilingAmount": 0,
+    "currency": "JPY",
+    "maxRuntimeSeconds": 120,
+    "maxProtocolRequests": 40,
+    "maxAcceptedMutations": 3,
+    "testDataRetentionAcknowledged": false
+  },
+  "fixtureMode": "single-account",
+  "provisioning": {
+    "approvalReference": "",
+    "region": "eastus",
+    "egressIpv4": "198.51.100.1",
+    "dataPrincipalObjectId": "00000000-0000-0000-0000-000000000000",
+    "billingMode": "free-tier-preferred",
+    "teardownApprovalReference": ""
+  }
+}

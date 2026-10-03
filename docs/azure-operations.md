@@ -1,6 +1,6 @@
 # Azure access, live verification and operations
 
-The independent implementation is ready for an owner-selected live verification environment. No Azure resources, app registrations, roles, secrets, firewall rules or deployments have been created. On 2026-10-03, Azure CLI 2.88.0 was installed and an existing login could enumerate subscriptions. That login includes corporate environments; neither its default subscription nor any existing application is authorized for this project merely because it is visible. Corporate names, resource identifiers and credentials are intentionally absent from this repository.
+The independent implementation is ready for an owner-selected live verification environment. This runbook has not created paid Azure resources, data roles, firewall rules or deployments. Dedicated Entra registrations are tracked separately in [the identity setup](entra-setup.md). On 2026-10-03, Azure CLI 2.88.0 was installed and existing authentication could enumerate subscriptions. An isolated selected-tenant profile later showed one enabled subscription and no existing Cosmos accounts; that observation does not select the subscription or establish offer eligibility. Neither a default subscription nor any existing application is authorized merely because it is visible. Owner-specific identifiers and credentials stay in ignored private files.
 
 Preparation is tracked in [#19](https://github.com/anaregdesign/cosmos-sync/issues/19); the actual environment and operational evidence remain in [#16](https://github.com/anaregdesign/cosmos-sync/issues/16). The app → OIDC → BFF → Azure → device release chain is [#24](https://github.com/anaregdesign/cosmos-sync/issues/24). The tools below do not claim those live gates have passed.
 
@@ -11,16 +11,66 @@ Provide the following nonsecret selections, and place credentials in a private l
 | Selection | Minimum needed |
 | --- | --- |
 | Isolated Azure target | Tenant ID, subscription ID, resource group, existing NoSQL account endpoint/name, database and container. If none exists, separately approve creating an isolated account/container, location, billing mode and teardown policy. |
-| Test authorization and budget | Explicit permission for the selected container's test scope, three expected accepted mutations (create/update/tombstone), retained journal and receipts, maximum duration, spending ceiling/currency and who monitors/tears down the environment. Runtime/request bounds do not enforce a monetary billing ceiling. |
+| Test authorization and budget | Explicit permission for the selected container's test scope, three expected accepted mutations (create/update/tombstone), retained journal and receipts, maximum duration, currency and who monitors/tears down the environment. Record a positive spending ceiling, or `ceilingAmount: null` plus `unboundedCostApproved: true` only when the owner explicitly approves no upper limit. Runtime/request bounds do not enforce monetary billing. |
 | Azure data identity | An existing approved developer identity for the local gate, with the narrow container role below. Later select the hosting managed identity separately. No account key, broad subscription Contributor role or new client secret is needed by the local gate. |
-| End-user identity | Trusted HTTPS OIDC issuer, exact API audience, delegated access scope, tenant claim and optional `token_use`; fresh writer/reader/negative-test access JWTs for that API in current-user-owned `0600` files. ID tokens are unsuitable. |
-| Current grants | Exact authorized JWT tenant-claim values and `sub` values for a writer and a distinct same-tenant reader; a negative test principal with no grant. The local harness creates only its own temporary grant file from these explicit selections. |
+| End-user identity | Trusted HTTPS OIDC issuer, exact API audience, delegated access scope, tenant claim and optional `token_use`; a fresh API access JWT in a current-user-owned `0600` file for the owner's selected single account. ID tokens are unsuitable. Distinct-account JWTs are needed only if the owner later chooses full three-principal evidence. |
+| Current grants | Exact authorized JWT tenant-claim and signature-verified API `sub` for the selected account. The local harness creates only its own temporary grant file and changes that one principal from writer to reader to inactive. The original three-principal mode remains available without requesting more accounts for the current gate. |
 | Hosting decision | Existing TLS-capable host or a separately budgeted host, region/network path, public or private ingress, DNS/certificate ownership, approved image digest/private pull mechanism, shared signing-key manager, metrics access and grants/revocation owner. A new AKS cluster is not a prerequisite. |
 | Recovery expectations | Accepted recovery point/time objectives, backup tier, distinct restore target and cost allowance, region/failover topology and a separate deliberate fault/load-test window. |
 
 The [manifest example](../ops/azure/environment.example.json) records selections and references to the owner's actual approvals. Copy it into an ignored private directory, replace every placeholder and retain only approval references; do not invent approval merely to make a script run. Token contents never belong in the manifest. The files contain subject identifiers and private paths, so keep completed manifests out of Git even though the examples are safe to commit.
 
-The BFF trusts one exact issuer. Use a third distinct ungranted principal in the same selected Entra tenant for the manifest's `outsider`: its signature-verified API access JWT must receive **403**, demonstrating current-grant denial. A single-tenant Entra API does not need an outside tenant to exercise that check. An explicitly selected foreign-tenant/issuer negative fixture is also permitted, but its 401/403 result demonstrates rejection without claiming the same current-grant evidence. A Microsoft Entra tenant-specific issuer cannot silently accept another tenant's issuer. The live harness also verifies distinct personal partitions within the trusted issuer, rather than claiming unsupported multi-issuer federation.
+The BFF trusts one exact issuer. In the optional three-principal mode, use a third distinct ungranted principal in the same selected Entra tenant for `outsider`: its signature-verified API access JWT must receive **403**, demonstrating current-grant denial. A single-tenant Entra API does not need an outside tenant to exercise that check. An explicitly selected foreign-tenant/issuer negative fixture is also permitted, but its 401/403 result demonstrates rejection without claiming the same current-grant evidence. A Microsoft Entra tenant-specific issuer cannot silently accept another tenant's issuer.
+
+## Cheapest temporary verification proposal
+
+The owner has approved a cheapest-first Azure verification environment and one user account. Before provisioning, select the subscription, permitted region, data-role principal and current public egress IP. Keep the BFF on the local Mac so this gate adds no cloud-hosting charge. Create only a temporary resource group, one NoSQL account, one database and one `/scopeId` container; use Session consistency, a single write/read region, no zone redundancy, no default TTL, Entra-only data authentication and an egress-IP firewall rule. Network policy can require a costlier approved private route instead; the preparation does not weaken that policy.
+
+If the selected subscription offer has its unused Cosmos free-tier entitlement, choose a free-tier provisioned account and one shared database at 400 RU/s. The account's first 1,000 RU/s and 25 GB are covered, but free tier is limited to one account per subscription and must be chosen at account creation. The observed lack of existing accounts is useful evidence, not a guarantee of billing eligibility. [Free-tier conditions](https://learn.microsoft.com/en-us/azure/cosmos-db/free-tier).
+
+Otherwise choose serverless for the tiny, short contract. It bills consumed RUs without an idle throughput minimum; do not set throughput on its database or container. Serverless is limited to one region and lacks predictable throughput/latency guarantees. Avoid optional zone redundancy, which multiplies serverless RU charges by 1.25. This is a cost inference for the bounded test, not a guaranteed monetary quote. The exact rate still depends on region, currency and subscription offer; use the selected offer's pricing calculator and record the actual billable usage. [Serverless constraints](https://learn.microsoft.com/en-us/azure/cosmos-db/serverless), [official serverless pricing](https://azure.microsoft.com/en-us/pricing/details/cosmos-db/serverless/).
+
+On 2026-10-03 the public Microsoft retail API reported East US serverless at **USD 0.25 per million RU**, among the lowest observed regional list rates, and Japan East at USD 0.285. East US NoSQL data-storage meters were USD 0.25/GB-month. For illustration, 10,000 consumed RU would cost USD 0.0025 in RU charges at the East US rate, plus time-weighted storage, any chargeable egress/tax and offer adjustments. This does not predict this harness's actual RU usage: startup metadata, polling and SDK retries add requests. Select the permitted region and offer before committing to a quote; refresh the rate at provisioning. [East US serverless retail query](https://prices.azure.com/api/retail/prices?api-version=2023-01-01-preview&%24filter=productName%20eq%20%27Azure%20Cosmos%20DB%20serverless%27%20and%20meterName%20eq%20%271M%20RUs%27%20and%20armRegionName%20eq%20%27eastus%27), [retail API scope and currencies](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices).
+
+Use continuous seven-day backup, whose backup storage has no additional charge; every restore is charged and belongs to a separate gate. Retained data and indexes, chargeable egress and later resources can still cost money. Omit `defaultTtl`/`--ttl` to disable TTL; `-1` enables TTL without a default expiration and still permits item expiry. [Backup billing](https://learn.microsoft.com/en-us/azure/cosmos-db/continuous-backup-restore-introduction), [TTL semantics](https://learn.microsoft.com/en-us/azure/cosmos-db/time-to-live).
+
+Paid manual throughput has a 400-RU/s baseline. The current smallest autoscale maximum is 1,000 RU/s, with an hourly floor of 100 RU/s at the single-write autoscale rate of 1.5 times manual. Consequently manual 400 is not always the cheapest paid provisioned option; hourly peaks and sustained workload determine the comparison. For this three-mutation gate, prefer free tier if eligible, then consumption-based serverless. [Autoscale limits and billing](https://learn.microsoft.com/en-us/azure/cosmos-db/autoscale-faq).
+
+The following are reviewable **owner-approved provisioning commands**, not actions performed by either verification tool. They require explicit subscription/region/egress-IP and resource-name selections. Use a new temporary group; never reuse a production group. Choose exactly one account/database variant:
+
+Bootstrap requires permission to create the selected resource group at subscription scope, and account/database/container creation plus native Cosmos role-definition/assignment writes only inside that temporary group/account. If `Microsoft.DocumentDB` is not registered, its provider-registration action is a separate subscription operation for the owner. The verification data identity still needs only account/container metadata reads and the bounded native container role; it never needs subscription Owner or resource-creation permission. An existing approved operator can perform bootstrap and then remove temporary setup access.
+
+```sh
+az group create --subscription "$COSMOS_TEST_SUBSCRIPTION_ID" \
+  --name "$COSMOS_TEST_RESOURCE_GROUP" --location "$COSMOS_TEST_REGION" --output none
+
+# Serverless fallback: do not supply any throughput argument later.
+az cosmosdb create --subscription "$COSMOS_TEST_SUBSCRIPTION_ID" \
+  --resource-group "$COSMOS_TEST_RESOURCE_GROUP" --name "$COSMOS_TEST_ACCOUNT" \
+  --kind GlobalDocumentDB --capabilities EnableServerless \
+  --locations "regionName=$COSMOS_TEST_REGION" failoverPriority=0 isZoneRedundant=false \
+  --default-consistency-level Session --enable-multiple-write-locations false \
+  --enable-automatic-failover false --disable-local-auth true \
+  --minimal-tls-version Tls12 --network-acl-bypass None \
+  --public-network-access Enabled --ip-range-filter "$COSMOS_TEST_EGRESS_IPV4" \
+  --backup-policy-type Continuous --continuous-tier Continuous7Days --output none
+
+# If free tier is selected instead, use the same reviewed account settings
+# but replace --capabilities EnableServerless with --enable-free-tier true.
+az cosmosdb sql database create --subscription "$COSMOS_TEST_SUBSCRIPTION_ID" \
+  --resource-group "$COSMOS_TEST_RESOURCE_GROUP" --account-name "$COSMOS_TEST_ACCOUNT" \
+  --name "$COSMOS_TEST_DATABASE" --output none
+# Only for the selected free-tier variant, add --throughput 400 to that database command.
+
+az cosmosdb sql container create --subscription "$COSMOS_TEST_SUBSCRIPTION_ID" \
+  --resource-group "$COSMOS_TEST_RESOURCE_GROUP" --account-name "$COSMOS_TEST_ACCOUNT" \
+  --database-name "$COSMOS_TEST_DATABASE" --name "$COSMOS_TEST_CONTAINER" \
+  --partition-key-path /scopeId --partition-key-version 2 --output none
+```
+
+Verify the resulting account capabilities/free-tier status, one region, Session consistency, `/scopeId` and absent `defaultTtl`, then grant only the container-scoped role below. Selected-IP firewall propagation can take up to 15 minutes; inspect failures rather than opening access to all addresses. Do not add the `0.0.0.0` Azure-services bypass. [Firewall behavior](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-configure-firewall).
+
+Keep the resource until the approved app/device chain has collected its evidence. After explicit teardown approval, delete only the newly created temporary group, confirm completion and check the recorded usage/cost. A spending alert does not stop Azure resources, and paid backup restore or regional failure injection remains outside this cheapest gate.
 
 ## Least privilege and network access
 
@@ -57,6 +107,7 @@ Python 3, Go 1.26, OpenSSL and the existing Azure CLI are used by the local harn
 ```sh
 python3 tools/live_azure_preflight.py --manifest ops/azure/environment.example.json
 python3 tools/live_azure_contract.py --manifest ops/azure/environment.example.json
+python3 tools/live_azure_contract.py --manifest ops/azure/environment.single-account.example.json
 python3 -m unittest discover -s tools -p test_live_azure_tools.py -v
 ```
 
@@ -92,6 +143,8 @@ python3 tools/live_azure_contract.py \
 It reads private JWT files only after separate target/write approvals, verifies CLI context and ARM metadata, builds the reviewed production CLI, starts two loopback BFFs with `development=false`, `storage=cosmos` and real `NewCosmosStore`, and uses a one-run TLS certificate as a specific trust anchor. TLS verification is retained. `AZURE_TOKEN_CREDENTIALS=AzureCLICredential` prevents unrelated ambient credential sources being chosen for this local gate. The cloud application identity is a separate hosted gate; local CLI success is not managed-identity proof.
 
 The selected shared test scope must be empty before any test mutation. Use dedicated test principals/tenant claim values with no concurrent writers. The contract checks access JWT rejection, current writer/reader grants, shared versus personal partition identity, forged partition denial, a writer cursor rejected for the same-scope/different-principal reader, one atomic create, exact replay on the other replica, conflicting replay payload, stale-version conflict, fixed-head snapshot resume, contiguous incremental journal, authenticated document-free SSE hints, ordered deletion tombstone and immediate temporary-grant revocation. Three new mutations are expected to commit; retry and intentionally denied/conflicting requests are also made. The complete plan requires 31 protocol requests including both health probes; smaller budgets fail before reading tokens or contacting Azure. The selected request limit can range from 31 to 50. SDK-internal retries, initial metadata and event polling generate additional Cosmos requests and RU; the protocol-request bound is not a Cosmos request/RU accounting limit.
+
+For the currently approved one-account gate, use [the single-account manifest](../ops/azure/environment.single-account.example.json), whose `fixtureMode` is `single-account` and whose only principal is `writer`. It uses the same real production Cosmos factory, TLS/OIDC verification, two local BFFs and three accepted mutations. It then changes this account's temporary grants from writer to read-only with a new permission version, verifies old-session and old-cursor rejection plus current read-only synchronization/write denial, and makes the grant inactive while an authenticated stream is open. The fixed plan is 29 protocol requests including two health probes. This proves one principal's role transitions and personal-versus-tenant scope handling; it does **not** prove distinct real-Entra principals' isolation/cursor binding, simultaneous distinct-user grants or hosted multi-replica managed identity. Those limitations appear in the result, and the original full three-principal mode remains intact for a later explicitly selected gate.
 
 `maxRuntimeSeconds` limits the **live BFF phase**, from first-process startup through final contract assertion, to the chosen 30–180 seconds. Read-only CLI inspection and local TLS/build preparation precede that phase and have separate per-command timeouts (CLI 40 seconds; local command 120 seconds). Cleanup can take additional bounded process-stop time. The successful report measures preparation, live phase and cleanup separately; this setting is not a total wall-clock budget. An absolute watchdog kills only the harness-owned BFF processes and shuts down registered active sockets when the live deadline expires, even if HTTP/SSE keeps making progress. Remaining-time checks before and after headers/body/SSE reads reject responses completed after the deadline. A request already received by Azure can still commit after the local connection disappears; that outcome is recorded as incomplete and must be reconciled through its durable receipt.
 

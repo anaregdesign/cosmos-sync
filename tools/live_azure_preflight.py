@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 import uuid
 
 MIN_PROTOCOL_REQUESTS = 31  # 29 contract requests plus two HTTPS health probes.
+SINGLE_ACCOUNT_PROTOCOL_REQUESTS = 29  # 27 contract requests plus two HTTPS health probes.
 
 
 class GateError(Exception):
@@ -26,6 +27,20 @@ def require(condition, message):
 
 def nonempty(value):
     return isinstance(value, str) and bool(value.strip())
+
+
+def fixture_mode(manifest):
+    mode = manifest.get("fixtureMode", "three-principal")
+    require(mode in ("three-principal", "single-account"), "unsupported live fixture mode")
+    return mode
+
+
+def principal_roles(manifest):
+    return ("writer",) if fixture_mode(manifest) == "single-account" else ("writer", "reader", "outsider")
+
+
+def protocol_request_plan(manifest):
+    return SINGLE_ACCOUNT_PROTOCOL_REQUESTS if fixture_mode(manifest) == "single-account" else MIN_PROTOCOL_REQUESTS
 
 
 def https_url(value, field):
@@ -57,33 +72,35 @@ def load_manifest(path):
             require(nonempty(oidc[key]), f"oidc.{key} must be specified")
         require(isinstance(oidc.get("tokenUse", ""), str), "invalid oidc.tokenUse")
         principals = value["testPrincipals"]
-        for role in ("writer", "reader", "outsider"):
+        for role in principal_roles(value):
             principal = principals[role]
             require(all(nonempty(principal[key]) for key in
                         ("tenant", "subject", "accessTokenFile")),
                     f"{role} requires explicitly selected tenant, subject, token file")
             require(Path(principal["accessTokenFile"]).is_absolute(),
                     f"{role} token file must use an absolute private path")
-        require(principals["writer"]["tenant"] == principals["reader"]["tenant"],
-                "writer and reader must share the selected test tenant")
-        require(principals["writer"]["subject"] != principals["reader"]["subject"],
-                "writer and reader must be distinct principals")
-        outsider_identity = (principals["outsider"]["tenant"],
-                             principals["outsider"]["subject"])
-        require(all(outsider_identity != (principals[role]["tenant"],
-                                         principals[role]["subject"])
-                    for role in ("writer", "reader")),
-                "outsider must be a distinct ungranted principal")
+        if fixture_mode(value) == "three-principal":
+            require(principals["writer"]["tenant"] == principals["reader"]["tenant"],
+                    "writer and reader must share the selected test tenant")
+            require(principals["writer"]["subject"] != principals["reader"]["subject"],
+                    "writer and reader must be distinct principals")
+            outsider_identity = (principals["outsider"]["tenant"],
+                                 principals["outsider"]["subject"])
+            require(all(outsider_identity != (principals[role]["tenant"],
+                                             principals[role]["subject"])
+                        for role in ("writer", "reader")),
+                    "outsider must be a distinct ungranted principal")
         budget = value["budget"]
         for key, lower, upper in (("maxRuntimeSeconds", 30, 180),
-                                  ("maxProtocolRequests", MIN_PROTOCOL_REQUESTS, 50)):
+                                  ("maxProtocolRequests", protocol_request_plan(value), 50)):
             require(type(budget[key]) is int and lower <= budget[key] <= upper,
                     f"budget.{key} is outside the bounded harness range")
         require(budget["maxAcceptedMutations"] == 3,
                 "this contract accepts exactly three new mutations")
-        require(type(budget["ceilingAmount"]) in (int, float)
-                and 0 <= budget["ceilingAmount"] < float("inf"),
-                "budget.ceilingAmount must be finite and nonnegative")
+        ceiling = budget["ceilingAmount"]
+        require((type(ceiling) in (int, float) and 0 <= ceiling < float("inf"))
+                or (ceiling is None and budget.get("unboundedCostApproved") is True),
+                "budget.ceilingAmount must be finite/nonnegative or explicitly approved as unbounded")
         require(re.fullmatch(r"[A-Z]{3}", budget["currency"]) is not None,
                 "budget.currency must be a three-letter currency code")
         return value
@@ -198,8 +215,9 @@ def main():
             "maxAcceptedMutations": manifest["budget"]["maxAcceptedMutations"],
             "maxProtocolRequests": manifest["budget"]["maxProtocolRequests"],
             "maxRuntimeSeconds": manifest["budget"]["maxRuntimeSeconds"],
-            "plannedProtocolRequests": MIN_PROTOCOL_REQUESTS,
-            "remainingGates": ["owner-selected isolated target and cost ceiling",
+            "fixtureMode": fixture_mode(manifest),
+            "plannedProtocolRequests": protocol_request_plan(manifest),
+            "remainingGates": ["owner-selected isolated target and explicit cost approval",
                                "container-scoped Entra data role and network access",
                                "API access JWT files and exact approved server grant subjects",
                                "explicit authorization for three retained test mutations"]}

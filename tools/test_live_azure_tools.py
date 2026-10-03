@@ -51,6 +51,40 @@ class ToolsTest(unittest.TestCase):
             path.write_text(json.dumps(value))
             preflight.load_manifest(path)
 
+    def test_single_account_plan_needs_only_writer_and_a_complete_request_budget(self):
+        value = self.approved_manifest()
+        value["fixtureMode"] = "single-account"
+        value["testPrincipals"] = {"writer": value["testPrincipals"]["writer"]}
+        value["budget"]["maxProtocolRequests"] = 29
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "manifest.json"
+            path.write_text(json.dumps(value))
+            loaded = preflight.load_manifest(path)
+        self.assertEqual(preflight.principal_roles(loaded), ("writer",))
+        self.assertEqual(preflight.protocol_request_plan(loaded), 29)
+        grants = contract.grants_for(loaded, "fixture-permission")
+        self.assertEqual(len(grants), 2)
+        self.assertTrue(all(grant["canWrite"] for grant in grants))
+        contract.require_write_approval(loaded)
+        loaded["budget"]["maxProtocolRequests"] = 28
+        with patch.object(contract, "load_private_token") as token, patch.object(contract, "inspect_target") as azure:
+            with self.assertRaises(preflight.GateError):
+                contract.execute(loaded)
+            token.assert_not_called()
+            azure.assert_not_called()
+
+    def test_no_spending_ceiling_requires_explicit_unbounded_cost_approval(self):
+        value = self.approved_manifest()
+        value["budget"]["ceilingAmount"] = None
+        with self.assertRaises(preflight.GateError):
+            contract.require_write_approval(value)
+        value["budget"]["unboundedCostApproved"] = True
+        contract.require_write_approval(value)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "manifest.json"
+            path.write_text(json.dumps(value))
+            preflight.load_manifest(path)
+
     def test_write_execution_refuses_unapproved_manifest_before_tokens_or_azure(self):
         with patch.object(contract, "load_private_token") as token, patch.object(contract, "inspect_target") as azure:
             with self.assertRaises(preflight.GateError):
