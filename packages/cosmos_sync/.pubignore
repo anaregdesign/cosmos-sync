@@ -1,0 +1,9 @@
+tool/
+bin/
+.dart_tool/
+build/
+*.db
+*.sqlite
+*.sqlite-*
+*.lockfile
+web/

@@ -1,0 +1,28 @@
+name: cosmos_sync
+description: Dart offline documents with native SQLite and Web IndexedDB persistence, synchronized through a Cosmos DB authentication BFF.
+version: 0.2.0-dev.1
+repository: https://github.com/anaregdesign/cosmos-sync
+issue_tracker: https://github.com/anaregdesign/cosmos-sync/issues
+environment:
+  sdk: ^3.12.0
+dependencies:
+  http: ^1.6.0
+  http_parser: ^4.1.2
+  # 3.6+ requires meta >=1.19 through hooks, incompatible with stable Flutter
+  # 3.44's meta 1.18 pin. Keep the supported native asset API without overrides.
+  sqlite3: '>=3.5.2 <3.6.0'
+  web: ^1.1.1
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.3
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  windows:
+  web:
+topics:
+  - offline
+  - database
+  - synchronization

@@ -4,7 +4,7 @@ Build a private monorepo for an authenticated Azure Cosmos DB for NoSQL BFF and 
 
 ## First delivery acceptance
 
-- BFF validates OIDC access JWT signature, issuer, audience and expiry. Server-managed grants enforce tenant/user access and derive the logical partition. No Cosmos key or privileged token reaches clients.
+- Go BFF validates OIDC access JWT signature, issuer, audience and expiry. Server-managed grants enforce tenant/user access and derive the logical partition. No Cosmos key or privileged token reaches clients.
 - A usable vertical slice supports documents, durable local cache/outbox, pending state, replay-safe writes, version conflict handling, retained deletion tombstones, initial and incremental sync, resume cursors and polling change hints.
 - Concurrent writes use optimistic concurrency. Atomic document, journal and receipt writes occur in one Cosmos logical partition. No cross-partition transaction or global ordering is promised.
 - Revoked or mismatched identity clears local data and pauses synchronization. Offline permission revocation cannot be detected without reconnection.
