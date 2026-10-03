@@ -359,6 +359,46 @@ void main() {
   );
 
   test(
+    '507 capacity preserves retry deadline and exact request across restart',
+    () async {
+      final transport = TestTransport(server)
+        ..mutationFailure = const TransportException(
+          statusCode: 507,
+          code: 'scope_capacity_exceeded',
+          message: 'Operator must restore capacity.',
+          retryAfter: Duration(seconds: 20),
+        );
+      var client = await open(transport: transport);
+      final id = await client.put('note', {'text': 'durable capacity wait'});
+      final deferred = await client.flush();
+      final exact = transport.requests.single.toJson();
+      expect(deferred.acknowledged, 0);
+      expect(deferred.retryAt, now.add(const Duration(seconds: 20)));
+      expect(client.pending.single.operationId, id);
+      expect(client.pending.single.state, MutationState.queued);
+      expect(client.pending.single.errorCode, 'scope_capacity_exceeded');
+      expect(client.get('note')!.hasPendingWrites, isTrue);
+      expect(server.sequence, 0);
+      expect(() => client.discard(id), throwsStateError);
+      await client.close();
+
+      final recovered = TestTransport(server);
+      client = await open(transport: recovered);
+      expect(client.pending.single.operationId, id);
+      expect(client.pending.single.attempts, 1);
+      expect(client.pending.single.errorCode, 'scope_capacity_exceeded');
+      await client.flush();
+      expect(recovered.requests, isEmpty);
+      now = now.add(const Duration(seconds: 21));
+      expect((await client.flush()).acknowledged, 1);
+      expect(recovered.requests.single.toJson(), exact);
+      expect(server.sequence, 1);
+      expect(client.pending, isEmpty);
+      expect(client.get('note')!.hasPendingWrites, isFalse);
+    },
+  );
+
+  test(
     'initial replay, incremental cursor and retained tombstone survive restart',
     () async {
       server.externalPut('note', {'text': 'remote'});
