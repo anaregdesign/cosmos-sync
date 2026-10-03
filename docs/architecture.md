@@ -4,9 +4,46 @@ Cosmos Sync v0.2 is an unpublished Go BFF and Dart/Flutter offline SDK for Cosmo
 
 ## Server boundary
 
-OIDC access JWT verification precedes current server grants. User and optional shared tenant modes derive a single logical partition; a separate principal identifies the caller. Each request asserts the verified principal/scope/mode/permission version, protecting against token-provider switches even between members sharing one partition. Shared scopes have whole-scope read/write roles, without per-document ACLs. Grants are read from the server file per request and must be atomically distributed to replicas.
+OIDC access JWT verification precedes BFF authorization. The provider authenticates
+an issuer/subject identity; email, groups and client-supplied ownership claims do
+not grant data permissions. New deployments explicitly select `builtin` mode.
+Cosmos stores durable opaque accounts, an account's personal self-access scope,
+and fixed-owner shared scopes. Only the owner can change registered accounts'
+reader/writer membership, using an operation ID and observed policy revision.
+Policy changes, immutable audit records and receipts commit together. Membership
+generations invalidate old sessions/cursors without rotating unrelated members.
+See the [authorization contract](authorization.md) for limits and revocation.
 
-The official Go `azcosmos` adapter uses ETag-conditional transactional batches to write head, document, immutable journal and principal-bound receipt atomically. Both batch and individual-operation results are checked. A head serializes writes within a partition; it creates contention for large shared scopes. Signed consistency envelopes propagate Cosmos session metadata across BFFs. Account policy rejects multi-write, missing metadata and weaker-than-Session consistency. Production requires one write region and a `/scopeId` container with TTL disabled.
+Each request asserts the verified principal/scope/mode/permission generation,
+protecting against token-provider switches between members sharing a partition.
+An opaque shared-scope selector conveys no permission. Authorization metadata is
+excluded from document reads and synchronization. A same-partition policy ETag
+fences document commits against a preceding permission change. Offline clients
+cannot learn remote revocation, and Session consistency is not a globally
+linearizable authorization read. A response already released to the network
+cannot be recalled.
+
+Unset/explicit `legacy` mode retains existing user/shared-tenant grants and
+partitions. Its server grant file is read per request and must be atomically
+distributed to replicas. It has an admission-time revocation boundary rather
+than the built-in policy commit fence. Built-in mode rejects mixed nonempty
+legacy grants; migration is separate reviewed work.
+
+The official Go `azcosmos` adapter uses ETag-conditional transactional batches to
+write head, document, immutable journal and principal-bound receipt atomically.
+Built-in mutations include the current policy's conditional write in that same
+batch. Both batch and individual-operation results are checked. A head serializes
+writes within a partition; it creates contention for large shared scopes. Signed
+consistency envelopes propagate Cosmos session metadata across BFFs. Account
+policy rejects multi-write, missing metadata and weaker-than-Session consistency.
+Production requires one write region and a `/scopeId` container with TTL disabled.
+
+The supplied Container Apps target uses HTTPS ingress, explicit trusted-ingress
+runtime mode, a dedicated managed identity and narrow Cosmos native data RBAC.
+Pinned Terraform references existing Cosmos/Key Vault resources and creates the
+hosting resources only after an approved apply. Mocked plans verify preparation,
+not Azure connectivity. [Onboarding](developer-onboarding.md) joins provider
+configuration, account/member APIs, the Flutter app and operational checks.
 
 ## Client state
 
@@ -35,7 +72,7 @@ History, receipts and tombstones have no TTL or GC. Conservative per-scope event
 | Transactions | Atomic single-document server mutation in one scope | No offline or cross-partition transaction API |
 | Sync | Journal, bounded snapshot, durable resume, tombstones | No unsafe compaction; bounded retained operations |
 | Notifications | Authenticated SSE hints with polling recovery | No guaranteed push/background execution |
-| Authorization | OIDC and current user/shared-tenant grants | Production identity/grant administration remains owner configured |
+| Authorization | Validated API JWTs; durable personal scopes and fixed-owner shared reader/writer membership | Provider setup/linking, invitations, owner transfer, account deletion and generic security rules are separate work; legacy grants remain opt-in |
 | Operations | Local/fault/emulator/platform tests and preparation | Approved live Azure RU/replica/backup/deployment gate |
 
 The owner approved MIT, public GitHub/GHCR visibility, personal pub.dev ownership
@@ -43,5 +80,9 @@ and the experimental `0.2.0-dev.1` preview. The foundation is merged; subsequent
 main integration and distribution are authorized and tracked in
 [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). Actual registry,
 provider, Azure and device results remain separate verification gates. The
-cheapest live Azure proposal uses a disposable isolated account and local BFF;
-no hosted deployment or production SLA follows from that proposal.
+cheapest live Azure proposal uses an isolated retained account and local BFF.
+Only its tagged empty resource group currently exists: the subscription rejected
+free-tier provisioning and East US serverless capacity was unavailable. Another
+region awaits owner approval. Actual ACA deployment and consumer Apple/Google
+provider setup remain separate gates; neither a mocked plan nor local test
+establishes a hosted production SLA.

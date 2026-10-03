@@ -82,7 +82,9 @@ deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
 
 | Check | Evidence scope |
 | --- | --- |
-| Flutter analysis and full app suite | No issues; 46 tests, including 37 auth lifecycle/native-adapter/secure-store tests |
+| Flutter analysis and full app suite | No issues; latest 50 tests, including shared-scope selection plus auth lifecycle/native-adapter/secure-store tests |
+| Latest native SDK suite | No analysis issues; all 165 tests passed, including typed account/membership management and shared-cache selection |
+| Release/environment control tools | All 79 tests passed; no actual cloud resource or registry write is performed by these unit tests |
 | macOS app integration | Actual Go HTTP BFF, disposable signed JWT/JWKS issuer, SQLite, document/conflict/pending UI and an isolated native Keychain key; provider is a test adapter |
 | Android physical SDK fixture | Pixel 9a / Android 17 API 37; actual SQLite and deterministic transport; cache close/reopen within the test process |
 | Android physical application | Pixel 9a / Android 17 API 37; actual Go HTTP BFF, SQLite, offline reconnect/conflict/delete/purge UI and isolated native secure storage; signed-fixture auth adapter |
@@ -112,3 +114,29 @@ The exact unsigned/simulator commands and toolchain workaround are recorded in
 Cosmos validation target, current developer egress and container-scoped data
 role, then explicitly required retaining the reusable Cosmos/Entra environment.
 That retention instruction supersedes the earlier after-test deletion approval.
+
+## Built-in authorization and Container Apps preparation
+
+The subsequent preview source adds durable issuer/subject accounts, personal
+self-access scopes and fixed-owner shared reader/writer membership. The actual
+Go/Dart TLS fixture in `tools/authorization_cross_stack_smoke.py` exercises signed
+RSA/JWKS identities, SQLite persistence, membership CAS/idempotency, reader and
+nonowner denial, pending purge on demotion, connected SSE revocation, old cursors,
+regrant and delete replay. Its identities are test fixtures, not actual Entra
+users. The latest full CI must pass again after the final Cosmos authorization
+consistency fixes; older green runs do not validate those changes.
+
+The Container Apps preparation adds trusted HTTPS-ingress runtime mode,
+non-secret bounded JSON configuration, graceful process drain and a pinned
+Terraform reference. Format/init/validate, 15 mock-only plan tests and TFLint
+passed. No ACA environment/application, managed identity, Key Vault or hosted
+role assignment was created. The reference uses container-scoped Cosmos native
+RBAC and versioned Key Vault secret references; a reviewed real plan and the
+owner's exact resource/network authorization are still required for deployment.
+
+The reusable Azure validation target currently contains only its owned tagged
+empty resource group. No Cosmos account, database, container or data-role
+assignment exists yet. Free-tier creation was rejected by the subscription
+offer and the approved East US serverless attempt failed for capacity. The
+requested region-only alternative awaits approval. No actual cloud data result
+or hosted clean-checkout onboarding is inferred from local/emulator evidence.

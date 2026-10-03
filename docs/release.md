@@ -16,7 +16,7 @@ selected; that does not prevent the approved first personal-account publication.
    without publishing the personal account identity. Preserve matching MIT notices
    in the repository, BFF and SDK. The container includes its project license, the
    Go license and downloaded dependency LICENSE/NOTICE files under `/licenses`.
-2. Run `python3 tools/package_docs.py` after any protocol/query/security edit. The
+2. Run `python3 tools/package_docs.py` after any protocol/query/security/authorization edit. The
    archive includes those documents under `packages/cosmos_sync/doc`; optional source
    links can remain private without blocking package usage or safety documentation.
 3. Merge the reviewed candidate and require the **latest completed successful main
