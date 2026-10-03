@@ -56,6 +56,10 @@ func (s *MemoryStore) LoadAuthorizationPolicy(ctx context.Context, scopeID strin
 	return cloneAuthorizationPolicy(policy), nil
 }
 
+func (s *MemoryStore) LoadAuthorizationPolicyAt(ctx context.Context, scopeID, dataMinimum string) (*AuthorizationPolicy, error) {
+	return s.LoadAuthorizationPolicy(ctx, scopeID)
+}
+
 func (s *MemoryStore) CreateSharedScope(ctx context.Context, accountID, operationID string) (SharedScope, error) {
 	if err := ctx.Err(); err != nil {
 		return SharedScope{}, err

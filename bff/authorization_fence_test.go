@@ -55,7 +55,7 @@ func TestCosmosAuthorizationFenceIsAtomicAndDeniesAfterRevocation(t *testing.T) 
 		return cosmosResponse(request, 200, `[{"statusCode":424},{"statusCode":424},{"statusCode":424},{"statusCode":424},{"statusCode":412}]`, "revoked-session"), nil
 	})
 	_, _, err = store.Mutate(context.Background(), scopeID, m, hash, "")
-	if e, ok := err.(*ProtocolError); !ok || e.Status != 403 || batchCount != 1 || policyReads != 2 {
+	if e, ok := err.(*ProtocolError); !ok || e.Status != 403 || batchCount != 1 || policyReads != 3 {
 		t.Fatalf("stale writer was not denied after fence retry: batches=%d reads=%d err=%v", batchCount, policyReads, err)
 	}
 }

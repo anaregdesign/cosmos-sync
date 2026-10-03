@@ -164,6 +164,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		session = value.Token
 	}
+	if s.builtinAuthorization() && session != "" {
+		if err := s.reauthorizeScope(r.Context(), auth[1], scope, session); err != nil {
+			s.writeError(w, err)
+			return
+		}
+	}
 	setSession := func(token string) {
 		if token != "" {
 			context := s.boundContext(scope, 0)
@@ -210,7 +216,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		setSession(token)
 		var outcome *ProtocolError
 		if e == nil || (errors.As(e, &outcome) && outcome.Current != nil) {
-			if err := s.reauthorizeScope(r.Context(), auth[1], scope); err != nil {
+			if err := s.reauthorizeScope(r.Context(), auth[1], scope, token); err != nil {
 				s.writeError(w, err)
 				return
 			}
@@ -252,7 +258,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, e)
 			return
 		}
-		if e = s.reauthorizeScope(r.Context(), auth[1], scope); e != nil {
+		if e = s.reauthorizeScope(r.Context(), auth[1], scope, token); e != nil {
 			s.writeError(w, e)
 			return
 		}

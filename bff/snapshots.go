@@ -109,7 +109,7 @@ func (s *Server) serveSnapshot(w http.ResponseWriter, r *http.Request, scope Sco
 		return
 	}
 	hasMore := end < len(documents)
-	if err := s.reauthorizeScope(ctx, accessToken, scope); err != nil {
+	if err := s.reauthorizeScope(ctx, accessToken, scope, session); err != nil {
 		s.writeError(w, err)
 		return
 	}

@@ -2,8 +2,10 @@ package syncbff
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,18 +20,62 @@ const authorizationAccountItemID = "a:account"
 
 type authorizationSessionsKey struct{}
 
-// This is request-local session state, not a permission cache. The Go SDK needs
-// explicit session-token handoff. Tokens never cross partition or leave the BFF.
+// This is request-local authorization session state, not a permission cache.
+// It is used only by account, policy, audit, receipt and membership operations.
+// Data reads/writes keep their separate, caller-supplied session-token chain:
+// opaque Cosmos tokens cannot be ordered by choosing one chain over another.
+// Tokens never cross partition or leave the BFF.
 type authorizationSessions struct {
-	mu     sync.Mutex
-	tokens map[string]string
+	mu       sync.Mutex
+	tokens   map[string]string
+	observed map[string]observedAuthorizationPolicy
+}
+
+// Remember only a security high-water mark, never a cached permission answer.
+type observedAuthorizationPolicy struct {
+	revision int64
+	owner    string
+	mode     string
+	digest   [32]byte
 }
 
 func withAuthorizationSessions(ctx context.Context) context.Context {
 	if _, ok := ctx.Value(authorizationSessionsKey{}).(*authorizationSessions); ok {
 		return ctx
 	}
-	return context.WithValue(ctx, authorizationSessionsKey{}, &authorizationSessions{tokens: make(map[string]string)})
+	return context.WithValue(ctx, authorizationSessionsKey{}, &authorizationSessions{tokens: make(map[string]string), observed: make(map[string]observedAuthorizationPolicy)})
+}
+
+func observeAuthorizationPolicy(ctx context.Context, scopeID string, policy *AuthorizationPolicy) error {
+	sessions, ok := ctx.Value(authorizationSessionsKey{}).(*authorizationSessions)
+	if !ok {
+		return nil
+	}
+	var observation observedAuthorizationPolicy
+	if policy != nil {
+		if !validAuthorizationPolicy(policy, scopeID) {
+			return protocolError(503, "authorization_store_unavailable")
+		}
+		body, err := encodeJSON(policy)
+		if err != nil {
+			return protocolError(503, "authorization_store_unavailable")
+		}
+		observation = observedAuthorizationPolicy{revision: policy.Revision, owner: policy.OwnerAccountID, mode: policy.Mode, digest: sha256.Sum256(body)}
+	}
+	sessions.mu.Lock()
+	defer sessions.mu.Unlock()
+	previous, exists := sessions.observed[scopeID]
+	if exists && (policy == nil || observation.owner != previous.owner || observation.mode != previous.mode || observation.revision < previous.revision || observation.revision == previous.revision && observation.digest != previous.digest) {
+		return protocolError(503, "authorization_store_unavailable")
+	}
+	if policy == nil {
+		return nil
+	}
+	if !exists && len(sessions.observed) >= 8 {
+		return protocolError(503, "authorization_store_unavailable")
+	}
+	sessions.observed[scopeID] = observation
+	return nil
 }
 
 func authorizationSession(ctx context.Context, scopeID, supplied string) (string, error) {
@@ -42,6 +88,8 @@ func authorizationSession(ctx context.Context, scopeID, supplied string) (string
 	if _, exists := sessions.tokens[scopeID]; !exists && len(sessions.tokens) >= 8 {
 		return "", protocolError(503, "authorization_store_unavailable")
 	}
+	// supplied belongs to this authorization chain, never to the data/session
+	// envelope. The holder is its last sequentially observed request response.
 	if observed := sessions.tokens[scopeID]; observed != "" {
 		return observed, nil
 	}
@@ -156,17 +204,68 @@ func (s *CosmosStore) readAuthorizationPolicy(ctx context.Context, scopeID, sess
 	if err != nil {
 		return nil, "", session, err
 	}
+	policy, err := validatedAuthorizationPolicyItem(item, etag, scopeID)
+	return policy, etag, session, err
+}
+
+func validatedAuthorizationPolicyItem(item *storedItem, etag azcore.ETag, scopeID string) (*AuthorizationPolicy, error) {
 	if item == nil {
-		return nil, "", session, nil
+		return nil, nil
 	}
 	if item.ID != authorizationPolicyItemID || item.ScopeID != scopeID || item.Kind != "authorization" || etag == "" || !validAuthorizationPolicy(item.Policy, scopeID) {
-		return nil, "", session, protocolError(503, "authorization_store_unavailable")
+		return nil, protocolError(503, "authorization_store_unavailable")
 	}
-	return item.Policy, etag, session, nil
+	return item.Policy, nil
+}
+
+// readAuthorizationPolicyAt preserves both independent causal minima without
+// interpreting Cosmos' opaque session tokens. Only the application's policy
+// revision orders authority; equal revisions must have identical policy bodies.
+func (s *CosmosStore) readAuthorizationPolicyAt(ctx context.Context, scopeID, dataMinimum string) (selected *AuthorizationPolicy, etag azcore.ETag, resultErr error) {
+	ctx = withAuthorizationSessions(ctx)
+	defer func() {
+		if resultErr == nil {
+			if err := observeAuthorizationPolicy(ctx, scopeID, selected); err != nil {
+				selected, etag, resultErr = nil, "", err
+			}
+		}
+	}()
+	authorization, authorizationETag, _, err := s.readAuthorizationPolicy(ctx, scopeID, "")
+	if err != nil || dataMinimum == "" {
+		return authorization, authorizationETag, err
+	}
+	// This point read intentionally bypasses the authorization token holder.
+	// Its response neither replaces that holder nor the caller's data chain.
+	item, dataETag, _, err := s.read(ctx, scopeID, authorizationPolicyItemID, dataMinimum)
+	if err != nil {
+		return nil, "", err
+	}
+	dataPolicy, err := validatedAuthorizationPolicyItem(item, dataETag, scopeID)
+	if err != nil {
+		return nil, "", err
+	}
+	if authorization == nil && dataPolicy == nil {
+		return nil, "", nil
+	}
+	if authorization == nil || dataPolicy == nil || authorization.ScopeID != dataPolicy.ScopeID || authorization.Mode != dataPolicy.Mode || authorization.OwnerAccountID != dataPolicy.OwnerAccountID {
+		return nil, "", protocolError(503, "authorization_store_unavailable")
+	}
+	if authorization.Revision == dataPolicy.Revision && !reflect.DeepEqual(authorization, dataPolicy) {
+		return nil, "", protocolError(503, "authorization_store_unavailable")
+	}
+	if dataPolicy.Revision > authorization.Revision {
+		return dataPolicy, dataETag, nil
+	}
+	return authorization, authorizationETag, nil
 }
 
 func (s *CosmosStore) LoadAuthorizationPolicy(ctx context.Context, scopeID string) (*AuthorizationPolicy, error) {
-	policy, _, _, err := s.readAuthorizationPolicy(ctx, scopeID, "")
+	policy, _, err := s.readAuthorizationPolicyAt(ctx, scopeID, "")
+	return policy, err
+}
+
+func (s *CosmosStore) LoadAuthorizationPolicyAt(ctx context.Context, scopeID, dataMinimum string) (*AuthorizationPolicy, error) {
+	policy, _, err := s.readAuthorizationPolicyAt(ctx, scopeID, dataMinimum)
 	return policy, err
 }
 

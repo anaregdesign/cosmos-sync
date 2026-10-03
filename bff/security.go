@@ -97,6 +97,10 @@ func (s *Server) authorize(ctx context.Context, token, mode string) (Scope, erro
 }
 
 func (s *Server) authorizeSelected(ctx context.Context, token, mode, scopeID string) (Scope, error) {
+	return s.authorizeSelectedAt(ctx, token, mode, scopeID, "")
+}
+
+func (s *Server) authorizeSelectedAt(ctx context.Context, token, mode, scopeID, dataMinimum string) (Scope, error) {
 	if mode == "" {
 		mode = "user"
 	}
@@ -112,7 +116,7 @@ func (s *Server) authorizeSelected(ctx context.Context, token, mode, scopeID str
 		return Scope{}, err
 	}
 	if s.builtinAuthorization() {
-		return s.authorizeBuiltin(ctx, identity, mode, scopeID)
+		return s.authorizeBuiltin(ctx, identity, mode, scopeID, dataMinimum)
 	}
 	if tenant == "" {
 		return Scope{}, protocolError(403, "forbidden")

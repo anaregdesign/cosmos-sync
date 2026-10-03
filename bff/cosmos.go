@@ -153,17 +153,7 @@ func (s *CosmosStore) ConfigureRetention(options RetentionOptions) error {
 	return s.retention.configure(options)
 }
 
-func (s *CosmosStore) read(ctx context.Context, scope, id, session string) (result *storedItem, tag azcore.ETag, nextToken string, readErr error) {
-	var sessionErr error
-	session, sessionErr = authorizationSession(ctx, scope, session)
-	if sessionErr != nil {
-		return nil, "", session, sessionErr
-	}
-	defer func() {
-		if err := rememberAuthorizationSession(ctx, scope, session); err != nil {
-			result, tag, nextToken, readErr = nil, "", session, err
-		}
-	}()
+func (s *CosmosStore) read(ctx context.Context, scope, id, session string) (*storedItem, azcore.ETag, string, error) {
 	response, err := s.container.ReadItem(ctx, azcosmos.NewPartitionKeyString(scope), id, &azcosmos.ItemOptions{SessionToken: stringPointer(session), ConsistencyLevel: azcosmos.ConsistencyLevelSession.ToPtr()})
 	session = nextSession(session, response.RawResponse)
 	if err != nil {
@@ -184,14 +174,18 @@ func (s *CosmosStore) read(ctx context.Context, scope, id, session string) (resu
 }
 
 func (s *CosmosStore) Mutate(ctx context.Context, scope string, m Mutation, hash, session string) (Document, string, error) {
+	if m.AuthorizationVersion != "" {
+		ctx = withAuthorizationSessions(ctx)
+	}
 	pk := azcosmos.NewPartitionKeyString(scope)
 	receiptID := "r:" + mutationReceiptKey(m)
 	for attempt := 0; attempt < 12; attempt++ {
 		var authorizationPolicy *AuthorizationPolicy
 		var authorizationETag azcore.ETag
 		if m.AuthorizationVersion != "" {
-			policy, etag, token, err := s.readAuthorizationPolicy(ctx, scope, session)
-			session = token
+			// Authorization and data maintain separate opaque session minima.
+			// A policy read must never downgrade the caller's validated data token.
+			policy, etag, err := s.readAuthorizationPolicyAt(ctx, scope, session)
 			if err != nil {
 				return Document{}, session, err
 			}
@@ -302,16 +296,10 @@ func (s *CosmosStore) Mutate(ctx context.Context, scope string, m Mutation, hash
 		}
 		response, err := s.container.ExecuteTransactionalBatch(ctx, batch, &azcosmos.TransactionalBatchOptions{SessionToken: session, ConsistencyLevel: azcosmos.ConsistencyLevelSession.ToPtr()})
 		session = nextSession(session, response.RawResponse)
-		if rememberErr := rememberAuthorizationSession(ctx, scope, session); rememberErr != nil {
-			return Document{}, session, rememberErr
-		}
 		if err != nil {
 			var service *azcore.ResponseError
 			if errors.As(err, &service) {
 				session = nextSession(session, service.RawResponse)
-				if rememberErr := rememberAuthorizationSession(ctx, scope, session); rememberErr != nil {
-					return Document{}, session, rememberErr
-				}
 				if service.StatusCode == 409 || service.StatusCode == 412 {
 					continue
 				}
@@ -348,18 +336,26 @@ func (s *CosmosStore) Sync(ctx context.Context, scope string, after int64, limit
 		return StorePage{}, session, &ProtocolError{Status: 503, Code: "sync_gap_retry", RetryAfter: "1"}
 	}
 	crossPartition := false
+	// The pinned SDK shallow-copies QueryOptions and only updates continuation.
+	// Keep the pointed-to value live so each physical page honors the preceding
+	// page's opaque consistency minimum, including empty pages.
+	querySession := session
 	pager := s.container.NewQueryItemsPager("SELECT TOP @count * FROM c WHERE c.kind = 'change' AND c.sequence > @after ORDER BY c.sequence", azcosmos.NewPartitionKeyString(scope), &azcosmos.QueryOptions{
-		SessionToken: stringPointer(session), ConsistencyLevel: azcosmos.ConsistencyLevelSession.ToPtr(), PageSizeHint: int32(limit + 1), EnableCrossPartitionQuery: &crossPartition,
+		SessionToken: &querySession, ConsistencyLevel: azcosmos.ConsistencyLevelSession.ToPtr(), PageSizeHint: int32(limit + 1), EnableCrossPartitionQuery: &crossPartition,
 		QueryParameters: []azcosmos.QueryParameter{{Name: "@count", Value: limit + 1}, {Name: "@after", Value: after}},
 	})
 	documents := []Document{}
 	for pager.More() && len(documents) < limit+1 {
 		response, err := pager.NextPage(ctx)
 		session = nextSession(session, response.RawResponse)
-		if rememberErr := rememberAuthorizationSession(ctx, scope, session); rememberErr != nil {
-			return StorePage{}, session, rememberErr
-		}
+		querySession = session
 		if err != nil {
+			// The SDK returns a zero query response on service errors; their
+			// observed minimum remains on ResponseError.RawResponse instead.
+			var service *azcore.ResponseError
+			if errors.As(err, &service) {
+				session = nextSession(session, service.RawResponse)
+			}
 			return StorePage{}, session, cosmosError(err)
 		}
 		for _, value := range response.Items {

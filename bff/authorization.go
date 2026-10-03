@@ -91,6 +91,7 @@ type AuthorizationStore interface {
 	EnsureAccount(context.Context, AccountIdentity) (Account, error)
 	CreateSharedScope(context.Context, string, string) (SharedScope, error)
 	LoadAuthorizationPolicy(context.Context, string) (*AuthorizationPolicy, error)
+	LoadAuthorizationPolicyAt(context.Context, string, string) (*AuthorizationPolicy, error)
 	ChangeMembership(context.Context, string, string, MembershipChange) (SharedScope, error)
 }
 
@@ -236,7 +237,7 @@ func cloneAuthorizationPolicy(policy *AuthorizationPolicy) *AuthorizationPolicy 
 
 func (s *Server) builtinAuthorization() bool { return s.config.Authorization.Mode == "builtin" }
 
-func (s *Server) authorizeBuiltin(ctx context.Context, identity AccountIdentity, mode, scopeID string) (Scope, error) {
+func (s *Server) authorizeBuiltin(ctx context.Context, identity AccountIdentity, mode, scopeID, dataMinimum string) (Scope, error) {
 	account, err := s.authorization.EnsureAccount(ctx, identity)
 	if err != nil {
 		return Scope{}, err
@@ -251,7 +252,7 @@ func (s *Server) authorizeBuiltin(ctx context.Context, identity AccountIdentity,
 	} else if !accountIDPattern.MatchString(scopeID) {
 		return Scope{}, protocolError(400, "invalid_authorization_request")
 	}
-	policy, err := s.authorization.LoadAuthorizationPolicy(ctx, scopeID)
+	policy, err := s.authorization.LoadAuthorizationPolicyAt(ctx, scopeID, dataMinimum)
 	if err != nil {
 		return Scope{}, err
 	}
@@ -358,8 +359,8 @@ func decodeAuthorizationRequest(w http.ResponseWriter, r *http.Request, value an
 
 // Reauthorization immediately before returning a potentially slow data read
 // preserves the existing SSE check and applies the same policy to sync/snapshot.
-func (s *Server) reauthorizeScope(ctx context.Context, token string, previous Scope) error {
-	current, err := s.authorizeSelected(ctx, token, previous.ScopeMode, previous.ID)
+func (s *Server) reauthorizeScope(ctx context.Context, token string, previous Scope, dataMinimum string) error {
+	current, err := s.authorizeSelectedAt(ctx, token, previous.ScopeMode, previous.ID, dataMinimum)
 	if err != nil {
 		return err
 	}

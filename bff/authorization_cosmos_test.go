@@ -1,14 +1,22 @@
 package syncbff
 
 import (
+	"bytes"
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/coreos/go-oidc/v3/oidc"
 )
 
 const authorizationTestAccountMetadata = `{"readableLocations":[{"name":"Test","databaseAccountEndpoint":"https://cosmos.test"}],"writableLocations":[{"name":"Test","databaseAccountEndpoint":"https://cosmos.test"}],"enableMultipleWriteLocations":false,"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`
@@ -355,8 +363,8 @@ func TestAuthorizationSessionsAreRequestAndPartitionBoundAndBounded(t *testing.T
 	if token, _ := authorizationSession(ctx, "one", ""); token != "one-token" {
 		t.Fatal("lost scoped token")
 	}
-	if token, _ := authorizationSession(ctx, "one", "older-client-token"); token != "one-token" {
-		t.Fatal("an already observed request token was replaced by an older supplied client token")
+	if token, _ := authorizationSession(ctx, "one", "earlier-authorization-token"); token != "one-token" {
+		t.Fatal("an already observed authorization response was replaced by an earlier authorization read")
 	}
 	if token, _ := authorizationSession(ctx, "two", ""); token != "" {
 		t.Fatal("token crossed partition")
@@ -376,6 +384,62 @@ func TestAuthorizationSessionsAreRequestAndPartitionBoundAndBounded(t *testing.T
 	}
 }
 
+func TestCosmosDataClientSessionAndAuthorizationSessionStaySeparate(t *testing.T) {
+	ctx := withAuthorizationSessions(context.Background())
+	scopeID, owner := namespacedID("session-scope"), namespacedID("session-owner")
+	if err := rememberAuthorizationSession(ctx, scopeID, "0:-1#5"); err != nil {
+		t.Fatal(err)
+	}
+	seen := []string{}
+	store := testCosmos(t, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/" || r.URL.Path == "" {
+			return cosmosResponse(r, 200, authorizationTestAccountMetadata, ""), nil
+		}
+		seen = append(seen, r.Header.Get("x-ms-session-token"))
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/docs/head"):
+			if seen[len(seen)-1] != "0:-1#10" {
+				t.Fatal("earlier authorization LSN5 discarded signed client minimum LSN10")
+			}
+			return authorizationItemResponse(t, r, &storedItem{ID: "head", ScopeID: scopeID, Kind: "head", Sequence: 1}, "0:-1#11"), nil
+		case strings.HasSuffix(r.URL.Path, "/docs/d:note"):
+			if seen[len(seen)-1] != "0:-1#11" {
+				t.Fatal("data reads lost their own response-token chain")
+			}
+			return authorizationItemResponse(t, r, nil, "0:-1#12"), nil
+		case strings.HasSuffix(r.URL.Path, "/docs/"+authorizationPolicyItemID):
+			if seen[len(seen)-1] != "0:-1#5" {
+				t.Fatal("raw data response overwrote the separate authorization chain")
+			}
+			return authorizationItemResponse(t, r, &storedItem{ID: authorizationPolicyItemID, ScopeID: scopeID, Kind: "authorization", Policy: newAuthorizationPolicy(scopeID, owner, "shared")}, "0:-1#6"), nil
+		default:
+			t.Fatalf("unexpected request %s", r.URL.Path)
+		}
+		return nil, nil
+	})
+	_, _, session, err := store.read(ctx, scopeID, "head", "0:-1#10")
+	if err != nil || session != "0:-1#11" {
+		t.Fatalf("client data session: %q %v", session, err)
+	}
+	_, _, session, err = store.read(ctx, scopeID, "d:note", session)
+	if err != nil || session != "0:-1#12" {
+		t.Fatalf("subsequent data session: %q %v", session, err)
+	}
+	if token, _ := authorizationSession(ctx, scopeID, ""); token != "0:-1#5" {
+		t.Fatalf("data response leaked into authorization token: %q", token)
+	}
+	_, _, _, err = store.readAuthorizationPolicy(ctx, scopeID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token, _ := authorizationSession(ctx, scopeID, ""); token != "0:-1#6" {
+		t.Fatalf("authorization response did not advance its own chain: %q", token)
+	}
+	if !reflect.DeepEqual(seen, []string{"0:-1#10", "0:-1#11", "0:-1#5"}) {
+		t.Fatalf("wrong SDK session headers: %+v", seen)
+	}
+}
+
 func TestCosmosBuiltinCanceledContextDoesNotIssueStorageRequests(t *testing.T) {
 	store := testCosmos(t, func(r *http.Request) (*http.Response, error) {
 		t.Fatal("canceled authorization must not call Cosmos")
@@ -386,5 +450,337 @@ func TestCosmosBuiltinCanceledContextDoesNotIssueStorageRequests(t *testing.T) {
 	_, err := store.EnsureAccount(ctx, AccountIdentity{Issuer: "https://issuer.test", Subject: "owner"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("want cancellation, got %v", err)
+	}
+}
+
+func TestCosmosAuthorizationPolicyHonorsBothIndependentCausalMinima(t *testing.T) {
+	owner, member, scopeID := namespacedID("causal-owner"), namespacedID("causal-member"), namespacedID("causal-scope")
+	for _, name := range []string{"data-newer-revoke", "auth-newer-regrant", "same-policy", "different-owner", "equal-revision-conflicting-body", "missing-auth", "missing-data", "both-missing"} {
+		t.Run(name, func(t *testing.T) {
+			authorization := newAuthorizationPolicy(scopeID, owner, "shared")
+			authorization.Revision = 2
+			authorization.Members[member] = ScopeMember{AccountID: member, Role: "writer", PermissionVersion: "2"}
+			data := cloneAuthorizationPolicy(authorization)
+			wantRevision, wantETag := int64(2), "\"auth\""
+			wantUnavailable := false
+			switch name {
+			case "data-newer-revoke":
+				data.Revision = 3
+				data.Members[member] = ScopeMember{AccountID: member, Role: "none", PermissionVersion: "3"}
+				wantRevision, wantETag = 3, "\"data\""
+			case "auth-newer-regrant":
+				authorization.Revision = 4
+				authorization.Members[member] = ScopeMember{AccountID: member, Role: "writer", PermissionVersion: "4"}
+				data.Revision = 3
+				data.Members[member] = ScopeMember{AccountID: member, Role: "none", PermissionVersion: "3"}
+				wantRevision = 4
+			case "different-owner":
+				data.OwnerAccountID = namespacedID("different-owner")
+				wantUnavailable = true
+			case "equal-revision-conflicting-body":
+				data.Members[member] = ScopeMember{AccountID: member, Role: "reader", PermissionVersion: "2"}
+				wantUnavailable = true
+			case "missing-auth":
+				authorization = nil
+				wantUnavailable = true
+			case "missing-data":
+				data = nil
+				wantUnavailable = true
+			case "both-missing":
+				authorization, data = nil, nil
+			}
+			ctx := withAuthorizationSessions(context.Background())
+			if err := rememberAuthorizationSession(ctx, scopeID, "0:-1#5"); err != nil {
+				t.Fatal(err)
+			}
+			seen := []string{}
+			store := testCosmos(t, func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/" || r.URL.Path == "" {
+					return cosmosResponse(r, 200, authorizationTestAccountMetadata, ""), nil
+				}
+				if !strings.HasSuffix(r.URL.Path, "/docs/"+authorizationPolicyItemID) {
+					t.Fatal("causal policy check reached unrelated data")
+				}
+				token := r.Header.Get("x-ms-session-token")
+				seen = append(seen, token)
+				selected, responseToken, etag := authorization, "0:-1#6", "\"auth\""
+				if token == "0:-1#10" {
+					selected, responseToken, etag = data, "0:-1#11", "\"data\""
+				} else if token != "0:-1#5" {
+					t.Fatalf("wrong independent minimum %q", token)
+				}
+				var item *storedItem
+				if selected != nil {
+					item = &storedItem{ID: authorizationPolicyItemID, ScopeID: scopeID, Kind: "authorization", Policy: selected}
+				}
+				response := authorizationItemResponse(t, r, item, responseToken)
+				response.Header.Set("Etag", etag)
+				return response, nil
+			})
+			selected, etag, err := store.readAuthorizationPolicyAt(ctx, scopeID, "0:-1#10")
+			if !reflect.DeepEqual(seen, []string{"0:-1#5", "0:-1#10"}) {
+				t.Fatalf("one causal minimum was discarded: %+v", seen)
+			}
+			if token, _ := authorizationSession(ctx, scopeID, ""); token != "0:-1#6" {
+				t.Fatalf("data-causal probe overwrote auth chain: %q", token)
+			}
+			if wantUnavailable {
+				requireAuthorizationCode(t, err, "authorization_store_unavailable")
+				return
+			}
+			if name == "both-missing" {
+				if err != nil || selected != nil {
+					t.Fatalf("unknown scope: %+v %v", selected, err)
+				}
+				return
+			}
+			if err != nil || selected == nil || selected.Revision != wantRevision || string(etag) != wantETag {
+				t.Fatalf("wrong trusted revision or its fence ETag: %+v %s %v", selected, etag, err)
+			}
+			if name == "data-newer-revoke" {
+				_, err := selected.scope(member)
+				requireAuthorizationCode(t, err, "forbidden")
+			}
+			if name == "auth-newer-regrant" {
+				scope, err := selected.scope(member)
+				if err != nil || scope.PermissionVersion != "4" {
+					t.Fatalf("stale generation revived: %+v %v", scope, err)
+				}
+				if err := checkAuthorizationWrite(selected, scopeID, Mutation{PrincipalID: member, AuthorizationVersion: "2"}); err == nil {
+					t.Fatal("old-generation mutation accepted after regrant")
+				}
+			}
+		})
+	}
+}
+
+func TestCosmosAuthorizationPolicyCannotRegressAfterNewerDataObservation(t *testing.T) {
+	owner, member, scopeID := namespacedID("watermark-owner"), namespacedID("watermark-member"), namespacedID("watermark-scope")
+	makePolicy := func(revision int64, role, version string) *AuthorizationPolicy {
+		policy := newAuthorizationPolicy(scopeID, owner, "shared")
+		policy.Revision = revision
+		policy.Members[member] = ScopeMember{AccountID: member, Role: role, PermissionVersion: version}
+		return policy
+	}
+	for _, name := range []string{"regression", "same-revision-body-change", "immutable-owner-change", "both-disappear", "valid-forward"} {
+		t.Run(name, func(t *testing.T) {
+			ctx := withAuthorizationSessions(context.Background())
+			if err := rememberAuthorizationSession(ctx, scopeID, "0:-1#5"); err != nil {
+				t.Fatal(err)
+			}
+			call := 0
+			store := testCosmos(t, func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/" || r.URL.Path == "" {
+					return cosmosResponse(r, 200, authorizationTestAccountMetadata, ""), nil
+				}
+				if !strings.HasSuffix(r.URL.Path, "/docs/"+authorizationPolicyItemID) {
+					t.Fatal("watermark check reached unrelated data")
+				}
+				call++
+				token := r.Header.Get("x-ms-session-token")
+				var policy *AuthorizationPolicy
+				responseToken := "0:-1#5"
+				switch call {
+				case 1:
+					if token != "0:-1#5" {
+						t.Fatal("initial auth minimum lost")
+					}
+					policy = makePolicy(2, "writer", "2")
+				case 2:
+					if token != "0:-1#10" {
+						t.Fatal("initial data minimum lost")
+					}
+					policy, responseToken = makePolicy(4, "writer", "4"), "0:-1#20"
+				default:
+					wantToken := "0:-1#5"
+					if call == 4 {
+						wantToken, responseToken = "0:-1#10", "0:-1#10"
+					}
+					if token != wantToken {
+						t.Fatalf("independent opaque minimum changed: got %q want %q", token, wantToken)
+					}
+					switch name {
+					case "regression":
+						policy = makePolicy(3, "none", "3")
+						if call == 4 {
+							policy = makePolicy(2, "writer", "2")
+						}
+					case "same-revision-body-change":
+						policy = makePolicy(4, "reader", "4")
+					case "immutable-owner-change":
+						policy = makePolicy(5, "writer", "4")
+						policy.OwnerAccountID = namespacedID("changed-owner")
+					case "both-disappear":
+						policy = nil
+					case "valid-forward":
+						policy = makePolicy(5, "writer", "4")
+						other := namespacedID("other-member")
+						policy.Members[other] = ScopeMember{AccountID: other, Role: "reader", PermissionVersion: "5"}
+					}
+				}
+				var item *storedItem
+				if policy != nil {
+					item = &storedItem{ID: authorizationPolicyItemID, ScopeID: scopeID, Kind: "authorization", Policy: policy}
+				}
+				return authorizationItemResponse(t, r, item, responseToken), nil
+			})
+			first, _, err := store.readAuthorizationPolicyAt(ctx, scopeID, "0:-1#10")
+			if err != nil || first == nil || first.Revision != 4 {
+				t.Fatalf("newer data policy not observed: %+v %v", first, err)
+			}
+			second, etag, err := store.readAuthorizationPolicyAt(ctx, scopeID, "0:-1#10")
+			if name == "valid-forward" {
+				if err != nil || second == nil || second.Revision != 5 || second.Members[member].PermissionVersion != "4" {
+					t.Fatalf("legitimate unrelated membership edit rejected: %+v %v", second, err)
+				}
+			} else {
+				requireAuthorizationCode(t, err, "authorization_store_unavailable")
+				if second != nil || etag != "" {
+					t.Fatal("regressed policy or ETag escaped fail-closed check")
+				}
+			}
+			if call != 4 {
+				t.Fatalf("watermark became a permission cache: reads=%d", call)
+			}
+		})
+	}
+}
+
+func TestAuthorizationPolicyHighWaterIsRequestLocalAndBounded(t *testing.T) {
+	ctx := withAuthorizationSessions(context.Background())
+	owner := namespacedID("watermark-owner")
+	for n := 0; n < 8; n++ {
+		scope := namespacedID("watermark", string(rune('a'+n)))
+		if err := observeAuthorizationPolicy(ctx, scope, newAuthorizationPolicy(scope, owner, "shared")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ninth := namespacedID("watermark-ninth")
+	requireAuthorizationCode(t, observeAuthorizationPolicy(ctx, ninth, newAuthorizationPolicy(ninth, owner, "shared")), "authorization_store_unavailable")
+	if err := observeAuthorizationPolicy(withAuthorizationSessions(context.Background()), ninth, newAuthorizationPolicy(ninth, owner, "shared")); err != nil {
+		t.Fatal("high-water leaked across requests", err)
+	}
+}
+
+func TestCosmosDataBatchFailureMinimumRejectsOldReceiptAfterRevocation(t *testing.T) {
+	owner, member, scopeID := namespacedID("fence-owner"), namespacedID("fence-member"), namespacedID("fence-scope")
+	policy := newAuthorizationPolicy(scopeID, owner, "shared")
+	policy.Revision = 2
+	policy.Members[member] = ScopeMember{AccountID: member, Role: "writer", PermissionVersion: "2"}
+	revoked := cloneAuthorizationPolicy(policy)
+	revoked.Revision = 3
+	revoked.Members[member] = ScopeMember{AccountID: member, Role: "none", PermissionVersion: "3"}
+	mutation := Mutation{OperationID: "33333333-3333-4333-8333-333333333333", DocumentID: "note", Kind: "put", Data: json.RawMessage("{\"private\":\"receipt\"}"), PrincipalID: member, AuthorizationVersion: "2"}
+	hash, err := validateMutation(&mutation, scopeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batches, receipts, policyProbes := 0, 0, []string{}
+	store := testCosmos(t, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/" || r.URL.Path == "" {
+			return cosmosResponse(r, 200, authorizationTestAccountMetadata, ""), nil
+		}
+		if strings.HasSuffix(r.URL.Path, "/docs/"+authorizationPolicyItemID) {
+			token := r.Header.Get("x-ms-session-token")
+			policyProbes = append(policyProbes, token)
+			selected, responseToken := policy, "0:-1#5"
+			if token == "0:-1#10" {
+				selected, responseToken = revoked, "0:-1#10"
+			}
+			return authorizationItemResponse(t, r, &storedItem{ID: authorizationPolicyItemID, ScopeID: scopeID, Kind: "authorization", Policy: selected}, responseToken), nil
+		}
+		if r.Method == http.MethodGet {
+			if strings.Contains(r.URL.Path, "/docs/r:") {
+				receipts++
+				if batches > 0 {
+					document := Document{ID: mutation.DocumentID, Version: 1, Data: mutation.Data}
+					receipt := &storedItem{ID: "r:" + mutationReceiptKey(mutation), ScopeID: scopeID, Kind: "receipt", RequestHash: hash, Document: &document}
+					return authorizationItemResponse(t, r, receipt, "0:-1#10"), nil
+				}
+			}
+			return authorizationItemResponse(t, r, nil, "0:-1#7"), nil
+		}
+		batches++
+		return cosmosResponse(r, 200, "[{\"statusCode\":424},{\"statusCode\":424},{\"statusCode\":424},{\"statusCode\":424},{\"statusCode\":412}]", "0:-1#10"), nil
+	})
+	document, _, err := store.Mutate(context.Background(), scopeID, mutation, hash, "")
+	requireAuthorizationCode(t, err, "forbidden")
+	if document.ID != "" || batches != 1 || receipts != 1 || !reflect.DeepEqual(policyProbes, []string{"", "0:-1#5", "0:-1#10"}) {
+		t.Fatalf("retry lost data causal minimum: batches=%d receipts=%d probes=%v", batches, receipts, policyProbes)
+	}
+}
+
+func TestCosmosBuiltinDataMinimumConstrainsPostReadAuthorization(t *testing.T) {
+	issuer := "https://review.test"
+	account := identityAccount(AccountIdentity{Issuer: issuer, Subject: "member"})
+	scope := strings.Repeat("c", 64)
+	owner := strings.Repeat("a", 64)
+	auth := newAuthorizationPolicy(scope, owner, "shared")
+	auth.Revision = 2
+	auth.Members[account.AccountID] = ScopeMember{AccountID: account.AccountID, Role: "writer", PermissionVersion: "2"}
+	revoked := cloneAuthorizationPolicy(auth)
+	revoked.Revision = 3
+	revoked.Members[account.AccountID] = ScopeMember{AccountID: account.AccountID, Role: "none", PermissionVersion: "3"}
+	policyTokens := []string{}
+	queryDone := false
+	respond := func(r *http.Request, item *storedItem, token string) *http.Response {
+		body, _ := encodeJSON(item)
+		return cosmosResponse(r, 200, string(body), token)
+	}
+	store := testCosmos(t, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "" || r.URL.Path == "/" {
+			return cosmosResponse(r, 200, `{"readableLocations":[{"name":"Test","databaseAccountEndpoint":"https://cosmos.test"}],"writableLocations":[{"name":"Test","databaseAccountEndpoint":"https://cosmos.test"}],"enableMultipleWriteLocations":false,"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`, ""), nil
+		}
+		if strings.Contains(r.Header.Get("x-ms-documentdb-partitionkey"), account.PersonalScopeID) {
+			if strings.HasSuffix(r.URL.Path, "/docs/a:account") {
+				return respond(r, &storedItem{ID: authorizationAccountItemID, ScopeID: account.PersonalScopeID, Kind: "account", Account: &accountRecord{Account: account, Identity: AccountIdentity{Issuer: issuer, Subject: "member"}}}, "1:-1#2"), nil
+			}
+			return respond(r, &storedItem{ID: authorizationPolicyItemID, ScopeID: account.PersonalScopeID, Kind: "authorization", Policy: newAuthorizationPolicy(account.PersonalScopeID, account.AccountID, "user")}, "1:-1#2"), nil
+		}
+		if strings.HasSuffix(r.URL.Path, "/docs/a:policy") {
+			token := r.Header.Get("x-ms-session-token")
+			policyTokens = append(policyTokens, token)
+			policy := auth
+			resultToken := "0:-1#5"
+			if token == "0:-1#10" {
+				policy = revoked
+				resultToken = "0:-1#10"
+			}
+			return respond(r, &storedItem{ID: authorizationPolicyItemID, ScopeID: scope, Kind: "authorization", Policy: policy}, resultToken), nil
+		}
+		if strings.HasSuffix(r.URL.Path, "/docs/head") {
+			return respond(r, &storedItem{ID: "head", ScopeID: scope, Kind: "head", Sequence: 1}, "0:-1#10"), nil
+		}
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/docs") {
+			queryDone = true
+			body, _ := encodeJSON(map[string]any{"Documents": []storedItem{{ID: "c:0000000000000001", ScopeID: scope, Kind: "change", Sequence: 1, Document: &Document{ID: "note", Version: 1, Data: json.RawMessage(`{"secret":"must be denied after observed data LSN10"}`)}}}, "_count": 1})
+			return cosmosResponse(r, 200, string(body), "0:-1#10"), nil
+		}
+		t.Fatalf("unexpected SDK route: %s %s", r.Method, r.URL.Path)
+		return nil, nil
+	})
+	key, e := rsa.GenerateKey(rand.Reader, 2048)
+	if e != nil {
+		t.Fatal(e)
+	}
+	verifier := oidc.NewVerifier(issuer, &oidc.StaticKeySet{PublicKeys: []crypto.PublicKey{&key.PublicKey}}, &oidc.Config{ClientID: "cosmos-sync-emulator-tests", SupportedSigningAlgs: []string{"RS256"}})
+	config := Config{Development: true, Storage: "Cosmos", CursorKeyBase64: base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{42}, 32)), Authorization: AuthorizationOptions{Mode: "builtin"}, OIDC: OIDCConfig{Issuer: issuer, Audience: "cosmos-sync-emulator-tests", RequiredScope: "cosmos_sync"}}
+	server, e := NewServer(config, store, verifier)
+	if e != nil {
+		t.Fatal(e)
+	}
+	req := httptest.NewRequest("GET", "https://review.test/v1/sync", nil)
+	req.Header.Set("Authorization", "Bearer "+signEmulatorJWT(t, key, issuer, "member"))
+	req.Header.Set(ScopeHeader, scope)
+	req.Header.Set(PrincipalHeader, account.AccountID)
+	req.Header.Set(PermissionHeader, "2")
+	req.Header.Set(ScopeModeHeader, "shared")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, req)
+	if !queryDone {
+		t.Fatalf("proof never reached slow data work: %d %s", response.Code, response.Body.String())
+	}
+	if response.Code != 403 || strings.Contains(response.Body.String(), "secret") {
+		t.Fatalf("dataLSN10 must constrain post-policy check: status%d policytokens%v body%s", response.Code, policyTokens, response.Body.String())
 	}
 }
