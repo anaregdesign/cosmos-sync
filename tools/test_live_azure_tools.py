@@ -29,10 +29,27 @@ class ToolsTest(unittest.TestCase):
                               "endpoint": "https://isolated-fixture.documents.azure.com/"})
         value["oidc"].update({"issuer": "https://fixture-issuer.example/", "audience": "fixture-api"})
         for role, principal in value["testPrincipals"].items():
-            principal.update({"tenant": "foreign-fixture" if role == "outsider" else "fixture-tenant",
+            principal.update({"tenant": "fixture-tenant",
                               "subject": role + "-fixture"})
         value["budget"].update({"ceilingAmount": 1, "testDataRetentionAcknowledged": True})
         return value
+
+    def test_negative_principal_can_share_trusted_tenant_but_must_be_distinct(self):
+        value = self.approved_manifest()
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "manifest.json"
+            path.write_text(json.dumps(value))
+            self.assertEqual(preflight.load_manifest(path)["testPrincipals"]["outsider"]["tenant"],
+                             "fixture-tenant")
+            for role in ("writer", "reader"):
+                invalid = copy.deepcopy(value)
+                invalid["testPrincipals"]["outsider"].update(invalid["testPrincipals"][role])
+                path.write_text(json.dumps(invalid))
+                with self.subTest(role=role), self.assertRaises(preflight.GateError):
+                    preflight.load_manifest(path)
+            value["testPrincipals"]["outsider"]["tenant"] = "foreign-fixture"
+            path.write_text(json.dumps(value))
+            preflight.load_manifest(path)
 
     def test_write_execution_refuses_unapproved_manifest_before_tokens_or_azure(self):
         with patch.object(contract, "load_private_token") as token, patch.object(contract, "inspect_target") as azure:
@@ -243,7 +260,7 @@ class ToolsTest(unittest.TestCase):
             return {"status": "ok"}
 
         for failure in ("os", "interrupt", "cleanup"):
-            def contract_failure(client, *_args):
+            def contract_failure(client, *_args, **_kwargs):
                 client.results.append("fixture-accepted-write")
                 client.requests += 1
                 client.write_attempted = True

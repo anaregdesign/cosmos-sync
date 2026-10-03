@@ -20,7 +20,7 @@ Provide the following nonsecret selections, and place credentials in a private l
 
 The [manifest example](../ops/azure/environment.example.json) records selections and references to the owner's actual approvals. Copy it into an ignored private directory, replace every placeholder and retain only approval references; do not invent approval merely to make a script run. Token contents never belong in the manifest. The files contain subject identifiers and private paths, so keep completed manifests out of Git even though the examples are safe to commit.
 
-The BFF trusts one exact issuer. A Microsoft Entra tenant-specific issuer cannot silently accept another tenant's issuer. For a negative JWT from another issuer, the expected denial can occur at JWT verification; for a trusted-issuer ungranted principal, denial occurs at current grants. The live harness also verifies distinct personal partitions within the trusted issuer, rather than claiming unsupported multi-issuer federation.
+The BFF trusts one exact issuer. Use a third distinct ungranted principal in the same selected Entra tenant for the manifest's `outsider`: its signature-verified API access JWT must receive **403**, demonstrating current-grant denial. A single-tenant Entra API does not need an outside tenant to exercise that check. An explicitly selected foreign-tenant/issuer negative fixture is also permitted, but its 401/403 result demonstrates rejection without claiming the same current-grant evidence. A Microsoft Entra tenant-specific issuer cannot silently accept another tenant's issuer. The live harness also verifies distinct personal partitions within the trusted issuer, rather than claiming unsupported multi-issuer federation.
 
 ## Least privilege and network access
 

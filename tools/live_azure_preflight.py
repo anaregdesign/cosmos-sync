@@ -68,8 +68,12 @@ def load_manifest(path):
                 "writer and reader must share the selected test tenant")
         require(principals["writer"]["subject"] != principals["reader"]["subject"],
                 "writer and reader must be distinct principals")
-        require(principals["outsider"]["tenant"] != principals["writer"]["tenant"],
-                "outsider must belong to a different selected test tenant")
+        outsider_identity = (principals["outsider"]["tenant"],
+                             principals["outsider"]["subject"])
+        require(all(outsider_identity != (principals[role]["tenant"],
+                                         principals[role]["subject"])
+                    for role in ("writer", "reader")),
+                "outsider must be a distinct ungranted principal")
         budget = value["budget"]
         for key, lower, upper in (("maxRuntimeSeconds", 30, 180),
                                   ("maxProtocolRequests", MIN_PROTOCOL_REQUESTS, 50)):

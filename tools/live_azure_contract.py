@@ -296,7 +296,7 @@ def grants_for(manifest, permission):
     return grants
 
 
-def exercise_contract(client, tokens, grants, grants_path, prefix):
+def exercise_contract(client, tokens, grants, grants_path, prefix, *, outsider_same_tenant=True):
     client.request(0, "GET", "/v1/session", expected=401, code="unauthorized")
     client.request(0, "GET", "/v1/session", token="invalid.jwt.fixture", expected=401, code="unauthorized")
     client.record("missing-and-invalid-access-jwt-rejected")
@@ -318,9 +318,10 @@ def exercise_contract(client, tokens, grants, grants_path, prefix):
               "kind": "put", "data": {"fixture": "cosmos-sync-live-contract", "value": "created"}, "baseVersion": 0}
     client.request(1, "POST", "/v1/mutations", token=tokens["reader"], session=reader,
                    payload=create, expected=403, code="forbidden")
-    # The owner-selected negative JWT is never granted locally. A JWT from a
-    # different issuer can fail at verification; a valid ungranted JWT fails at RBAC.
-    client.request(0, "GET", "/v1/session", token=tokens["outsider"], expected=(401, 403))
+    # A selected same-tenant negative principal must have a valid API access JWT
+    # to prove grant denial. Foreign-issuer rejection is weaker, separate evidence.
+    client.request(0, "GET", "/v1/session", token=tokens["outsider"],
+                   expected=403 if outsider_same_tenant else (401, 403))
     forged = client.headers(tokens["writer"], writer)
     forged[SESSION_HEADERS["scopeId"]] = personal_reader["scopeId"]
     client.request(1, "GET", "/v1/sync", headers=forged, expected=403, code="session_mismatch")
@@ -479,7 +480,9 @@ def execute(manifest, binary=None):
                         break
                     client.timeout()
                     time.sleep(0.25)
-            exercise_contract(client, tokens, grants, grants_path, prefix)
+            exercise_contract(client, tokens, grants, grants_path, prefix,
+                              outsider_same_tenant=(manifest["testPrincipals"]["outsider"]["tenant"]
+                                                    == manifest["testPrincipals"]["writer"]["tenant"]))
             client.timeout()
             live_finished = time.monotonic()
             result = {"schemaVersion": 1, "targetDigest": manifest_digest(manifest),

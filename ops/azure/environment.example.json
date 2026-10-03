@@ -30,7 +30,7 @@
       "accessTokenFile": "/absolute/private/path/reader.jwt"
     },
     "outsider": {
-      "tenant": "owner-selected-other-test-tenant",
+      "tenant": "owner-selected-test-tenant",
       "subject": "owner-selected-outsider-subject",
       "accessTokenFile": "/absolute/private/path/outsider.jwt"
     }
