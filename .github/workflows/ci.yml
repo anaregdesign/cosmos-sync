@@ -105,11 +105,30 @@ jobs:
       - run: python3 tools/flutter_app_smoke.py
   release-tools:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: python3 -m unittest discover -s tools -p 'test_*.py' -v
       - run: python3 tools/package_docs.py --check
       - run: python3 tools/release_verify.py preflight
+      - name: Validate Container Apps Terraform without Azure access
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform_task_bin="$(mktemp -d "$RUNNER_TEMP/cosmos-sync-terraform.XXXXXX")"
+          trap 'rm -rf "$terraform_task_bin"' EXIT
+          curl --fail --location --retry 2 https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip --output "$terraform_task_bin/terraform.zip"
+          echo "d25ce7b6902013ad905db3d2eab0be4cd905887fe88b81a6171b8d5503c31f3d  $terraform_task_bin/terraform.zip" | sha256sum --check
+          unzip -q "$terraform_task_bin/terraform.zip" -d "$terraform_task_bin"
+          curl --fail --location --retry 2 https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_linux_amd64.zip --output "$terraform_task_bin/tflint.zip"
+          echo "cca9d13e2e1d7a2c627af60ff899a3c9b74212899416aeb96ec764d2ef954537  $terraform_task_bin/tflint.zip" | sha256sum --check
+          unzip -q "$terraform_task_bin/tflint.zip" -d "$terraform_task_bin"
+          export PATH="$terraform_task_bin:$PATH"
+          terraform -chdir=infra/terraform/azure-container-apps fmt -check -recursive
+          terraform -chdir=infra/terraform/azure-container-apps init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/terraform/azure-container-apps validate
+          terraform -chdir=infra/terraform/azure-container-apps test
+          tflint --chdir=infra/terraform/azure-container-apps
   container:
     runs-on: ubuntu-latest
     steps:
