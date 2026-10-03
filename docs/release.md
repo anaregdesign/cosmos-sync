@@ -1,12 +1,21 @@
 # Release and distribution
 
-No package has been published yet. On 2026-10-03 the owner explicitly approved
+The [cosmos_sync 0.2.0-dev.1 SDK](https://pub.dev/packages/cosmos_sync/versions/0.2.0-dev.1)
+was published from `82e937c8659e9ec0263a78e6e3ad2f43e05be20a` after all eight
+[main checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37140346546)
+passed. Its actual archive and clean hosted Dart/Flutter/Chromium consumers were
+verified. The BFF image from that same source is public at the index digest below;
+full read-only registry evidence is tracked in
+[#15](https://github.com/anaregdesign/cosmos-sync/issues/15).
+
+On 2026-10-03 the owner explicitly approved
 **MIT**, copyright 2026 anaregdesign, **public GitHub source and public GHCR**, and
 the initial prerelease **0.2.0-dev.1**. The chosen pub.dev Google account is kept
 private in the owner's local authentication flow; no personal email is recorded here.
-Repository, BFF and SDK include identical approved MIT licenses. Actual visibility
-changes, owner sign-in and registry publication remain execution steps until their
-evidence is recorded. The prerelease has measured Android/iOS emulator, macOS and
+Repository, BFF and SDK include identical approved MIT licenses. GitHub source is
+public and private vulnerability reporting is enabled. Selected personal-owner
+identity was verified through normal existing credential refresh without adding
+an OAuth grant. The prerelease has measured Android/iOS emulator, macOS and
 Chromium coverage and no production SLA. A verified publisher/domain has not been
 selected; that does not prevent the approved first personal-account publication.
 
@@ -49,7 +58,7 @@ inputs plus the matching approval variables above. Set `GHCR_RELEASE_VISIBILITY`
 to the owner's approved **final** visibility. Authentication uses the job's temporary
 `GITHUB_TOKEN` with `packages:write`; no user token or registry secret is required.
 
-New GHCR packages start **private**. For an approved public first distribution,
+The preflight treats a missing first package as **private**. For an approved public first distribution,
 the workflow retains the owner-approved final value `public`, discovers the current
 package state (a missing initial package means `private`), verifies that private
 stage and reports `verified_private_stage_public_transition_pending`. It records
@@ -58,6 +67,22 @@ Then explicitly change only this package to public in GitHub's package settings 
 run `verify-ghcr.yml` with visibility `public`. Existing public packages verify
 public directly. The workflow never changes package visibility or treats a private
 stage as completed public distribution.
+
+For the first `0.2.0-dev.1` release, push run
+[37140837379](https://github.com/anaregdesign/cosmos-sync/actions/runs/37140837379)
+created index digest
+`sha256:a23ab75eb4518597aa26e4833787b9b77a07def717868e080944555594adc1b3`.
+Post-push inspection found the package already public, so the expected-private
+stage check failed after publication. Reuse that digest and verify its actual
+public visibility; this failure requires no image rebuild or upload.
+
+Verification also pulls each platform by its child manifest digest from the
+reviewed index. Pulling amd64 and arm64 into a classic daemon image store under
+the same index-digest reference can fail with `cannot overwrite digest` even
+after all layers download. Distinct child references avoid that local collision.
+Evidence retains the original index digest, each selected platform manifest and
+its bound source metadata/provenance/SBOM. Docker context or image-store settings
+do not need to change.
 Repository access inheritance and Actions access must also be inspected; public
 source alone does not make a GHCR package public. [Official GHCR access rules](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 
@@ -108,6 +133,14 @@ before adding that feature. [BuildKit attestations](https://docs.docker.com/buil
 [GitHub availability](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
 
 ## pub.dev: first manual publication and ownership
+
+The initial `0.2.0-dev.1` upload is complete; do not upload that immutable version
+again. Its archive SHA256 is
+`5fe3f46ec981815c90e9dd68cdaac58519a7af8667e99672b499d92a0a8d404a`
+(87,507 bytes), matched against the clean release source. The commands below
+describe guarded release procedure; a later version needs its own reviewed
+source/version approval. To reverify this archive, use a clean checkout of its
+original `82e937c8` source rather than labeling it with a later tools/docs commit.
 
 The public package API returned HTTP 404 for `cosmos_sync` again on 2026-10-03;
 the name is not reserved. Recheck immediately before the first upload. First

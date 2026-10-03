@@ -1,6 +1,6 @@
 # Architecture and supported scope
 
-Cosmos Sync v0.2 is an unpublished Go BFF and Dart/Flutter offline SDK for Cosmos DB for NoSQL. It provides a finite document protocol and cache query model inspired by Firestore, with explicit differences. The [product contract](spec/product-completion.md) defines the bounded completion target; [verification](verification.md) records actual evidence.
+Cosmos Sync v0.2 is an experimental Go BFF and Dart/Flutter offline SDK for Cosmos DB for NoSQL. It provides a finite document protocol and cache query model inspired by Firestore, with explicit differences. The [product contract](spec/product-completion.md) defines the bounded completion target; [verification](verification.md) records actual evidence.
 
 ## Server boundary
 

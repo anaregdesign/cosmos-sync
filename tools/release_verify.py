@@ -265,16 +265,21 @@ def ghcr_verify(digest, sha, version, visibility):
     evidence = {"image": reference, "sourceSha": sha, "version": version, "visibility": visibility, "licenseSpdx": "MIT", "platforms": []}
     for architecture in ("amd64", "arm64"):
         platform = "linux/" + architecture
-        run("docker", "pull", "--platform=" + platform, reference)
+        entry = next(m for m in index["manifests"] if m.get("platform", {}).get("os") == "linux" and m["platform"].get("architecture") == architecture)
+        require(DIGEST.fullmatch(entry["digest"]), "Invalid platform manifest digest")
+        # Classic daemon image stores cannot retain both architectures under
+        # the same index-digest reference. Pull the selected immutable child;
+        # the reviewed parent index still binds its platform and attestations.
+        child_reference = IMAGE + "@" + entry["digest"]
+        run("docker", "pull", "--platform=" + platform, child_reference)
         config = json.loads(run("docker", "buildx", "imagetools", "inspect", reference, "--format", '{{json (index .Image "' + platform + '")}}'))
         validate_image(config, sha, version, architecture)
-        entry = next(m for m in index["manifests"] if m.get("platform", {}).get("os") == "linux" and m["platform"].get("architecture") == architecture)
         attestation = next(m for m in index["manifests"] if m.get("annotations", {}).get("vnd.docker.reference.digest") == entry["digest"])
         attached = json.loads(run("docker", "buildx", "imagetools", "inspect", "--raw", IMAGE + "@" + attestation["digest"]))
         predicates = {validate_statement(registry_statement(layer["digest"], token), entry["digest"]) for layer in attached["layers"]}
         require(any(p.startswith("https://slsa.dev/provenance/") for p in predicates), "Missing bound SLSA provenance for " + platform)
         require("https://spdx.dev/Document" in predicates, "Missing bound SPDX SBOM for " + platform)
-        evidence["platforms"].append({"platform": platform, "authenticatedPull": True, "attestationSubjectBinding": entry["digest"], "attestationLayerSha256Verified": True, "provenance": "BuildKit (not a signed GitHub attestation)", "sbom": "SPDX"})
+        evidence["platforms"].append({"platform": platform, "manifestDigest": entry["digest"], "pulledImage": child_reference, "authenticatedPull": True, "attestationSubjectBinding": entry["digest"], "attestationLayerSha256Verified": True, "provenance": "BuildKit (not a signed GitHub attestation)", "sbom": "SPDX"})
     evidence["anonymousAccess"] = anonymous_visibility(digest, visibility)
     return evidence
 

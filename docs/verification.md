@@ -92,7 +92,7 @@ deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
 | Actual Entra native authentication | macOS system-browser AppAuth PKCE, callback, Keychain controller restore, provider refresh and local sign-out passed; both API JWTs independently verified against issuer/JWKS/audience/scope/tenant/approved owner |
 | Normal iOS release build | Unsigned arm64 build passed from core `e7fa4ccb`; no physical install or Apple portal operation |
 | iOS simulator app integration | iPhone 16 Pro / iOS 26.5; actual HTTP BFF, SQLite and isolated Keychain probe; local ad-hoc simulator signing and ephemeral arm64 workaround, test auth adapter |
-| MIT archive | Latest 85 KB strict pub publish dry-run, zero warnings, with protocol/query/security/authorization documents; no upload |
+| MIT archive | 85 KB strict dry-run with zero warnings; actual published 87,507-byte archive matched the reviewed source and self-contained documentation |
 | Multiarch OCI artifact | Linux amd64/arm64, nonroot runtime, checked provenance/SBOM subjects, MIT and Go/module license notices; local build, no push |
 | Independent review | Auth reentry/purge defects and Azure request/deadline/partial-evidence defects reproduced, fixed and independently rechecked |
 
@@ -145,3 +145,29 @@ assignment exists yet. Free-tier creation was rejected by the subscription
 offer and the approved East US serverless attempt failed for capacity. The
 requested region-only alternative awaits approval. No actual cloud data result
 or hosted clean-checkout onboarding is inferred from local/emulator evidence.
+
+## Actual first distribution
+
+[PR #25](https://github.com/anaregdesign/cosmos-sync/pull/25) merged release source
+`82e937c8659e9ec0263a78e6e3ad2f43e05be20a`. Its latest
+[main CI](https://github.com/anaregdesign/cosmos-sync/actions/runs/37140346546)
+passed all eight jobs. GitHub public visibility and private vulnerability reporting
+were confirmed by API readback; the authenticated private advisory form was
+inspected without submitting an advisory.
+
+The actual [pub.dev preview](https://pub.dev/packages/cosmos_sync/versions/0.2.0-dev.1)
+archive SHA256 is `5fe3f46ec981815c90e9dd68cdaac58519a7af8667e99672b499d92a0a8d404a`.
+All archive files matched the original clean source. Fresh isolated hosted-package
+consumers passed native Dart SQLite offline/reopen/ACK/tombstone, Flutter native
+SQLite, Chromium IndexedDB, API analysis and release Web build. These storage
+consumers use synthetic transport and do not establish live-cloud authentication.
+
+The public BFF index is
+`sha256:a23ab75eb4518597aa26e4833787b9b77a07def717868e080944555594adc1b3`.
+Independent anonymous pulls of both platform children, source/version/MIT/nonroot
+configuration and SHA/subject-bound BuildKit provenance/SPDX SBOM passed. The
+initial verifier encountered a same-index platform collision in the classic
+Docker image store; [#34](https://github.com/anaregdesign/cosmos-sync/issues/34)
+corrects verification to pull child manifests without changing the original
+runtime/SDK artifacts. Final repository-authenticated registry workflow evidence
+belongs in [#15](https://github.com/anaregdesign/cosmos-sync/issues/15).

@@ -21,6 +21,57 @@ VERSION = "0.2.0-dev.1"
 
 
 class ReleaseGuardsTest(unittest.TestCase):
+    def test_ghcr_pulls_distinct_children_and_preserves_index_source_platform_binding(self):
+        index_digest = "sha256:" + "0" * 64
+        reference = release.IMAGE + "@" + index_digest
+        children = {arch: "sha256:" + number * 64 for arch, number in (("amd64", "1"), ("arm64", "2"))}
+        attachments = {arch: "sha256:" + number * 64 for arch, number in (("amd64", "3"), ("arm64", "4"))}
+        layers = {arch: ["sha256:" + first * 64, "sha256:" + second * 64] for arch, first, second in (("amd64", "5", "6"), ("arm64", "7", "8"))}
+        entries, statements, attached = [], {}, {}
+        for arch in children:
+            entries.extend([
+                {"digest": children[arch], "platform": {"os": "linux", "architecture": arch}},
+                {"digest": attachments[arch], "platform": {"os": "unknown", "architecture": "unknown"}, "annotations": {"vnd.docker.reference.type": "attestation-manifest", "vnd.docker.reference.digest": children[arch]}},
+            ])
+            attached[release.IMAGE + "@" + attachments[arch]] = {"layers": [{"digest": layer} for layer in layers[arch]]}
+            for layer, predicate in zip(layers[arch], ("https://slsa.dev/provenance/v1", "https://spdx.dev/Document")):
+                statements[layer] = {"_type": "https://in-toto.io/Statement/v1", "predicateType": predicate, "predicate": {"test": True}, "subject": [{"digest": {"sha256": children[arch][7:]}}]}
+        index = {"schemaVersion": 2, "manifests": entries}
+
+        for mismatch in (None, "source", "platform"):
+            with self.subTest(mismatch=mismatch):
+                pulls = []
+
+                def daemon(*args):
+                    if args[1] == "pull":
+                        if args[-1] == reference:
+                            raise release.ReleaseError("cannot overwrite digest " + index_digest)
+                        pulls.append(args)
+                        return "pulled"
+                    if "--raw" in args:
+                        return json.dumps(index if args[-1] == reference else attached[args[-1]])
+                    if "--format" in args:
+                        arch = "amd64" if "linux/amd64" in args[-1] else "arm64"
+                        return json.dumps({"os": "linux", "architecture": "wrong" if mismatch == "platform" else arch, "config": {"User": "nonroot:nonroot", "Entrypoint": ["/cosmos-sync-bff"], "Labels": {"org.opencontainers.image.source": release.SOURCE, "org.opencontainers.image.revision": "b" * 40 if mismatch == "source" else SHA, "org.opencontainers.image.version": VERSION, "org.opencontainers.image.licenses": "MIT"}}})
+                    raise AssertionError("Unexpected daemon command")
+
+                package = {"visibility": "public", "repository": {"full_name": release.REPOSITORY}}
+                with patch.object(release, "gh", return_value=package), patch.object(release, "run", side_effect=daemon), patch.object(release, "registry_pull_token", return_value="disposable-test-token"), patch.object(release, "registry_statement", side_effect=lambda digest, token: statements[digest]), patch.object(release, "anonymous_visibility", return_value="anonymous_manifest_verified"):
+                    if mismatch:
+                        with self.assertRaises(release.ReleaseError):
+                            release.ghcr_verify(index_digest, SHA, VERSION, "public")
+                    else:
+                        evidence = release.ghcr_verify(index_digest, SHA, VERSION, "public")
+                        self.assertEqual(pulls, [("docker", "pull", "--platform=linux/" + arch, release.IMAGE + "@" + children[arch]) for arch in ("amd64", "arm64")])
+                        self.assertEqual(evidence["image"], reference)
+                        self.assertEqual(evidence["sourceSha"], SHA)
+                        self.assertEqual(evidence["version"], VERSION)
+                        for platform in evidence["platforms"]:
+                            arch = platform["platform"].split("/")[1]
+                            self.assertEqual(platform["manifestDigest"], children[arch])
+                            self.assertEqual(platform["pulledImage"], release.IMAGE + "@" + children[arch])
+                            self.assertEqual(platform["attestationSubjectBinding"], children[arch])
+
     def test_pub_verification_rejects_dirty_or_mismatched_source_before_registry_reads(self):
         candidates = (
             ("invalid-sha", []),

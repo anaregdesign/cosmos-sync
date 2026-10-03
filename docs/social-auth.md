@@ -93,12 +93,15 @@ the approved recent-authentication/link transaction. Prove this with the broker'
 configuration and trusted server-side identity-binding checks, including direct
 SDK mutation attacks. A safe BFF button alone does not enforce that boundary.
 
-The current BFF derives its personal partition from verified issuer, tenant and
-subject. A stable account directory and migration are **not implemented**.
-Introducing them requires an explicit mapping of old scope IDs, retained journal
-and receipt integrity, permission-version changes, cursor invalidation/resync,
-and a policy for pending edits. Never use a provider-wide audience or issuer as
-shared-tenant membership. Server-managed grants still decide every read/write.
+The legacy BFF mode derives its personal partition from verified issuer, tenant
+and subject. The opt-in [built-in authorization mode](authorization.md) now
+provides a durable account directory keyed by verified issuer/subject, personal
+self-access and fixed-owner shared membership. Cross-provider linking and
+legacy-data migration remain **unimplemented**. Migration requires an explicit
+mapping of old scope IDs, retained journal and receipt integrity,
+permission-version changes, cursor invalidation/resync and a policy for pending
+edits. Never use a provider-wide audience or issuer as shared-tenant membership.
+The selected server-managed authorization mode still decides every read/write.
 
 ## Token and session requirements
 
