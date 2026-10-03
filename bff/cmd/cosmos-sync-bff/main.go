@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"log"
 	"net"
@@ -18,18 +17,17 @@ import (
 func main() {
 	configFile := flag.String("config", "config.json", "server configuration JSON; secrets may be supplied by environment")
 	flag.Parse()
-	data, err := os.ReadFile(*configFile)
+	explicitFile := false
+	flag.Visit(func(f *flag.Flag) { explicitFile = explicitFile || f.Name == "config" })
+	cfg, err := readConfiguration(*configFile, explicitFile, os.LookupEnv)
 	if err != nil {
-		log.Fatal("cannot read configuration")
-	}
-	var cfg syncbff.Config
-	if json.Unmarshal(data, &cfg) != nil {
-		log.Fatal("invalid configuration")
+		log.Fatal(err)
 	}
 	if value := os.Getenv("COSMOS_SYNC_CURSOR_KEY_BASE64"); value != "" {
 		cfg.CursorKeyBase64 = value
 	}
 	cfg.MetricsToken = os.Getenv("COSMOS_SYNC_METRICS_TOKEN")
+	cfg.TLSMode = os.Getenv("COSMOS_SYNC_TLS_MODE")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	verifier, err := syncbff.NewOIDCVerifier(ctx, cfg.OIDC)
@@ -56,6 +54,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if handler.CheckReady(ctx) != nil {
+		log.Fatal("server readiness initialization failed")
+	}
 	if cfg.Listen == "" {
 		if cfg.Development {
 			cfg.Listen = "127.0.0.1:8080"
@@ -73,23 +74,25 @@ func main() {
 	server := &http.Server{Addr: cfg.Listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32768}
 	stop, shutdown := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer shutdown()
-	go func() {
-		<-stop.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = server.Shutdown(ctx)
-	}()
 	log.Print("Cosmos Sync BFF listening on ", cfg.Listen)
-	// Production uses TLS directly. A trusted ingress must re-encrypt to this endpoint.
+	// Direct TLS is the default. ACA mode explicitly trusts the platform's HTTP
+	// ingress and never enables a generic forwarded-header option.
 	cert, key := os.Getenv("COSMOS_SYNC_TLS_CERT"), os.Getenv("COSMOS_SYNC_TLS_KEY")
-	if !cfg.Development && (cert == "" || key == "") {
+	if (cert == "") != (key == "") {
+		log.Fatal("TLS certificate and key must be configured together")
+	}
+	if cfg.TLSMode == syncbff.ContainerAppsTLSMode && (cert != "" || key != "") {
+		log.Fatal("container-apps TLS mode cannot use direct TLS certificate settings")
+	}
+	if !cfg.Development && cfg.TLSMode != syncbff.ContainerAppsTLSMode && (cert == "" || key == "") {
 		log.Fatal("production requires COSMOS_SYNC_TLS_CERT and COSMOS_SYNC_TLS_KEY")
 	}
-	if cert != "" && key != "" {
-		err = server.ListenAndServeTLS(cert, key)
-	} else {
-		err = server.ListenAndServe()
-	}
+	err = serveWithShutdown(stop, server, func() error {
+		if cert != "" && key != "" {
+			return server.ListenAndServeTLS(cert, key)
+		}
+		return server.ListenAndServe()
+	})
 	if err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}

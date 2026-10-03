@@ -12,7 +12,15 @@ go build -o cosmos-sync-bff ./cmd/cosmos-sync-bff
 ./cosmos-sync-bff -config /run/config/config.json
 ```
 
-Production requires `COSMOS_SYNC_TLS_CERT` and `COSMOS_SYNC_TLS_KEY` paths for direct TLS. A TLS ingress must re-encrypt its connection to the BFF. Forwarded headers are not trusted. `development: true` requires a loopback listener such as `127.0.0.1:8080`; it does not bypass JWT verification. Memory storage is allowed only with this development setting and is deliberately volatile.
+Production defaults to direct TLS and requires both `COSMOS_SYNC_TLS_CERT` and `COSMOS_SYNC_TLS_KEY` paths. An ordinary TLS ingress must re-encrypt its connection to the BFF. Forwarded headers are ignored in this mode. `development: true` requires a loopback listener such as `127.0.0.1:8080`; it does not bypass JWT verification. Memory storage is allowed only with this development setting and is deliberately volatile.
+
+### Azure Container Apps runtime
+
+Set `COSMOS_SYNC_TLS_MODE=container-apps` only when using Azure Container Apps HTTP ingress with insecure ingress disabled. This production mode requires the platform-provided `CONTAINER_APP_NAME` and `CONTAINER_APP_REVISION`; do not manufacture those markers in a local deployment. It accepts protected requests only when the ingress supplies exactly one `X-Forwarded-Proto: https` header. Container Apps [terminates HTTPS and overwrites the client-supplied protocol header](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview). The marker checks are a deployment guard, not remote platform attestation. Keep the environment dedicated to trusted workloads, expose no additional TCP port, and prevent callers from bypassing the trusted ingress. Configure environment peer traffic encryption separately; this mode does not perform TLS inside the Go process. Direct TLS certificate settings cannot be combined with this mode.
+
+`COSMOS_SYNC_CONFIG_JSON` supplies the same JSON configuration as the file. An explicitly selected `-config` file cannot be combined with that variable. Both sources are bounded to 1 MiB and reject unknown fields; errors never include configuration values. Keep the JSON to nonsecret resource identifiers, OIDC settings and operational limits. Inject the shared cursor key and optional metrics token using platform secret references. The runtime never provisions identity providers, Cosmos resources or authorization policy.
+
+Configure startup/readiness probes as `GET /readyz` and liveness as `GET /healthz` on the target HTTP port. Only these two GET routes permit an HTTP probe without the forwarded protocol header in Container Apps mode. They expose fixed status values. Readiness means OIDC discovery, Cosmos container initialization and server configuration completed successfully before listening; it does not continuously test remote dependencies. JWT/session routes and metrics retain their existing authorization checks. The process waits for active requests to drain on SIGTERM/SIGINT, then forcibly closes remaining requests after a 10-second grace period. SSE clients must reconnect and retrieve durable changes from their applied cursor.
 
 The OIDC issuer must use HTTPS and expose discovery/JWKS. Use a dedicated API audience and an access-token scope (`cosmos_sync` by default). Tokens need `sub`, a configured tenant claim (`tid` by default), valid issuer/audience/signature/expiry, and a complete space-delimited required scope. `nbf` is enforced. For issuers such as Cognito, configure `tokenUse: "access"` when that claim is available. The BFF never exchanges credentials or accepts ID tokens lacking the API scope.
 
@@ -52,7 +60,7 @@ Journals, receipts and tombstones never expire or get garbage-collected. Capacit
 
 Configure `allowedOrigins` as exact HTTPS origins to support browser fetch-based SSE with Authorization and expectation headers. Only HTTP loopback origins are permitted in development. No wildcard or credentialed CORS is provided. Approved preflight requests require no JWT, and response headers expose consistency envelopes and `Retry-After`.
 
-Set a separate `COSMOS_SYNC_METRICS_TOKEN` to enable protected `/metrics`; omission disables it. Metrics use bounded route/method/status labels and aggregate request counts/duration, with no principals, tenant IDs, document IDs, query strings, bearer tokens or payloads. Runtime responses and logs avoid credential contents. Configure TLS ingress, monitoring and deployment quotas separately; the sample performs no cloud deployment.
+Set a separate `COSMOS_SYNC_METRICS_TOKEN` to enable protected `/metrics`; omission disables it. Metrics use bounded route/method/status labels and aggregate request counts/duration, with no principals, tenant IDs, document IDs, query strings, bearer tokens or payloads. Runtime responses and logs avoid credential contents. Configure TLS ingress, monitoring and deployment quotas separately; the runtime performs no cloud deployment.
 
 ## Verification status
 

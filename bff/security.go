@@ -50,6 +50,7 @@ type Scope struct {
 type Config struct {
 	Listen          string           `json:"listen"`
 	Development     bool             `json:"development"`
+	TLSMode         string           `json:"-"`
 	OIDC            OIDCConfig       `json:"oidc"`
 	CursorKeyBase64 string           `json:"cursorKeyBase64"`
 	Grants          []Grant          `json:"grants"`

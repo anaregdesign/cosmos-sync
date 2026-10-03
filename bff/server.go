@@ -27,6 +27,9 @@ func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Ser
 	if store == nil || verifier == nil {
 		return nil, fmt.Errorf("store and OIDC verifier are required")
 	}
+	if err := validateTLSMode(config); err != nil {
+		return nil, err
+	}
 	if config.OIDC.TenantClaim == "" {
 		config.OIDC.TenantClaim = "tid"
 	}
@@ -66,7 +69,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer s.metrics.record(r, observed)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
-	if !s.config.Development && r.TLS == nil {
+	probe := r.Method == http.MethodGet && (r.URL.Path == "/healthz" || r.URL.Path == "/readyz")
+	if !s.transportAllowed(r, probe) {
 		s.writeError(w, protocolError(400, "https_required"))
 		return
 	}
@@ -75,6 +79,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/healthz" && r.Method == http.MethodGet {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
+		return
+	}
+	if r.URL.Path == "/readyz" && r.Method == http.MethodGet {
+		if err := s.CheckReady(r.Context()); err != nil {
+			s.writeError(w, protocolError(503, "not_ready"))
+			return
+		}
+		writeJSON(w, 200, map[string]string{"status": "ready"})
 		return
 	}
 	if r.URL.Path == "/metrics" && r.Method == http.MethodGet {
