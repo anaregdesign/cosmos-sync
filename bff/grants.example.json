@@ -1,0 +1,10 @@
+[
+  {
+    "tenant": "your-tenant",
+    "subject": "your-end-user-subject",
+    "permissionVersion": "1",
+    "active": true,
+    "canRead": true,
+    "canWrite": true
+  }
+]

@@ -1,0 +1,8 @@
+.gopath
+.gomodcache
+.gocache
+config.json
+grants.json
+*.pem
+*.key
+*.test

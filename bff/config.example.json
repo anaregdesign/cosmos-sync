@@ -1,0 +1,19 @@
+{
+  "listen": ":8080",
+  "development": false,
+  "storage": "cosmos",
+  "oidc": {
+    "issuer": "https://your-issuer.example/",
+    "audience": "cosmos-sync-api",
+    "tenantClaim": "tid",
+    "requiredScope": "cosmos_sync",
+    "tokenUse": ""
+  },
+  "grantsFile": "/run/config/grants.json",
+  "cosmos": {
+    "endpoint": "https://your-account.documents.azure.com:443/",
+    "database": "cosmos-sync",
+    "container": "sync",
+    "singleWriteRegion": true
+  }
+}
