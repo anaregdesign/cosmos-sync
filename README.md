@@ -121,7 +121,22 @@ Startup validates an existing container and never provisions one. Mutation/head/
 
 ## Release status
 
-The foundation was merged to main in [PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1); all seven main checks passed. The remaining publication work is tracked in [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2), including the usable Flutter app/auth, release artifacts, live Azure and physical devices. The owner approved MIT, public GitHub/GHCR distribution and the first `cosmos_sync` 0.2.0-dev.1 preview. Actual registry publication and final access checks are tracked in [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and [#23](https://github.com/anaregdesign/cosmos-sync/issues/23); a name check or dry run does not reserve or publish a package. Planned image: `ghcr.io/anaregdesign/cosmos-sync-bff`.
+The Flutter app, durable authorization and hosting preparation were merged in
+[PR #25](https://github.com/anaregdesign/cosmos-sync/pull/25); all eight
+[main checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37140346546)
+passed at release source `82e937c8659e9ec0263a78e6e3ad2f43e05be20a`.
+The MIT [cosmos_sync 0.2.0-dev.1 preview](https://pub.dev/packages/cosmos_sync/versions/0.2.0-dev.1)
+is published, with archive/source and clean hosted-consumer verification.
+GitHub source is public and private vulnerability reporting is enabled.
+The [public BFF image](https://github.com/anaregdesign/cosmos-sync/pkgs/container/cosmos-sync-bff)
+uses the same artifact source; pin its index digest
+`sha256:a23ab75eb4518597aa26e4833787b9b77a07def717868e080944555594adc1b3`.
+Exact registry access/verification evidence is recorded in
+[#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and
+[#23](https://github.com/anaregdesign/cosmos-sync/issues/23).
+The later [verification-tool correction](https://github.com/anaregdesign/cosmos-sync/issues/34)
+preserves those published artifacts. [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2)
+keeps actual Azure, hosted onboarding and consumer-provider gates separate.
 
 Dedicated Entra registration and actual macOS browser PKCE, API-token validation,
 secure credential restore, refresh and local sign-out passed. Physical Android
