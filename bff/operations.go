@@ -154,6 +154,11 @@ func (s *Server) cors(w http.ResponseWriter, r *http.Request) bool {
 	}
 	method := r.Header.Get("Access-Control-Request-Method")
 	validRoute := ((r.URL.Path == "/v1/session" || r.URL.Path == "/v1/sync" || r.URL.Path == "/v1/events" || r.URL.Path == "/v1/snapshot") && method == http.MethodGet) || (r.URL.Path == "/v1/mutations" && method == http.MethodPost)
+	if s.builtinAuthorization() {
+		validRoute = validRoute || (r.URL.Path == "/v1/account" && method == http.MethodGet) || (r.URL.Path == "/v1/scopes" && method == http.MethodPost)
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/scopes/"), "/")
+		validRoute = validRoute || (len(parts) == 2 && accountIDPattern.MatchString(parts[0]) && parts[1] == "members" && (method == http.MethodGet || method == http.MethodPost))
+	}
 	if !validRoute {
 		s.writeError(w, protocolError(403, "preflight_forbidden"))
 		return false

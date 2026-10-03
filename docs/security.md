@@ -1,19 +1,23 @@
 # Security boundary and deployment obligations
 
-The Go BFF is the only component with Cosmos data-plane credentials. End-user authentication grants access to this API, and server authorization grants access to a derived user or authorized shared tenant scope. A valid token is not sufficient without the current tenant/subject grant. Configure one trusted HTTPS OIDC issuer, the BFF-specific access-token audience and a required API scope. Accept only supported asymmetric signature algorithms and reject expired/not-yet-valid/incorrect-issuer/incorrect-audience tokens. The production entrypoint has no development authentication bypass.
+The Go BFF is the only component with Cosmos data-plane credentials. End-user authentication proves an API identity; the BFF separately enforces application data authorization. Configure one trusted HTTPS OIDC issuer, the BFF-specific access-token audience and a required API scope. Accept only supported asymmetric signature algorithms and reject expired/not-yet-valid/incorrect-issuer/incorrect-audience tokens. Provider roles/groups, email and client document owner fields do not grant data permissions. The production entrypoint has no development authentication bypass.
 
 Clients cannot provide an arbitrary owner, partition key, Cosmos SQL expression or trusted version/cursor. Strict IDs and bounded JSON payloads constrain batch serialization and cost. Unknown JSON fields are rejected. Expected principal/scope/mode/permission headers are assertions only; the BFF derives and compares the real scope before data access. Sync cursors and consistency envelopes are purpose-separated, HMAC authenticated and principal/scope/mode/permission/epoch bound. HTTPS and trusted server endpoints are essential because document data and bearer tokens cross the network. The Dart transport disables redirects and rejects non-HTTPS servers except explicit loopback development.
 
-The scope policy provides personal or shared tenant documents with current whole-scope read/write grants; tenant mode never implies document-specific ACLs. It is not a general row-level ACL engine. Keep grants on the server, review administrator changes and advance permissionVersion for changed authorization. For static configuration, distribute changes/restart all replicas before claiming revocation is effective. A production dynamic grant service, audit history and change propagation are separate follow-up work. Never let clients edit grants. Do not share a user's cache path with another account.
+Explicit `authorization.mode=builtin` registers a durable issuer/subject account and a personal scope owned only by that account. Shared scopes have one immutable authenticated creator as owner; only that owner can assign registered accounts whole-scope reader/writer membership. Policy, membership audits and idempotency receipts persist in the same Cosmos container. Removed member generations remain as tombstones. No deployment-wide administrator, provider app-role dependency or document-specific ACL engine is introduced. [Application authorization](authorization.md) describes the management API, limits and migration. Absent/legacy mode retains server inline/file user/shared-tenant grants; distribute static changes to all replicas and advance permissionVersion. Never expose grant files or privileged Cosmos access to clients. Do not share a user's cache path with another account.
 
-Current enforcement rejects a request at its next authorization check after the
-server observes a changed grant. An already-authorized request can still finish:
-the document transaction does not currently contain a membership/version fence.
-This differs from guaranteeing that no write commits after a revocation response.
-SSE rechecks grants while polling and before delivering changes; ordinary sync and
-snapshot requests authorize before their storage read. The SDK's learned-revocation
-purge and in-flight drain prevent late responses from repopulating its revoked
-cache, but cannot retract a response already received by another client.
+Builtin mutations include a policy ETag assertion in their single-partition
+transaction. If membership revocation commits first, a stale authorized mutation
+cannot subsequently commit; retry reloads and rechecks role/generation before
+accessing receipts or writing. Legacy grants have no transaction fence, so an
+already-authorized legacy mutation can finish. Neither mode promises instant
+globally linearizable policy reads across independent Cosmos Session clients.
+Access is denied at the next check after the server observes the change. SSE
+rechecks before/after reads and on heartbeats; sync, snapshot and document/conflict
+responses also recheck after storage work. A commit before revocation can still
+lose its acknowledgement: HTTP403 does not prove no earlier commit happened.
+The SDK's learned-revocation purge and in-flight drain prevent late responses
+from repopulating its revoked cache, but cannot retract already received data.
 
 Before delivery of an outbox, the client verifies `/session` and asserts the same identity on every mutation/sync. A scope/permission mismatch or HTTP 401/403 purges local cache/outbox and pauses the client. This is intentionally conservative and may discard unsent edits on expired credentials; applications should refresh tokens before delivery. Offline revocation cannot erase data or notify disconnected devices immediately. SQLite plaintext on disk, backups, disk remanence, OS compromise and malicious apps are not solved by a logical purge. Choose device encryption and sensitive-data retention policies before production.
 

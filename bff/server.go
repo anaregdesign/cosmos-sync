@@ -15,12 +15,13 @@ import (
 )
 
 type Server struct {
-	config   Config
-	store    Store
-	verifier *oidc.IDTokenVerifier
-	key      []byte
-	controls *runtimeControls
-	metrics  *metrics
+	config        Config
+	store         Store
+	verifier      *oidc.IDTokenVerifier
+	key           []byte
+	controls      *runtimeControls
+	metrics       *metrics
+	authorization AuthorizationStore
 }
 
 func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Server, error) {
@@ -44,6 +45,21 @@ func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Ser
 	if err := validateGrantRoles(config.Grants); err != nil {
 		return nil, err
 	}
+	var authorization AuthorizationStore
+	switch config.Authorization.Mode {
+	case "", "legacy":
+	case "builtin":
+		if len(config.Grants) != 0 || config.GrantsFile != "" {
+			return nil, fmt.Errorf("builtin authorization cannot be combined with legacy grants")
+		}
+		var ok bool
+		authorization, ok = store.(AuthorizationStore)
+		if !ok {
+			return nil, fmt.Errorf("builtin authorization requires an authorization-capable store")
+		}
+	default:
+		return nil, fmt.Errorf("unsupported authorization mode")
+	}
 	key, err := base64.StdEncoding.DecodeString(config.CursorKeyBase64)
 	if err != nil || len(key) < 32 {
 		return nil, fmt.Errorf("cursorKeyBase64 requires at least 32 random bytes shared by replicas")
@@ -60,10 +76,13 @@ func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Ser
 			return nil, err
 		}
 	}
-	return &Server{config: config, store: store, verifier: verifier, key: key, controls: controls, metrics: newMetrics()}, nil
+	return &Server{config: config, store: store, verifier: verifier, key: key, controls: controls, metrics: newMetrics(), authorization: authorization}, nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.builtinAuthorization() {
+		r = r.WithContext(withAuthorizationSessions(r.Context()))
+	}
 	observed := newObservedResponse(w)
 	w = observed
 	defer s.metrics.record(r, observed)
@@ -104,10 +123,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mode := r.Header.Get(ScopeModeHeader)
+	selectedScopeID := ""
+	if mode == "shared" {
+		selectedScopeID = r.Header.Get(ScopeHeader)
+	}
+	if s.serveAuthorization(w, r, auth[1]) {
+		return
+	}
 	if r.URL.Path == "/v1/session" {
 		mode = r.URL.Query().Get("scope")
+		selectedScopeID = r.URL.Query().Get("scopeId")
+		if len(r.URL.Query()["scope"]) > 1 || len(r.URL.Query()["scopeId"]) > 1 {
+			s.writeError(w, protocolError(400, "invalid_authorization_request"))
+			return
+		}
 	}
-	scope, err := s.authorize(r.Context(), auth[1], mode)
+	scope, err := s.authorizeSelected(r.Context(), auth[1], mode, selectedScopeID)
 	if err != nil {
 		s.writeError(w, err)
 		return
@@ -163,6 +194,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		mutation.PrincipalID = scope.PrincipalID
+		if s.builtinAuthorization() {
+			mutation.AuthorizationVersion = scope.PermissionVersion
+		}
 		hash, e := validateMutation(&mutation, scope.ID)
 		if e != nil {
 			s.writeError(w, e)
@@ -174,6 +208,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		document, token, e := s.store.Mutate(r.Context(), scope.ID, mutation, hash, session)
 		setSession(token)
+		var outcome *ProtocolError
+		if e == nil || (errors.As(e, &outcome) && outcome.Current != nil) {
+			if err := s.reauthorizeScope(r.Context(), auth[1], scope); err != nil {
+				s.writeError(w, err)
+				return
+			}
+		}
 		if e != nil {
 			s.writeError(w, e)
 			return
@@ -211,6 +252,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, e)
 			return
 		}
+		if e = s.reauthorizeScope(r.Context(), auth[1], scope); e != nil {
+			s.writeError(w, e)
+			return
+		}
 		kept := boundedDocumentCount(page.Changes, s.controls.options.MaxSyncPageBytes)
 		if kept < len(page.Changes) {
 			if kept == 0 {
@@ -226,7 +271,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/v1/events" && r.Method == http.MethodGet:
 		s.serveEvents(w, r, scope, auth[1], session)
 	case r.URL.Path == "/v1/snapshot" && r.Method == http.MethodGet:
-		s.serveSnapshot(w, r, scope, session)
+		s.serveSnapshot(w, r, scope, auth[1], session)
 	default:
 		s.writeError(w, protocolError(404, "not_found"))
 	}

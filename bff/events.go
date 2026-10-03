@@ -95,7 +95,7 @@ func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request, scope Scope
 		return controller.Flush() == nil
 	}
 	check := func() bool {
-		current, err := s.authorize(ctx, accessToken, scope.ScopeMode)
+		current, err := s.authorizeSelected(ctx, accessToken, scope.ScopeMode, scope.ID)
 		if ctx.Err() != nil {
 			return false
 		}
@@ -125,7 +125,7 @@ func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request, scope Scope
 		}
 		// A slow query may span expiry or revocation. Recheck immediately before
 		// emitting a hint, rather than only before the storage round trip.
-		current, err = s.authorize(ctx, accessToken, scope.ScopeMode)
+		current, err = s.authorizeSelected(ctx, accessToken, scope.ScopeMode, scope.ID)
 		if ctx.Err() != nil {
 			return false
 		}
@@ -160,7 +160,7 @@ func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request, scope Scope
 			}
 		case <-heartbeatTimer.C:
 			// Revalidate before every heartbeat as well as every journal poll.
-			current, err := s.authorize(ctx, accessToken, scope.ScopeMode)
+			current, err := s.authorizeSelected(ctx, accessToken, scope.ScopeMode, scope.ID)
 			if ctx.Err() != nil {
 				return
 			}

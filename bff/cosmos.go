@@ -32,13 +32,17 @@ type CosmosStore struct {
 	retention retentionControls
 }
 type storedItem struct {
-	ID                     string    `json:"id"`
-	ScopeID                string    `json:"scopeId"`
-	Kind                   string    `json:"kind"`
-	Sequence               int64     `json:"sequence,omitempty"`
-	Document               *Document `json:"document,omitempty"`
-	RequestHash            string    `json:"requestHash,omitempty"`
-	EstimatedRetainedBytes int64     `json:"estimatedRetainedBytes,omitempty"`
+	ID                     string                `json:"id"`
+	ScopeID                string                `json:"scopeId"`
+	Kind                   string                `json:"kind"`
+	Sequence               int64                 `json:"sequence,omitempty"`
+	Document               *Document             `json:"document,omitempty"`
+	RequestHash            string                `json:"requestHash,omitempty"`
+	EstimatedRetainedBytes int64                 `json:"estimatedRetainedBytes,omitempty"`
+	Account                *accountRecord        `json:"account,omitempty"`
+	Policy                 *AuthorizationPolicy  `json:"policy,omitempty"`
+	Audit                  *authorizationAudit   `json:"audit,omitempty"`
+	AuthorizationReceipt   *authorizationReceipt `json:"authorizationReceipt,omitempty"`
 }
 
 func NewCosmosStore(ctx context.Context, c CosmosConfig) (*CosmosStore, error) {
@@ -149,7 +153,17 @@ func (s *CosmosStore) ConfigureRetention(options RetentionOptions) error {
 	return s.retention.configure(options)
 }
 
-func (s *CosmosStore) read(ctx context.Context, scope, id, session string) (*storedItem, azcore.ETag, string, error) {
+func (s *CosmosStore) read(ctx context.Context, scope, id, session string) (result *storedItem, tag azcore.ETag, nextToken string, readErr error) {
+	var sessionErr error
+	session, sessionErr = authorizationSession(ctx, scope, session)
+	if sessionErr != nil {
+		return nil, "", session, sessionErr
+	}
+	defer func() {
+		if err := rememberAuthorizationSession(ctx, scope, session); err != nil {
+			result, tag, nextToken, readErr = nil, "", session, err
+		}
+	}()
 	response, err := s.container.ReadItem(ctx, azcosmos.NewPartitionKeyString(scope), id, &azcosmos.ItemOptions{SessionToken: stringPointer(session), ConsistencyLevel: azcosmos.ConsistencyLevelSession.ToPtr()})
 	session = nextSession(session, response.RawResponse)
 	if err != nil {
@@ -173,6 +187,19 @@ func (s *CosmosStore) Mutate(ctx context.Context, scope string, m Mutation, hash
 	pk := azcosmos.NewPartitionKeyString(scope)
 	receiptID := "r:" + mutationReceiptKey(m)
 	for attempt := 0; attempt < 12; attempt++ {
+		var authorizationPolicy *AuthorizationPolicy
+		var authorizationETag azcore.ETag
+		if m.AuthorizationVersion != "" {
+			policy, etag, token, err := s.readAuthorizationPolicy(ctx, scope, session)
+			session = token
+			if err != nil {
+				return Document{}, session, err
+			}
+			if err := checkAuthorizationWrite(policy, scope, m); err != nil {
+				return Document{}, session, err
+			}
+			authorizationPolicy, authorizationETag = policy, etag
+		}
 		receipt, _, token, err := s.read(ctx, scope, receiptID, session)
 		session = token
 		if err != nil {
@@ -264,19 +291,34 @@ func (s *CosmosStore) Mutate(ctx context.Context, scope string, m Mutation, hash
 		}
 		batch.CreateItem(changeBody, nil)
 		batch.CreateItem(receiptBody, nil)
+		operationCount := 4
+		if authorizationPolicy != nil {
+			// Replacing the unchanged policy with If-Match is an atomic fence,
+			// not a permission update. A successful revoke changes this ETag; no
+			// batch authorized against the old policy can subsequently commit.
+			body, _ := encodeJSON(storedItem{ID: authorizationPolicyItemID, ScopeID: scope, Kind: "authorization", Policy: authorizationPolicy})
+			batch.ReplaceItem(authorizationPolicyItemID, body, &azcosmos.TransactionalBatchItemOptions{IfMatchETag: &authorizationETag})
+			operationCount++
+		}
 		response, err := s.container.ExecuteTransactionalBatch(ctx, batch, &azcosmos.TransactionalBatchOptions{SessionToken: session, ConsistencyLevel: azcosmos.ConsistencyLevelSession.ToPtr()})
 		session = nextSession(session, response.RawResponse)
+		if rememberErr := rememberAuthorizationSession(ctx, scope, session); rememberErr != nil {
+			return Document{}, session, rememberErr
+		}
 		if err != nil {
 			var service *azcore.ResponseError
 			if errors.As(err, &service) {
 				session = nextSession(session, service.RawResponse)
+				if rememberErr := rememberAuthorizationSession(ctx, scope, session); rememberErr != nil {
+					return Document{}, session, rememberErr
+				}
 				if service.StatusCode == 409 || service.StatusCode == 412 {
 					continue
 				}
 			}
 			return Document{}, session, cosmosError(err)
 		}
-		status := batchStatus(response)
+		status := batchStatusForOperations(response, operationCount)
 		if status == 200 {
 			return document, session, nil
 		}
@@ -314,6 +356,9 @@ func (s *CosmosStore) Sync(ctx context.Context, scope string, after int64, limit
 	for pager.More() && len(documents) < limit+1 {
 		response, err := pager.NextPage(ctx)
 		session = nextSession(session, response.RawResponse)
+		if rememberErr := rememberAuthorizationSession(ctx, scope, session); rememberErr != nil {
+			return StorePage{}, session, rememberErr
+		}
 		if err != nil {
 			return StorePage{}, session, cosmosError(err)
 		}
@@ -342,13 +387,17 @@ func (s *CosmosStore) Sync(ctx context.Context, scope string, after int64, limit
 }
 
 func batchStatus(response azcosmos.TransactionalBatchResponse) int {
+	return batchStatusForOperations(response, 4)
+}
+
+func batchStatusForOperations(response azcosmos.TransactionalBatchResponse, count int) int {
 	for _, result := range response.OperationResults {
 		if result.StatusCode >= 200 && result.StatusCode < 300 || result.StatusCode == 424 {
 			continue
 		}
 		return int(result.StatusCode)
 	}
-	if !response.Success || len(response.OperationResults) != 4 {
+	if !response.Success || len(response.OperationResults) != count {
 		return 503
 	}
 	for _, result := range response.OperationResults {

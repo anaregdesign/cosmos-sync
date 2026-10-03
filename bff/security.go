@@ -48,22 +48,23 @@ type Scope struct {
 	CanWrite          bool   `json:"-"`
 }
 type Config struct {
-	Listen          string           `json:"listen"`
-	Development     bool             `json:"development"`
-	TLSMode         string           `json:"-"`
-	OIDC            OIDCConfig       `json:"oidc"`
-	CursorKeyBase64 string           `json:"cursorKeyBase64"`
-	Grants          []Grant          `json:"grants"`
-	GrantsFile      string           `json:"grantsFile"`
-	Storage         string           `json:"storage"`
-	Cosmos          CosmosConfig     `json:"cosmos"`
-	HistoryEpoch    string           `json:"historyEpoch"`
-	Events          EventOptions     `json:"events"`
-	Limits          LimitOptions     `json:"limits"`
-	Snapshots       SnapshotOptions  `json:"snapshots"`
-	MetricsToken    string           `json:"-"`
-	AllowedOrigins  []string         `json:"allowedOrigins"`
-	Retention       RetentionOptions `json:"retention"`
+	Listen          string               `json:"listen"`
+	Development     bool                 `json:"development"`
+	TLSMode         string               `json:"-"`
+	OIDC            OIDCConfig           `json:"oidc"`
+	CursorKeyBase64 string               `json:"cursorKeyBase64"`
+	Grants          []Grant              `json:"grants"`
+	GrantsFile      string               `json:"grantsFile"`
+	Authorization   AuthorizationOptions `json:"authorization"`
+	Storage         string               `json:"storage"`
+	Cosmos          CosmosConfig         `json:"cosmos"`
+	HistoryEpoch    string               `json:"historyEpoch"`
+	Events          EventOptions         `json:"events"`
+	Limits          LimitOptions         `json:"limits"`
+	Snapshots       SnapshotOptions      `json:"snapshots"`
+	MetricsToken    string               `json:"-"`
+	AllowedOrigins  []string             `json:"allowedOrigins"`
+	Retention       RetentionOptions     `json:"retention"`
 }
 
 func validateGrantRoles(grants []Grant) error {
@@ -92,53 +93,37 @@ func NewOIDCVerifier(ctx context.Context, c OIDCConfig) (*oidc.IDTokenVerifier, 
 }
 
 func (s *Server) authorize(ctx context.Context, token, mode string) (Scope, error) {
+	return s.authorizeSelected(ctx, token, mode, "")
+}
+
+func (s *Server) authorizeSelected(ctx context.Context, token, mode, scopeID string) (Scope, error) {
 	if mode == "" {
 		mode = "user"
 	}
-	if mode != "user" && mode != "tenant" {
+	if s.builtinAuthorization() {
+		if mode != "user" && mode != "shared" {
+			return Scope{}, protocolError(400, "invalid_scope_mode")
+		}
+	} else if mode != "user" && mode != "tenant" {
 		return Scope{}, protocolError(400, "invalid_scope_mode")
 	}
-	verified, err := s.verifier.Verify(ctx, token)
+	identity, tenant, err := s.verifyAccessIdentity(ctx, token)
 	if err != nil {
-		return Scope{}, protocolError(401, "unauthorized")
+		return Scope{}, err
 	}
-	var claims map[string]json.RawMessage
-	if verified.Claims(&claims) != nil {
-		return Scope{}, protocolError(401, "unauthorized")
+	if s.builtinAuthorization() {
+		return s.authorizeBuiltin(ctx, identity, mode, scopeID)
 	}
-	claim := func(name string) string { var value string; _ = json.Unmarshal(claims[name], &value); return value }
-	var nbf json.Number
-	if value, ok := claims["nbf"]; ok {
-		if json.Unmarshal(value, &nbf) != nil {
-			return Scope{}, protocolError(401, "unauthorized")
-		}
-		seconds, err := nbf.Int64()
-		if err != nil || seconds > time.Now().Unix() {
-			return Scope{}, protocolError(401, "unauthorized")
-		}
-	}
-	if s.config.OIDC.TokenUse != "" && claim("token_use") != s.config.OIDC.TokenUse {
-		return Scope{}, protocolError(401, "unauthorized")
-	}
-	// API-only audience plus required scope distinguish access JWTs from ID JWTs.
-	allowed := false
-	for _, value := range strings.Fields(claim("scp") + " " + claim("scope")) {
-		if value == s.config.OIDC.RequiredScope {
-			allowed = true
-		}
-	}
-	tenant, subject := claim(s.config.OIDC.TenantClaim), verified.Subject
-	if !allowed || tenant == "" || subject == "" {
+	if tenant == "" {
 		return Scope{}, protocolError(403, "forbidden")
 	}
+	subject := identity.Subject
 	grants := s.config.Grants
 	if s.config.GrantsFile != "" {
 		data, err := os.ReadFile(s.config.GrantsFile)
 		if err != nil {
 			return Scope{}, protocolError(503, "grant_store_unavailable")
 		}
-		// Decode into fresh storage: reusing the inline config slice would mutate
-		// shared server configuration during concurrent requests and SSE checks.
 		var loaded []Grant
 		if json.Unmarshal(data, &loaded) != nil || validateGrantRoles(loaded) != nil {
 			return Scope{}, protocolError(503, "grant_store_unavailable")
@@ -161,16 +146,53 @@ func (s *Server) authorize(ctx context.Context, token, mode string) (Scope, erro
 	if match == nil || !match.Active || match.PermissionVersion == "" || !match.CanRead {
 		return Scope{}, protocolError(403, "forbidden")
 	}
-	framing, _ := json.Marshal([]string{verified.Issuer, tenant, subject})
+	framing, _ := json.Marshal([]string{identity.Issuer, tenant, subject})
 	hash := sha256.Sum256(framing)
 	principal := hex.EncodeToString(hash[:])
-	scopeID := principal
+	derivedScopeID := principal
 	if mode == "tenant" {
-		framing, _ = json.Marshal([]string{"tenant", verified.Issuer, tenant})
+		framing, _ = json.Marshal([]string{"tenant", identity.Issuer, tenant})
 		hash = sha256.Sum256(framing)
-		scopeID = hex.EncodeToString(hash[:])
+		derivedScopeID = hex.EncodeToString(hash[:])
 	}
-	return Scope{ID: scopeID, PrincipalID: principal, ScopeMode: mode, PermissionVersion: match.PermissionVersion, CanRead: match.CanRead, CanWrite: match.CanWrite}, nil
+	return Scope{ID: derivedScopeID, PrincipalID: principal, ScopeMode: mode, PermissionVersion: match.PermissionVersion, CanRead: match.CanRead, CanWrite: match.CanWrite}, nil
+}
+
+func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (AccountIdentity, string, error) {
+	verified, err := s.verifier.Verify(ctx, token)
+	if err != nil {
+		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+	}
+	var claims map[string]json.RawMessage
+	if verified.Claims(&claims) != nil {
+		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+	}
+	claim := func(name string) string { var value string; _ = json.Unmarshal(claims[name], &value); return value }
+	var nbf json.Number
+	if value, ok := claims["nbf"]; ok {
+		if json.Unmarshal(value, &nbf) != nil {
+			return AccountIdentity{}, "", protocolError(401, "unauthorized")
+		}
+		seconds, err := nbf.Int64()
+		if err != nil || seconds > time.Now().Unix() {
+			return AccountIdentity{}, "", protocolError(401, "unauthorized")
+		}
+	}
+	if s.config.OIDC.TokenUse != "" && claim("token_use") != s.config.OIDC.TokenUse {
+		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+	}
+	// API-only audience plus required scope distinguish access JWTs from ID JWTs.
+	allowed := false
+	for _, value := range strings.Fields(claim("scp") + " " + claim("scope")) {
+		if value == s.config.OIDC.RequiredScope {
+			allowed = true
+		}
+	}
+	tenant, subject := claim(s.config.OIDC.TenantClaim), verified.Subject
+	if !allowed || subject == "" || len(subject) > 512 || len(verified.Issuer) > 2048 {
+		return AccountIdentity{}, "", protocolError(403, "forbidden")
+	}
+	return AccountIdentity{Issuer: verified.Issuer, Subject: subject}, tenant, nil
 }
 
 type signedContext struct {
