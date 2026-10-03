@@ -92,7 +92,7 @@ deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
 | Actual Entra native authentication | macOS system-browser AppAuth PKCE, callback, Keychain controller restore, provider refresh and local sign-out passed; both API JWTs independently verified against issuer/JWKS/audience/scope/tenant/approved owner |
 | Normal iOS release build | Unsigned arm64 build passed from core `e7fa4ccb`; no physical install or Apple portal operation |
 | iOS simulator app integration | iPhone 16 Pro / iOS 26.5; actual HTTP BFF, SQLite and isolated Keychain probe; local ad-hoc simulator signing and ephemeral arm64 workaround, test auth adapter |
-| MIT archive | 72 KB strict pub publish dry-run, zero warnings; no upload |
+| MIT archive | Latest 85 KB strict pub publish dry-run, zero warnings, with protocol/query/security/authorization documents; no upload |
 | Multiarch OCI artifact | Linux amd64/arm64, nonroot runtime, checked provenance/SBOM subjects, MIT and Go/module license notices; local build, no push |
 | Independent review | Auth reentry/purge defects and Azure request/deadline/partial-evidence defects reproduced, fixed and independently rechecked |
 
