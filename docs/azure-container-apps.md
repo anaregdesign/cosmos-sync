@@ -130,8 +130,9 @@ never upload them to public Issues, CI artifacts or source. Use `umask 077` when
 creating them, and do not put secret values in Terraform variables.
 [Azure Blob backend](https://developer.hashicorp.com/terraform/language/backend/azurerm).
 
-The currently retained validation Cosmos firewall permits only the Mac's approved
-egress IP and cannot accept ACA connections as it stands. This module intentionally
+The approved Cosmos validation network plan permits only the Mac's current
+egress IP; account creation is still blocked by regional capacity/selection.
+That plan would not permit ACA connections. This module intentionally
 does not change that firewall. A later deployment needs an approved egress/private
 network design: existing delegated subnet, private endpoints/DNS, or a narrowly
 approved stable egress route. Returned ACA outbound addresses are not a promise of
