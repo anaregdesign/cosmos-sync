@@ -78,12 +78,59 @@ func TestCosmosActualBatchWireBoundaryAndAtomicOperations(t *testing.T) {
 			if operations[i].Operation != "Create" || operations[i].Item.Kind != kind || operations[i].Item.ScopeID != "scope" {
 				t.Fatalf("wrong atomic member %+v", operations[i])
 			}
+			if i > 0 && string(operations[i].Item.Document.Data) != string(m.Data) {
+				t.Fatal("batch normalization changed document content")
+			}
 		}
 		return cosmosResponse(r, 200, `[{"statusCode":201},{"statusCode":201},{"statusCode":201},{"statusCode":201}]`, "write-session"), nil
 	})
 	doc, session, err := store.Mutate(context.Background(), "scope", m, hash, "")
 	if err != nil || doc.Version != 1 || session != "write-session" || batchCount != 1 {
 		t.Fatalf("mutation result %+v %s batches%d err%v", doc, session, batchCount, err)
+	}
+}
+
+func TestCosmosExplicitBatchRetryPreservesBodyAndNumberPrecision(t *testing.T) {
+	m := Mutation{OperationID: "11111111-1111-4111-8111-111111111111", DocumentID: "note", Kind: "put", Data: json.RawMessage(`{"text":"<>","integer":9007199254740991,"decimal":1.00,"items":[2,1]}`)}
+	hash, err := validateMutation(&m, "scope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bodies []string
+	store := testCosmos(t, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "" || r.URL.Path == "/" {
+			return cosmosResponse(r, 200, `{"readableLocations":[{"name":"Test","databaseAccountEndpoint":"https://cosmos.test"}],"writableLocations":[{"name":"Test","databaseAccountEndpoint":"https://cosmos.test"}],"enableMultipleWriteLocations":false,"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`, ""), nil
+		}
+		if r.Method == http.MethodGet {
+			return cosmosResponse(r, 404, `{"code":"NotFound","message":"missing"}`, "read-session"), nil
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bodies = append(bodies, string(body))
+		if len(bodies) == 1 {
+			return cosmosResponse(r, 503, `{"code":"ServiceUnavailable","message":"transient"}`, ""), nil
+		}
+		return cosmosResponse(r, 200, `[{"statusCode":201},{"statusCode":201},{"statusCode":201},{"statusCode":201}]`, "committed"), nil
+	})
+	// The official SDK deliberately does not blindly replay a failed write. The
+	// client retries the same durable mutation, rechecking its receipt first.
+	_, session, err := store.Mutate(context.Background(), "scope", m, hash, "")
+	if err == nil || len(bodies) != 1 {
+		t.Fatalf("first503 should be returned to caller: %v bodies%d", err, len(bodies))
+	}
+	_, _, err = store.Mutate(context.Background(), "scope", m, hash, session)
+	if err != nil || len(bodies) != 2 {
+		t.Fatalf("retry err%v bodies%d", err, len(bodies))
+	}
+	if bodies[0] != bodies[1] {
+		t.Fatal("SDK retried different atomic payload")
+	}
+	for _, number := range []string{`9007199254740991`, `1.00`, `[2,1]`} {
+		if !strings.Contains(bodies[1], number) {
+			t.Fatalf("normalization changed %s", number)
+		}
 	}
 }
 
