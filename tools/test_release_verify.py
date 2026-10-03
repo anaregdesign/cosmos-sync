@@ -3,8 +3,11 @@
 import copy
 import importlib.util
 import io
+import json
 from pathlib import Path
+import shutil
 import tarfile
+import tempfile
 import unittest
 from urllib.request import Request
 from unittest.mock import patch
@@ -18,6 +21,25 @@ VERSION = "0.2.0-dev.1"
 
 
 class ReleaseGuardsTest(unittest.TestCase):
+    def test_installed_consumer_requires_isolated_hosted_version_and_source_bytes(self):
+        with tempfile.TemporaryDirectory(prefix="cosmos-sync-consumer ") as directory:
+            cache = Path(directory) / ".pub-cache"
+            package = cache / "hosted/pub.dev" / ("cosmos_sync-" + VERSION)
+            shutil.copytree(release.PACKAGE / "lib", package / "lib")
+            config = Path(directory) / "package_config.json"
+            def write_config(root):
+                config.write_text(json.dumps({"packages": [{"name": "cosmos_sync", "rootUri": root}]}))
+            write_config(package.as_uri())
+            self.assertEqual(release.resolved_consumer_package(config, VERSION, cache), package.resolve())
+            (package / "lib/extra.dart").write_text("library;\n")
+            with self.assertRaises(release.ReleaseError):
+                release.resolved_consumer_package(config, VERSION, cache)
+            (package / "lib/extra.dart").unlink()
+            for root in (release.PACKAGE.as_uri(), "https://pub.dev/packages/cosmos_sync", (cache / "hosted/pub.dev/cosmos_sync-9.0.0").as_uri()):
+                write_config(root)
+                with self.assertRaises(release.ReleaseError):
+                    release.resolved_consumer_package(config, VERSION, cache)
+
     def test_approved_mit_files_match_and_pending_license_stays_blocked(self):
         release.verify_license_files("MIT")
         with self.assertRaises(release.ReleaseError):

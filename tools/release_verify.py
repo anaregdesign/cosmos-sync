@@ -15,7 +15,7 @@ import sys
 import tarfile
 import tempfile
 from urllib.error import HTTPError
-from urllib.parse import urlencode, urlparse
+from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -315,24 +315,116 @@ def validate_archive(raw, expected_hash=None):
     return {"archiveSha256": actual, "archiveBytes": len(raw), "uncompressedBytes": total, "verifiedFiles": len(local)}
 
 
+def resolved_consumer_package(config_file, version, cache_directory):
+    config = json.loads(config_file.read_text())
+    packages = [p for p in config["packages"] if p["name"] == "cosmos_sync"]
+    require(len(packages) == 1, "Resolved consumer must contain exactly one cosmos_sync package")
+    parsed = urlparse(packages[0]["rootUri"])
+    require(parsed.scheme == "file" and not parsed.netloc, "Consumer package must resolve to a local hosted-cache file")
+    root = Path(unquote(parsed.path)).resolve()
+    expected = (cache_directory / "hosted/pub.dev" / ("cosmos_sync-" + version)).resolve()
+    require(root == expected, "Consumer did not resolve the exact version from its isolated pub.dev cache")
+    local = {str(p.relative_to(PACKAGE / "lib")): p.read_bytes() for p in (PACKAGE / "lib").rglob("*.dart")}
+    installed = {str(p.relative_to(root / "lib")): p.read_bytes() for p in (root / "lib").rglob("*.dart")}
+    require(installed == local, "Installed hosted library differs from the reviewed source")
+    return root
+
+
+FLUTTER_CONSUMER_TEST = """import 'package:cosmos_sync/cosmos_sync.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+// Synthetic verified scope and deliberately unusable BFF. This verifies local
+// installed-package storage/imports; it does not claim live cloud acceptance.
+void main() {
+  test('published cache commits offline and survives reopen', () async {
+    final path = 'published-consumer-${DateTime.now().microsecondsSinceEpoch}';
+    HttpSyncTransport transport() => HttpSyncTransport(
+      baseUri: Uri.parse('https://unused.invalid'),
+      tokenProvider: () async => 'synthetic-unused-token',
+    );
+    var client = await CosmosSyncClient.open(
+      path: path,
+      transport: transport(),
+      session: const SessionInfo(principalId: 'demo', scopeId: 'demo', permissionVersion: '1'),
+    );
+    try {
+      await client.put('proof', {'text': 'durable offline'});
+      expect(client.get('proof')!.hasPendingWrites, isTrue);
+      await client.close();
+      client = await CosmosSyncClient.open(path: path, transport: transport());
+      expect(client.get('proof')!.data!['text'], 'durable offline');
+      expect(client.get('proof')!.hasPendingWrites, isTrue);
+      await client.delete('proof');
+      expect(client.get('proof')!.deleted, isTrue);
+      expect(client.list(), isEmpty);
+      await client.signOut();
+    } finally {
+      await client.close();
+    }
+  });
+}
+"""
+
+FLUTTER_CONSUMER_MAIN = """import 'package:cosmos_sync/cosmos_sync.dart';
+import 'package:flutter/material.dart';
+
+void main() => runApp(const MaterialApp(home: ConsumerView()));
+
+class ConsumerView extends StatelessWidget {
+  const ConsumerView({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Center(child: Text('Published SDK query limit: ${LocalQuery(limit: 5).limit}')),
+  );
+}
+"""
+
+
 def consumer_verify(version):
     dart = os.environ.get("DART") or shutil.which("dart")
     require(dart, "Dart is required for installed-package verification")
+    flutter = os.environ.get("FLUTTER") or shutil.which("flutter")
+    require(flutter, "Flutter and Chromium are required for installed-package verification")
     with tempfile.TemporaryDirectory(prefix="cosmos-sync-published-consumer-") as directory:
         destination = Path(directory)
+        cache_directory = destination / ".pub-cache"
         (destination / "pubspec.yaml").write_text("name: cosmos_sync_release_consumer\npublish_to: none\nenvironment:\n  sdk: ^3.12.0\ndependencies:\n  cosmos_sync: " + version + "\n")
         (destination / "consumer.dart").write_bytes((PACKAGE / "example/cosmos_sync_example.dart").read_bytes())
-        environment = dict(os.environ, CI="true", PUB_HOSTED_URL="https://pub.dev")
+        environment = dict(os.environ, CI="true", PUB_HOSTED_URL="https://pub.dev", PUB_CACHE=str(cache_directory))
         resolved = subprocess.run([dart, "--suppress-analytics", "pub", "get"], cwd=destination, env=environment, text=True, capture_output=True, timeout=180)
         require(resolved.returncode == 0, "Clean consumer could not resolve the published package")
-        config = json.loads((destination / ".dart_tool/package_config.json").read_text())
-        package = next((p for p in config["packages"] if p["name"] == "cosmos_sync"), None)
-        require(package is not None, "Resolved consumer lacks cosmos_sync")
-        root = urlparse(package["rootUri"]).path
-        require("/hosted/pub.dev/" in root and Path(root).name == "cosmos_sync-" + version, "Consumer did not resolve the exact version from pub.dev")
+        resolved_consumer_package(destination / ".dart_tool/package_config.json", version, cache_directory)
         executed = subprocess.run([dart, "--suppress-analytics", "run", "consumer.dart"], cwd=destination, env=environment, text=True, capture_output=True, timeout=180)
         require(executed.returncode == 0 and all(marker in executed.stdout for marker in ("Offline pending: true", "After restart: Saved locally while offline", "Acknowledged version: 1", "Deletion tombstone: true")), "Published native SQLite example did not satisfy its runtime contract")
-        return "clean pub.dev resolution and native SQLite offline/reopen/ACK/tombstone example passed (demo transport)"
+        application = destination / "flutter_consumer"
+        generated = subprocess.run([flutter, "--suppress-analytics", "create", "--no-pub", "--platforms=web", "--project-name", "cosmos_sync_release_flutter_consumer", str(application)], env=environment, text=True, capture_output=True, timeout=180)
+        require(generated.returncode == 0, "Could not create an isolated Flutter consumer")
+        (application / "pubspec.yaml").write_text("name: cosmos_sync_release_flutter_consumer\npublish_to: none\nenvironment:\n  sdk: ^3.12.0\ndependencies:\n  flutter:\n    sdk: flutter\n  cosmos_sync: " + version + "\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\nflutter:\n  uses-material-design: true\n")
+        (application / "lib/main.dart").write_text(FLUTTER_CONSUMER_MAIN)
+        (application / "test/widget_test.dart").unlink(missing_ok=True)
+        (application / "test/published_cache_test.dart").write_text(FLUTTER_CONSUMER_TEST)
+        # The generated lint file otherwise refers to an unrelated dependency.
+        (application / "analysis_options.yaml").write_text("analyzer:\n  errors:\n    todo: ignore\n")
+        commands = (
+            ("Flutter hosted package resolution", ["pub", "get"], 180),
+            ("Flutter public imports analysis", ["analyze", "--no-pub", "lib/main.dart", "test/published_cache_test.dart"], 180),
+            ("Flutter native SQLite offline/reopen/tombstone runtime", ["test", "--no-pub", "test/published_cache_test.dart"], 300),
+            ("Flutter Chromium IndexedDB offline/reopen/tombstone runtime", ["test", "--no-pub", "--platform", "chrome", "test/published_cache_test.dart"], 300),
+            ("Flutter release web build", ["build", "web", "--release", "--no-pub"], 600),
+        )
+        for index, (description, arguments, timeout) in enumerate(commands):
+            result = subprocess.run([flutter, "--suppress-analytics", *arguments], cwd=application, env=environment, text=True, capture_output=True, timeout=timeout)
+            require(result.returncode == 0, "Published consumer failed: " + description)
+            if index == 0:
+                resolved_consumer_package(application / ".dart_tool/package_config.json", version, cache_directory)
+        return {
+            "registryResolution": "exact version from isolated pub.dev cache; installed library bytes match source",
+            "dartNative": "SQLite offline/reopen/ACK/tombstone example (demo transport)",
+            "flutterNative": "SQLite offline/reopen/tombstone runtime",
+            "flutterBrowser": "Chromium IndexedDB offline/reopen/tombstone runtime",
+            "flutterImports": "public API analysis and release web build",
+            "liveCloudVerified": False,
+        }
 
 
 def pub_verify(version):

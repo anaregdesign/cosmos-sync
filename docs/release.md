@@ -118,6 +118,13 @@ account. The owner completes the browser authorization themselves. Do not send
 credentials through chat, copy refresh-token files or place them in GitHub secrets.
 Set `PUB_PUBLICATION_APPROVED=true` only after explicit approval, then run:
 
+Before uploading, run official `dart pub login` with its stdout/stderr captured
+only in a private local file and compare the returned Google email against the
+owner's privately selected account. Record only `identityMatchesOwner: true` in
+public evidence. Normal existing credential refresh is sufficient; if the CLI
+requests new authorization, stop and hand the browser step to the owner. Do not
+print the account email, raw CLI output or OAuth authorization URL in CI/Issues.
+
 ```sh
 python3 tools/release_verify.py preflight --target pub \
   --sha <approved-40-hex-sha> --version 0.2.0-dev.1
@@ -145,10 +152,16 @@ and compares all library files, essential package docs and every archive file wi
 the reviewed source. It rejects extra library files, development assets, links and unsafe paths.
 Record the package/version URL, ownership-verification result and archive hash on
 [#23](https://github.com/anaregdesign/cosmos-sync/issues/23). Also resolve the SDK
-from pub.dev in a clean temporary consumer directory and run its public example;
-this happens in the same verification command. It checks real native SQLite
-offline/reopen/ACK/tombstone behavior with a demo transport. A path dependency,
-dry-run or demo transport does not prove live cloud behavior.
+from pub.dev into an isolated temporary pub cache in the same verification command.
+It checks the exact hosted version and installed library bytes, runs the public
+Dart example with native SQLite offline/reopen/ACK/tombstone behavior, and creates
+a clean Flutter consumer. That consumer analyzes the public imports, runs native
+SQLite and Chromium IndexedDB offline/reopen/tombstone tests, and builds release web.
+Install Dart, Flutter and Chrome/Chromium first; set `DART`, `FLUTTER` or
+`CHROME_EXECUTABLE` when their executable paths differ from tool defaults. These
+local storage tests use a synthetic session/demo transport; they do not prove
+live Azure or production OIDC acceptance. Path dependencies and dry-run results
+cannot satisfy installed-registry verification.
 
 ## Later OIDC publication
 
