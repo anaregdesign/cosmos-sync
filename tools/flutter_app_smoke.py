@@ -106,11 +106,15 @@ def android_runtime_status(result):
     seen = marker in output
     return {"exit_code": result.returncode, "expected_runtime_marker_seen": seen,
             "native_secure_storage_verified": seen and result.returncode == 0,
+            "controller_state": {name: value == "true" for name, value in re.findall(
+                r"\b(settingsSaved|signedIn|authError|appBusy|workspaceBusy|workspaceConnected|appMessage|workspaceMessage)=(true|false)\b",
+                output) if "COSMOS_SYNC_APP_STATE" in output},
             "diagnostic_flags": {name: literal in output for name, literal in (
                 ("socket_exception", "SocketException"), ("timeout_exception", "TimeoutException"),
                 ("expectation_failure", "TestFailure"), ("plugin_exception", "PlatformException"),
                 ("missing_plugin", "MissingPluginException"), ("gradle_failed", "Gradle task assembleDebug failed"),
-                ("install_failed", "Error: ADB exited"), ("vm_service_failed", "VM Service is not available"))},
+                ("install_failed", "Error: ADB exited"), ("vm_service_failed", "VM Service is not available"),
+                ("tap_missed_hit_test", "would not hit test on the specified widget"))},
             "integration_source_lines": sorted({int(line) for line in re.findall(r"app_flow_test\.dart:(\d+):", output)})}
 
 

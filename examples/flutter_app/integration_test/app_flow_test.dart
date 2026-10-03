@@ -73,14 +73,26 @@ void main() {
         find.byKey(const Key('oidc-scopes')),
         'openid offline_access cosmos_sync',
       );
-      await _tap(
-        tester,
-        find.text('Allow loopback HTTP for local development'),
+      await _tap(tester, find.byType(CheckboxListTile));
+      expect(
+        tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+        true,
       );
       await _tap(tester, find.byKey(const Key('sign-in')));
       await _wait(
         tester,
         () => app!.workspace.connected && !app.busy && !app.workspace.busy,
+        onTimeout: () => debugPrint(
+          'COSMOS_SYNC_APP_STATE '
+          'settingsSaved=${app!.settings != null} '
+          'signedIn=${app.auth.isSignedIn} '
+          'authError=${app.auth.error != null} '
+          'appBusy=${app.busy} '
+          'workspaceBusy=${app.workspace.busy} '
+          'workspaceConnected=${app.workspace.connected} '
+          'appMessage=${app.message != null} '
+          'workspaceMessage=${app.workspace.message != null}',
+        ),
       );
       expect(app.workspace.bootstrapComplete, true);
       expect(app.workspace.session!.principalId, isNotEmpty);
@@ -211,11 +223,16 @@ Future<Map<String, Object?>> _fixture(Uri uri) async {
   }
 }
 
-Future<void> _wait(WidgetTester tester, bool Function() ready) async {
+Future<void> _wait(
+  WidgetTester tester,
+  bool Function() ready, {
+  void Function()? onTimeout,
+}) async {
   await tester.runAsync(() async {
     final deadline = DateTime.now().add(const Duration(seconds: 20));
     while (!ready()) {
       if (DateTime.now().isAfter(deadline)) {
+        onTimeout?.call();
         throw TimeoutException('App operation did not finish.');
       }
       await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -225,6 +242,10 @@ Future<void> _wait(WidgetTester tester, bool Function() ready) async {
 }
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
+  // Native software keyboards can cover the next tap target on a small screen.
+  // Closing the keyboard is a user interaction, before scrolling and hit tests.
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pumpAndSettle();
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);
