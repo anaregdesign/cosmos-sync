@@ -81,8 +81,10 @@ main integration and distribution are authorized and tracked in
 [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). Actual registry,
 provider, Azure and device results remain separate verification gates. The
 cheapest live Azure proposal uses an isolated retained account and local BFF.
-Only its tagged empty resource group currently exists: the subscription rejected
-free-tier provisioning and East US serverless capacity was unavailable. Another
-region awaits owner approval. Actual ACA deployment and consumer Apple/Google
+Its tagged resource group retains the intended serverless account in ARM
+`Failed` state with no data endpoint: the subscription rejected free-tier
+provisioning and East US capacity was unavailable. No usable Cosmos target or
+cloud data result exists. Another region and target await updated owner approval;
+the failed record is retained. Actual ACA deployment and consumer Apple/Google
 provider setup remain separate gates; neither a mocked plan nor local test
 establishes a hosted production SLA.
