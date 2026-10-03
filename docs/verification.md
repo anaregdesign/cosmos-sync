@@ -139,12 +139,15 @@ role assignment was created. The reference uses container-scoped Cosmos native
 RBAC and versioned Key Vault secret references; a reviewed real plan and the
 owner's exact resource/network authorization are still required for deployment.
 
-The reusable Azure validation target currently contains only its owned tagged
-empty resource group. No Cosmos account, database, container or data-role
-assignment exists yet. Free-tier creation was rejected by the subscription
-offer and the approved East US serverless attempt failed for capacity. The
-requested region-only alternative awaits approval. No actual cloud data result
-or hosted clean-checkout onboarding is inferred from local/emulator evidence.
+The reusable Azure validation target retains its owned tagged resource group
+and intended serverless account in ARM `Failed` state with no data endpoint.
+Direct account readback on 2026-10-03 corrected the earlier empty-group inventory;
+the Cosmos list command still returned zero. No usable account, database,
+container, data-role assignment or cloud data result exists. Free-tier creation
+was rejected by the subscription offer and the approved East US serverless
+attempt failed for capacity. An alternative region and target require updated
+owner approval; retain the failed record and reject empty-group retargeting.
+No hosted clean-checkout onboarding is inferred from local/emulator evidence.
 
 ## Actual first distribution
 
