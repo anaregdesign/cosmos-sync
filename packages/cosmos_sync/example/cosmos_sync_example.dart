@@ -6,7 +6,11 @@ import 'package:cosmos_sync/cosmos_sync.dart';
 Future<void> main() async {
   final directory = Directory.systemTemp.createTempSync('cosmos-sync-example-');
   final path = '${directory.path}/cache.sqlite';
-  const scope = SessionInfo(scopeId: 'demo-user', permissionVersion: '1');
+  const scope = SessionInfo(
+    principalId: 'principal',
+    scopeId: 'demo-user',
+    permissionVersion: '1',
+  );
   final server = DemoServer();
   var client = await CosmosSyncClient.open(
     path: path,
@@ -14,7 +18,7 @@ Future<void> main() async {
     session: scope,
   );
   try {
-    client.put('note-1', {'text': 'Saved locally while offline'});
+    await client.put('note-1', {'text': 'Saved locally while offline'});
     print('Offline pending: ${client.get('note-1')!.hasPendingWrites}');
     await client.close();
     client = await CosmosSyncClient.open(
@@ -24,7 +28,7 @@ Future<void> main() async {
     print('After restart: ${client.get('note-1')!.data!['text']}');
     await client.flush();
     print('Acknowledged version: ${client.get('note-1')!.version}');
-    client.delete('note-1');
+    await client.delete('note-1');
     await client.flush();
     print('Deletion tombstone: ${client.get('note-1')!.deleted}');
   } finally {
@@ -45,8 +49,11 @@ class DemoTransport implements SyncTransport {
   final DemoServer server;
 
   @override
-  Future<SessionInfo> sessionInfo() async =>
-      const SessionInfo(scopeId: 'demo-user', permissionVersion: '1');
+  Future<SessionInfo> sessionInfo() async => const SessionInfo(
+    principalId: 'principal',
+    scopeId: 'demo-user',
+    permissionVersion: '1',
+  );
 
   @override
   Future<ServerDocument> mutate(MutationRequest request) async {

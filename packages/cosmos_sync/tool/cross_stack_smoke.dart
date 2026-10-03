@@ -29,7 +29,7 @@ Future<void> main(List<String> args) async {
       path: '${directory.path}/first.db',
       transport: transport(),
     );
-    first.put('note', {'title': 'offline', 'count': 1});
+    await first.put('note', {'title': 'offline', 'count': 1});
     check(
       first.get('note')!.hasPendingWrites,
       'local enqueue has pending state',
@@ -58,13 +58,13 @@ Future<void> main(List<String> args) async {
       'initial journal replay',
     );
 
-    first.put('note', {'title': 'updated', 'count': 2});
+    await first.put('note', {'title': 'updated', 'count': 2});
     await first.flush();
     await second.sync(pageSize: 1);
     check(second.get('note')!.data!['count'] == 2, 'incremental cursor resume');
 
-    final staleEdit = second.put('note', {'title': 'stale offline edit'});
-    first.put('note', {'title': 'concurrent server edit', 'count': 3});
+    final staleEdit = await second.put('note', {'title': 'stale offline edit'});
+    await first.put('note', {'title': 'concurrent server edit', 'count': 3});
     await first.flush();
     await second.sync();
     check(
@@ -80,15 +80,15 @@ Future<void> main(List<String> args) async {
       first.get('note')!.data!['count'] == 3,
       'server retains concurrent edit',
     );
-    second.discard(staleEdit);
+    await second.discard(staleEdit);
 
-    first.delete('note');
+    await first.delete('note');
     await first.flush();
     await second.sync();
     check(second.get('note')!.deleted, 'remote tombstone retained');
     check(second.list().isEmpty, 'deleted data excluded from collection');
 
-    first.put('note', {'title': 'recreated'});
+    await first.put('note', {'title': 'recreated'});
     await first.flush();
     await second.sync();
     check(!second.get('note')!.deleted, 'recreate against tombstone version');

@@ -1,24 +1,49 @@
 import 'dart:convert';
 
 /// Server-verified authorization scope. It contains no Cosmos credential.
-class SessionInfo {
-  const SessionInfo({required this.scopeId, required this.permissionVersion});
+enum SyncScopeMode { user, tenant }
 
-  factory SessionInfo.fromJson(Map<String, Object?> json) => SessionInfo(
+class SessionInfo {
+  const SessionInfo({
+    required this.scopeId,
+    required this.principalId,
+    required this.permissionVersion,
+    this.scopeMode = SyncScopeMode.user,
+  });
+
+  factory SessionInfo.fromJson(
+    Map<String, Object?> json, {
+    bool allowLegacy = false,
+  }) => SessionInfo(
     scopeId: json['scopeId'] as String,
+    principalId: allowLegacy
+        ? (json['principalId'] as String? ?? 'legacy-unverified')
+        : json['principalId'] as String,
     permissionVersion: json['permissionVersion'] as String,
+    scopeMode: SyncScopeMode.values.byName(
+      allowLegacy
+          ? (json['scopeMode'] as String? ?? 'user')
+          : json['scopeMode'] as String,
+    ),
   );
 
   final String scopeId;
+  final String principalId;
   final String permissionVersion;
+  final SyncScopeMode scopeMode;
 
   Map<String, Object?> toJson() => {
     'scopeId': scopeId,
+    'principalId': principalId,
     'permissionVersion': permissionVersion,
+    'scopeMode': scopeMode.name,
   };
 
   bool sameScope(SessionInfo other) =>
-      scopeId == other.scopeId && permissionVersion == other.permissionVersion;
+      scopeId == other.scopeId &&
+      principalId == other.principalId &&
+      permissionVersion == other.permissionVersion &&
+      scopeMode == other.scopeMode;
 }
 
 /// A confirmed document or retained server deletion tombstone.
@@ -29,7 +54,10 @@ class ServerDocument {
     required this.version,
     required this.deleted,
   }) : data = data == null ? null : immutableJson(data) {
-    if (id.isEmpty || version < 1 || (deleted ? data != null : data == null)) {
+    if (id.isEmpty ||
+        version < 1 ||
+        version > 9007199254740991 ||
+        (deleted ? data != null : data == null)) {
       throw FormatException('Invalid server document.');
     }
   }
@@ -64,7 +92,11 @@ class MutationRequest {
     required this.kind,
     required Map<String, Object?>? data,
     required this.baseVersion,
-  }) : data = data == null ? null : immutableJson(data);
+  }) : data = data == null ? null : immutableJson(data) {
+    if (baseVersion < 0 || baseVersion > 9007199254740991) {
+      throw FormatException('Invalid mutation base version.');
+    }
+  }
 
   final String operationId;
   final String documentId;
@@ -86,7 +118,9 @@ class SyncPage {
     required List<ServerDocument> changes,
     required this.cursor,
     required this.hasMore,
-  }) : changes = List.unmodifiable(changes);
+  }) : changes = List.unmodifiable(changes) {
+    if (cursor.isEmpty) throw FormatException('Invalid sync cursor.');
+  }
 
   factory SyncPage.fromJson(Map<String, Object?> json) => SyncPage(
     changes: (json['changes'] as List)
@@ -99,6 +133,54 @@ class SyncPage {
   final List<ServerDocument> changes;
   final String cursor;
   final bool hasMore;
+}
+
+/// A stable initial view at one partition sequence, with a separate resume cursor.
+class SnapshotPage {
+  SnapshotPage({
+    required List<ServerDocument> documents,
+    required this.cursor,
+    required this.syncCursor,
+    required this.cutoverSequence,
+    required this.hasMore,
+  }) : documents = List.unmodifiable(documents) {
+    if (cursor.isEmpty ||
+        syncCursor.isEmpty ||
+        cutoverSequence < 0 ||
+        cutoverSequence > 9007199254740991 ||
+        documents.any((document) => document.version > cutoverSequence)) {
+      throw FormatException('Invalid snapshot page.');
+    }
+  }
+  factory SnapshotPage.fromJson(Map<String, Object?> json) => SnapshotPage(
+    documents: (json['documents'] as List)
+        .map((value) => ServerDocument.fromJson((value as Map).cast()))
+        .toList(),
+    cursor: json['cursor'] as String,
+    syncCursor: json['syncCursor'] as String,
+    cutoverSequence: json['cutoverSequence'] as int,
+    hasMore: json['hasMore'] as bool,
+  );
+  final List<ServerDocument> documents;
+  final String cursor;
+  final String syncCursor;
+  final int cutoverSequence;
+  final bool hasMore;
+}
+
+abstract interface class SnapshotTransport {
+  Future<SnapshotPage> snapshot({String? cursor, int limit = 100});
+}
+
+/// An SSE hint ID resumes only the hint stream; it is never a sync cursor.
+class ChangeHint {
+  const ChangeHint({required this.resumeId, this.consistencyToken});
+  final String resumeId;
+  final String? consistencyToken;
+}
+
+abstract interface class ChangeHintTransport {
+  Stream<ChangeHint> watchChanges({String? lastEventId, String? cursor});
 }
 
 abstract interface class SyncTransport {
@@ -223,6 +305,15 @@ class SyncStatus {
   final Object? lastError;
 }
 
+class PendingWritesException implements Exception {
+  const PendingWritesException({required this.reason, this.operationId});
+  final String reason;
+  final String? operationId;
+  @override
+  String toString() =>
+      'PendingWritesException($reason${operationId == null ? '' : ', $operationId'})';
+}
+
 /// Deeply copied JSON prevents caller mutation after persistence or sending.
 Map<String, Object?> immutableJson(Map<String, Object?> value) {
   Object? freeze(Object? item) => switch (item) {
@@ -232,8 +323,20 @@ Map<String, Object?> immutableJson(Map<String, Object?> value) {
       ),
     ),
     List value => List<Object?>.unmodifiable(value.map(freeze)),
+    int value when value < -9007199254740991 || value > 9007199254740991 =>
+      throw const FormatException(
+        'JSON integers must fit the exact portable range ±(2^53−1).',
+      ),
+    double value
+        when !value.isFinite ||
+            (value.abs() > 9007199254740991 &&
+                value == value.truncateToDouble()) =>
+      throw const FormatException(
+        'JSON numbers must be finite and preserve portable integer precision.',
+      ),
     _ => item,
   };
-  final decoded = jsonDecode(jsonEncode(value)) as Map<String, dynamic>;
+  // Check raw numbers before serialization can change their representation.
+  final decoded = jsonDecode(jsonEncode(freeze(value))) as Map<String, dynamic>;
   return freeze(decoded) as Map<String, Object?>;
 }

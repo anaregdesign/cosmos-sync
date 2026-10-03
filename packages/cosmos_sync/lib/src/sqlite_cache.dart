@@ -4,14 +4,15 @@ import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'models.dart';
+import 'cache_store.dart';
 
 /// Native, synchronous SQLite storage. Use one client/writer per file.
 ///
-/// Pages and resume cursors commit in the same transaction. A process-level
-/// guard within one isolate and an advisory OS lock catch common duplicate opens.
+/// Pages and resume cursors commit in the same transaction. An isolate-local
+/// guard and an advisory OS lock catch common duplicate opens.
 /// Apps must enforce one isolate owner per file; POSIX locks are process-scoped.
 /// The file is unencrypted; the app must choose an app-private directory.
-class SqliteCache {
+class SqliteCache implements CacheStore {
   SqliteCache(String path) {
     var opened = false;
     if (path == ':memory:') {
@@ -113,63 +114,92 @@ class SqliteCache {
   RandomAccessFile? _lock;
   bool _closed = false;
 
+  @override
   SessionInfo? get session {
     final value = _metadata('session');
     return value == null
         ? null
-        : SessionInfo.fromJson((jsonDecode(value) as Map).cast());
+        : SessionInfo.fromJson(
+            (jsonDecode(value) as Map).cast(),
+            allowLegacy: true,
+          );
   }
 
+  @override
   bool get paused => _metadata('paused') == 'true';
+  @override
   String? get pauseReason => _metadata('pause_reason');
+  @override
   String? get cursor => _metadata('cursor');
+  @override
   String? get consistencyToken => _metadata('consistency_token');
+  @override
   bool get bootstrapIncomplete => _metadata('bootstrap_incomplete') == 'true';
+  @override
+  bool get journalBootstrap => _metadata('journal_bootstrap') == 'true';
+  @override
+  String? get snapshotCursor => _metadata('snapshot_cursor');
+  @override
+  int? get snapshotCutoverSequence =>
+      int.tryParse(_metadata('snapshot_cutover') ?? '');
 
   /// Binds an empty cache to a verified or explicitly provided offline scope.
+  @override
   void initialize(SessionInfo scope) {
     _transaction(() {
       _setMetadata('session', jsonEncode(scope.toJson()));
       _setMetadata('paused', 'false');
       _setMetadata('pause_reason', null);
       _setMetadata('bootstrap_incomplete', 'true');
+      _setMetadata('journal_bootstrap', 'false');
     });
   }
 
   /// Conservatively removes readable data, pending writes and cursors.
+  @override
   void purgeAndPause(String reason) {
     _transaction(() {
       _db.execute('DELETE FROM documents');
       _db.execute('DELETE FROM outbox');
       _setMetadata('cursor', null);
       _setMetadata('consistency_token', null);
+      _setMetadata('snapshot_cursor', null);
+      _setMetadata('snapshot_cutover', null);
       _setMetadata('paused', 'true');
       _setMetadata('pause_reason', reason);
+      _setMetadata('journal_bootstrap', 'false');
     });
   }
 
   /// Explicitly adopts a newly verified scope after a purge/pause.
+  @override
   void resumeFor(SessionInfo scope) {
     _transaction(() {
       _db.execute('DELETE FROM documents');
       _db.execute('DELETE FROM outbox');
       _setMetadata('cursor', null);
       _setMetadata('consistency_token', null);
+      _setMetadata('snapshot_cursor', null);
+      _setMetadata('snapshot_cutover', null);
       _setMetadata('session', jsonEncode(scope.toJson()));
       _setMetadata('paused', 'false');
       _setMetadata('pause_reason', null);
       _setMetadata('bootstrap_incomplete', 'true');
+      _setMetadata('journal_bootstrap', 'false');
     });
   }
 
+  @override
   List<PendingMutation> get pending => _db
       .select('SELECT * FROM outbox ORDER BY sequence')
       .map(_pendingFromRow)
       .toList(growable: false);
 
+  @override
   int get pendingCount =>
       _db.select('SELECT count(*) AS count FROM outbox').first['count'] as int;
 
+  @override
   DocumentSnapshot? get(String id) {
     final base = _db.select('SELECT * FROM documents WHERE id = ?', [id]);
     final overlays = _db.select(
@@ -191,6 +221,7 @@ class SqliteCache {
     );
   }
 
+  @override
   List<DocumentSnapshot> list({bool includeDeleted = false}) {
     final ids = _db.select('''
       SELECT id FROM documents UNION SELECT document_id AS id FROM outbox
@@ -202,6 +233,7 @@ class SqliteCache {
         .toList(growable: false);
   }
 
+  @override
   void enqueue({
     required String operationId,
     required String documentId,
@@ -235,6 +267,7 @@ class SqliteCache {
   }
 
   /// Returns only a document's first queued write, never following a conflict.
+  @override
   PendingMutation? nextReady(DateTime now) {
     final rows = _db.select(
       '''
@@ -253,6 +286,7 @@ class SqliteCache {
     return rows.isEmpty ? null : _pendingFromRow(rows.first);
   }
 
+  @override
   DateTime? get nextRetryAt {
     final rows = _db.select('''
       SELECT min(current.next_attempt_ms) AS next FROM outbox current
@@ -271,6 +305,7 @@ class SqliteCache {
   }
 
   /// Locks a request's exact baseVersion before any network transmission.
+  @override
   PendingMutation prepare(PendingMutation mutation) => _transaction(() {
     mutation = _findPending(mutation.operationId);
     if (mutation.predecessorOperationId != null) {
@@ -287,6 +322,7 @@ class SqliteCache {
     return _findPending(mutation.operationId);
   });
 
+  @override
   void acknowledge(
     PendingMutation mutation,
     ServerDocument document,
@@ -309,6 +345,7 @@ class SqliteCache {
     });
   }
 
+  @override
   void defer(PendingMutation mutation, DateTime until, String code) {
     _db.execute(
       '''
@@ -319,6 +356,7 @@ class SqliteCache {
     );
   }
 
+  @override
   void markConflict(PendingMutation mutation, ServerDocument? current) {
     if (current != null && current.id != mutation.documentId) {
       throw FormatException('Conflict reply has an unexpected document id.');
@@ -341,6 +379,7 @@ class SqliteCache {
     });
   }
 
+  @override
   void markRejected(PendingMutation mutation, String code) {
     _db.execute(
       "UPDATE outbox SET state = 'rejected', error_code = ?, next_attempt_ms = NULL WHERE operation_id = ?",
@@ -349,6 +388,7 @@ class SqliteCache {
   }
 
   /// Keeps its queue position but assigns a fresh replay identity and base.
+  @override
   void retryConflict(
     String operationId,
     String newOperationId, {
@@ -389,6 +429,7 @@ class SqliteCache {
     });
   }
 
+  @override
   void discard(String operationId) {
     final mutation = _findPending(operationId);
     if (mutation.baseVersion != null &&
@@ -407,6 +448,7 @@ class SqliteCache {
     });
   }
 
+  @override
   void applyPage(SyncPage page, String? token) {
     if (page.cursor.isEmpty) throw FormatException('Empty sync cursor.');
     _transaction(() {
@@ -415,20 +457,52 @@ class SqliteCache {
       }
       _setMetadata('cursor', page.cursor);
       _setMetadata('consistency_token', token);
-      if (!page.hasMore) _setMetadata('bootstrap_incomplete', 'false');
+      if (!page.hasMore) {
+        _setMetadata('bootstrap_incomplete', 'false');
+        _setMetadata('journal_bootstrap', 'false');
+      }
     });
   }
 
   /// Restarts retained-journal replay without rewriting already attempted writes.
-  void resetForResync() {
+  @override
+  void resetForResync({bool journalOnly = false}) {
     _transaction(() {
       _db.execute('DELETE FROM documents');
       _setMetadata('cursor', null);
       _setMetadata('consistency_token', null);
+      _setMetadata('snapshot_cursor', null);
+      _setMetadata('snapshot_cutover', null);
       _setMetadata('bootstrap_incomplete', 'true');
+      _setMetadata('journal_bootstrap', journalOnly ? 'true' : 'false');
     });
   }
 
+  @override
+  void applySnapshotPage(SnapshotPage page, String? token) {
+    if (snapshotCutoverSequence != null &&
+        snapshotCutoverSequence != page.cutoverSequence) {
+      throw FormatException('Snapshot cutover changed during bootstrap.');
+    }
+    _transaction(() {
+      for (final document in page.documents) {
+        _upsert(document);
+      }
+      _setMetadata('consistency_token', token);
+      _setMetadata('bootstrap_incomplete', page.hasMore ? 'true' : 'false');
+      _setMetadata('snapshot_cursor', page.hasMore ? page.cursor : null);
+      _setMetadata(
+        'snapshot_cutover',
+        page.hasMore ? '${page.cutoverSequence}' : null,
+      );
+      if (!page.hasMore) {
+        _setMetadata('cursor', page.syncCursor);
+        _setMetadata('journal_bootstrap', 'false');
+      }
+    });
+  }
+
+  @override
   void close() {
     if (_closed) return;
     _closed = true;

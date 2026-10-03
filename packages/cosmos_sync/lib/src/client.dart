@@ -3,27 +3,26 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'models.dart';
-import 'sqlite_cache.dart';
+import 'cache_store.dart';
+import 'cache_platform_stub.dart'
+    if (dart.library.io) 'cache_platform_native.dart'
+    if (dart.library.js_interop) 'cache_platform_web.dart'
+    as platform;
+import 'query.dart';
 
 /// Offline local document API with an explicitly triggered durable sync engine.
 ///
-/// Reads and writes are local and synchronous. Network operations are serialized,
+/// Reads are local and synchronous; writes complete after durable persistence.
+/// Network operations are serialized,
 /// while new local edits may continue during an in-flight request. Use a single
 /// instance per file, preferably in a dedicated isolate for larger workloads.
 class CosmosSyncClient {
   CosmosSyncClient._({
     required this.cache,
     required this.transport,
-    required SessionInfo session,
+    required this._session,
     DateTime Function()? clock,
-  }) : _session = session,
-       _clock = clock ?? (() => DateTime.now().toUtc()) {
-    final saved = cache.session;
-    if (saved == null) {
-      cache.initialize(session);
-    } else if (!saved.sameScope(session)) {
-      cache.purgeAndPause('scope_changed');
-    }
+  }) : _clock = clock ?? (() => DateTime.now().toUtc()) {
     _restoreConsistencyToken();
   }
 
@@ -33,27 +32,37 @@ class CosmosSyncClient {
   /// It must come from this BFF, not from decoded/unvalidated JWT claims. Every
   /// network operation still verifies the current server session before use.
   static Future<CosmosSyncClient> open({
-    required String path,
+    String? path,
+    CacheStore? cache,
     required SyncTransport transport,
     SessionInfo? session,
     DateTime Function()? clock,
   }) async {
-    final cache = SqliteCache(path);
+    if ((path == null) == (cache == null)) {
+      throw ArgumentError('Provide exactly one of path or an opened cache.');
+    }
+    final store = cache ?? await platform.openCache(path!);
     try {
-      final scope = session ?? cache.session ?? await transport.sessionInfo();
+      final scope = session ?? store.session ?? await transport.sessionInfo();
+      final saved = store.session;
+      if (saved == null) {
+        await store.initialize(scope);
+      } else if (!saved.sameScope(scope)) {
+        await store.purgeAndPause('scope_changed');
+      }
       return CosmosSyncClient._(
-        cache: cache,
+        cache: store,
         transport: transport,
         session: scope,
         clock: clock,
       );
     } catch (_) {
-      cache.close();
+      await store.close();
       rethrow;
     }
   }
 
-  final SqliteCache cache;
+  final CacheStore cache;
   final SyncTransport transport;
   SessionInfo _session;
   final DateTime Function() _clock;
@@ -65,38 +74,111 @@ class CosmosSyncClient {
   bool _pollBusy = false;
   DateTime? _pollNotBefore;
   int _pollFailures = 0;
+  StreamSubscription<ChangeHint>? _hintSubscription;
+  Timer? _hintReconnectTimer;
+  int _hintGeneration = 0;
+  int _hintFailures = 0;
+  String? _hintResumeId;
+  bool _hintSyncBusy = false;
+  bool _hintSyncAgain = false;
   bool _closed = false;
   bool _closing = false;
   bool _signingOut = false;
+  bool _transitioning = false;
+  String? _revocationReason;
   Future<void>? _signOutFuture;
   Object? _lastError;
+  final _pendingWaiters = <_PendingWritesWaiter>[];
 
   SessionInfo get session => _session;
   SyncStatus get status => SyncStatus(
-    paused: cache.paused,
-    reason: cache.pauseReason,
+    paused: cache.paused || _transitioning || _revocationReason != null,
+    reason: _revocationReason ?? cache.pauseReason,
     lastError: _lastError,
   );
-  List<PendingMutation> get pending => cache.pending;
+  List<PendingMutation> get pending =>
+      _revocationReason == null ? cache.pending : const [];
+
+  /// Waits for true server ACKs for the currently committed pending write set.
+  /// Later writes do not extend this waiter. Conflicts, discard, auth changes
+  /// and close fail it; local persistence alone never reports server success.
+  Future<void> waitForPendingWrites() {
+    _assertUsable();
+    final ids = cache.pending.map((mutation) => mutation.operationId).toSet();
+    if (ids.isEmpty) return Future<void>.value();
+    final waiter = _PendingWritesWaiter(ids);
+    _pendingWaiters.add(waiter);
+    _checkPendingWaiters();
+    return waiter.completer.future.whenComplete(
+      () => _pendingWaiters.remove(waiter),
+    );
+  }
 
   DocumentSnapshot? get(String id) {
     _assertOpen();
-    return cache.get(id);
+    return _revocationReason == null ? cache.get(id) : null;
   }
 
   List<DocumentSnapshot> list({bool includeDeleted = false}) {
     _assertOpen();
-    return cache.list(includeDeleted: includeDeleted);
+    return _revocationReason == null
+        ? cache.list(includeDeleted: includeDeleted)
+        : const [];
   }
+
+  /// Evaluates a deterministic query over this client's committed local view.
+  /// Cache completeness is tied to a durable cursor, never to current connectivity.
+  LocalQuerySnapshot query(LocalQuery query) {
+    _assertOpen();
+    return query.evaluate(
+      list(includeDeleted: true),
+      metadata: QueryCacheMetadata(
+        bootstrapComplete: !cache.bootstrapIncomplete,
+        cursor: cache.cursor,
+        paused: cache.paused || _transitioning || _signingOut,
+        scopeKey: jsonEncode([
+          _session.scopeId,
+          _session.principalId,
+          _session.permissionVersion,
+          _session.scopeMode.name,
+        ]),
+      ),
+    );
+  }
+
+  Stream<LocalQuerySnapshot> watchQuery(LocalQuery localQuery) =>
+      Stream.multi((controller) {
+        _assertOpen();
+        StreamSubscription<void>? subscription;
+        var invalidated = false;
+        void emit() {
+          if (invalidated) return;
+          try {
+            controller.add(query(localQuery));
+          } catch (error, stack) {
+            invalidated = true;
+            controller.addError(error, stack);
+            unawaited(subscription?.cancel());
+            controller.close();
+          }
+        }
+
+        subscription = _changes.stream.listen(
+          (_) => emit(),
+          onDone: controller.close,
+        );
+        controller.onCancel = subscription.cancel;
+        emit();
+      });
 
   /// Emits immediately, then after durable local writes, ACKs and sync pages.
   Stream<DocumentSnapshot?> watch(String id) => Stream.multi((controller) {
     _assertOpen();
     final subscription = _changes.stream.listen(
-      (_) => controller.add(cache.get(id)),
+      (_) => controller.add(get(id)),
       onDone: controller.close,
     );
-    controller.add(cache.get(id));
+    controller.add(get(id));
     controller.onCancel = subscription.cancel;
   });
 
@@ -104,10 +186,10 @@ class CosmosSyncClient {
       Stream.multi((controller) {
         _assertOpen();
         final subscription = _changes.stream.listen(
-          (_) => controller.add(cache.list(includeDeleted: includeDeleted)),
+          (_) => controller.add(list(includeDeleted: includeDeleted)),
           onDone: controller.close,
         );
-        controller.add(cache.list(includeDeleted: includeDeleted));
+        controller.add(list(includeDeleted: includeDeleted));
         controller.onCancel = subscription.cancel;
       });
 
@@ -122,56 +204,69 @@ class CosmosSyncClient {
   });
 
   /// Replaces a local document; returned replay ID identifies its pending write.
-  String put(String id, Map<String, Object?> data) {
+  Future<String> put(String id, Map<String, Object?> data) {
     _assertUsable();
     _validateId(id);
     final copied = _validateData(data);
     final operationId = _uuid();
-    cache.enqueue(
-      operationId: operationId,
-      documentId: id,
-      kind: MutationKind.put,
-      data: copied,
-    );
-    _notify();
-    return operationId;
+    return Future<void>.value(
+      cache.enqueue(
+        operationId: operationId,
+        documentId: id,
+        kind: MutationKind.put,
+        data: copied,
+      ),
+    ).then((_) {
+      _notify();
+      return operationId;
+    });
   }
 
   /// Creates a local tombstone, retained by the server when acknowledged.
-  String delete(String id) {
+  Future<String> delete(String id) {
     _assertUsable();
     _validateId(id);
     final operationId = _uuid();
-    cache.enqueue(
-      operationId: operationId,
-      documentId: id,
-      kind: MutationKind.delete,
-      data: null,
-    );
-    _notify();
-    return operationId;
+    return Future<void>.value(
+      cache.enqueue(
+        operationId: operationId,
+        documentId: id,
+        kind: MutationKind.delete,
+        data: null,
+      ),
+    ).then((_) {
+      _notify();
+      return operationId;
+    });
   }
 
   /// Retries a known conflict as a new mutation, optionally with merged data.
   /// Later queued edits to that document retain their existing queue positions.
-  String retryConflict(String operationId, {Map<String, Object?>? data}) {
+  Future<String> retryConflict(
+    String operationId, {
+    Map<String, Object?>? data,
+  }) {
     _assertUsable();
     final newId = _uuid();
-    cache.retryConflict(
-      operationId,
-      newId,
-      replacementData: data == null ? null : _validateData(data),
-    );
-    _notify();
-    return newId;
+    return Future<void>.value(
+      cache.retryConflict(
+        operationId,
+        newId,
+        replacementData: data == null ? null : _validateData(data),
+      ),
+    ).then((_) {
+      _notify();
+      return newId;
+    });
   }
 
   /// Discards an unattempted/rejected/conflicted write. Unknown in-flight outcomes
   /// must be retried with their original ID to discover whether they committed.
-  void discard(String operationId) {
+  Future<void> discard(String operationId) {
     _assertUsable();
-    cache.discard(operationId);
-    _notify();
+    return Future<void>.value(
+      cache.discard(operationId),
+    ).then((_) => _notify());
   }
 
   /// Sends ready writes serially. Retryable failures retain the exact request
@@ -193,10 +288,10 @@ class CosmosSyncClient {
     var acknowledged = 0;
     var restarted = false;
     for (var index = 0; index < maxOperations; index++) {
-      if (_signingOut) break;
+      if (_signingOut || _transitioning) break;
       final ready = cache.nextReady(_clock());
       if (ready == null) break;
-      final mutation = cache.prepare(ready);
+      final mutation = await cache.prepare(ready);
       try {
         final document = await transport.mutate(mutation.request);
         if (document.version <= mutation.baseVersion!) {
@@ -205,24 +300,27 @@ class CosmosSyncClient {
             message: 'Mutation response did not advance the requested version.',
           );
         }
-        cache.acknowledge(mutation, document, _consistencyToken);
+        await cache.acknowledge(mutation, document, _consistencyToken);
+        for (final waiter in _pendingWaiters) {
+          waiter.remaining.remove(mutation.operationId);
+        }
         acknowledged++;
         _lastError = null;
         _notify();
       } on TransportException catch (error) {
         _lastError = error;
         if (error.authorizationFailure) {
-          _purgeAndPause(error.code);
+          await _purgeAndPause(error.code);
           rethrow;
         }
         if (error.statusCode == 409 && error.code == 'conflict') {
-          cache.markConflict(mutation, error.current);
+          await cache.markConflict(mutation, error.current);
           _notify();
           continue;
         }
         if (error.statusCode == 410 && error.code == 'resync_required') {
           if (restarted) rethrow;
-          cache.resetForResync();
+          await cache.resetForResync();
           _setConsistencyToken(null);
           restarted = true;
           _notify();
@@ -243,11 +341,11 @@ class CosmosSyncClient {
           final delay = error.retryAfter == null || error.retryAfter! < backoff
               ? backoff
               : error.retryAfter!;
-          cache.defer(mutation, _clock().add(delay), error.code);
+          await cache.defer(mutation, _clock().add(delay), error.code);
           _notify();
           break;
         }
-        cache.markRejected(mutation, error.code);
+        await cache.markRejected(mutation, error.code);
         _notify();
       }
     }
@@ -275,14 +373,29 @@ class CosmosSyncClient {
   Future<int> _syncPages({required int pageSize, required int maxPages}) async {
     var count = 0;
     var restarted = false;
+    var snapshotFallback = cache.journalBootstrap;
     for (var index = 0; index < maxPages; index++) {
-      if (_signingOut) break;
+      if (_signingOut || _transitioning) break;
       try {
+        final value = transport;
+        if (cache.bootstrapIncomplete &&
+            value is SnapshotTransport &&
+            !snapshotFallback) {
+          final page = await (value as SnapshotTransport).snapshot(
+            cursor: cache.snapshotCursor,
+            limit: pageSize,
+          );
+          await cache.applySnapshotPage(page, _consistencyToken);
+          count += page.documents.length;
+          _lastError = null;
+          _notify();
+          continue;
+        }
         final page = await transport.sync(
           cursor: cache.cursor,
           limit: pageSize,
         );
-        cache.applyPage(page, _consistencyToken);
+        await cache.applyPage(page, _consistencyToken);
         count += page.changes.length;
         _lastError = null;
         _notify();
@@ -290,15 +403,26 @@ class CosmosSyncClient {
       } on TransportException catch (error) {
         _lastError = error;
         if (error.authorizationFailure) {
-          _purgeAndPause(error.code);
+          await _purgeAndPause(error.code);
           rethrow;
+        }
+        if (error.statusCode == 413 &&
+            error.code == 'snapshot_limit_exceeded' &&
+            !snapshotFallback) {
+          await cache.resetForResync(journalOnly: true);
+          _setConsistencyToken(null);
+          snapshotFallback = true;
+          _notify();
+          index--;
+          continue;
         }
         if (error.statusCode == 410 &&
             error.code == 'resync_required' &&
             !restarted) {
-          cache.resetForResync();
+          await cache.resetForResync();
           _setConsistencyToken(null);
           restarted = true;
+          snapshotFallback = false;
           _notify();
           // Recovery itself does not consume the page budget.
           index--;
@@ -315,16 +439,20 @@ class CosmosSyncClient {
   /// Any data still associated with the prior session is conservatively cleared.
   Future<void> resume() => _serialize(() async {
     _assertOpen();
+    _transitioning = true;
+    stopWatching();
     try {
       final verified = await transport.sessionInfo();
-      cache.resumeFor(verified);
+      await cache.resumeFor(verified);
       _session = verified;
       _lastError = null;
       _setConsistencyToken(null);
       _notify();
     } on TransportException catch (error) {
-      if (error.authorizationFailure) _purgeAndPause(error.code);
+      if (error.authorizationFailure) await _purgeAndPause(error.code);
       rethrow;
+    } finally {
+      _transitioning = false;
     }
   });
 
@@ -334,7 +462,8 @@ class CosmosSyncClient {
     _assertOpen();
     if (_signOutFuture != null) return _signOutFuture!;
     _signingOut = true;
-    stopPolling();
+    _failPendingWaiters('signed_out');
+    stopWatching();
     final next = _networkTail.then((_) => _purgeAndPause('signed_out'));
     _networkTail = next.then<void>(
       (_) {},
@@ -393,16 +522,166 @@ class CosmosSyncClient {
     _pollTimer = null;
   }
 
+  /// Listens for non-authoritative change hints, with durable-cursor polling as
+  /// fallback. Hint resume IDs are kept only for this lifecycle and never become
+  /// cache cursors. A transport without SSE capability simply uses polling.
+  void startWatching({Duration pollingInterval = const Duration(seconds: 15)}) {
+    _assertUsable();
+    stopWatching();
+    startPolling(interval: pollingInterval);
+    if (transport is ChangeHintTransport) {
+      unawaited(_connectHintStream(_hintGeneration));
+    }
+  }
+
+  void stopWatching() {
+    _hintGeneration++;
+    _hintReconnectTimer?.cancel();
+    _hintReconnectTimer = null;
+    final subscription = _hintSubscription;
+    _hintSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+    _hintResumeId = null;
+    _hintFailures = 0;
+    _hintSyncAgain = false;
+    stopPolling();
+  }
+
+  Future<void> _connectHintStream(int generation) async {
+    if (_closing || _closed || generation != _hintGeneration || cache.paused) {
+      return;
+    }
+    try {
+      await _serialize(() async {
+        _assertUsable();
+        await _verifySession();
+      });
+      if (_closing || generation != _hintGeneration || cache.paused) return;
+      final capability = transport as ChangeHintTransport;
+      _hintSubscription = capability
+          .watchChanges(lastEventId: _hintResumeId, cursor: cache.cursor)
+          .listen(
+            (hint) {
+              if (generation != _hintGeneration) return;
+              _hintResumeId = hint.resumeId;
+              _hintFailures = 0;
+              _requestHintSync(generation);
+            },
+            onError: (Object error, StackTrace stack) {
+              _handleHintError(error, generation);
+            },
+            onDone: () => _scheduleHintReconnect(generation),
+            cancelOnError: true,
+          );
+    } catch (error) {
+      _handleHintError(error, generation);
+    }
+  }
+
+  void _handleHintError(Object error, int generation) {
+    if (_closed || _closing || generation != _hintGeneration) return;
+    _lastError = error;
+    if (error is TransportException && error.authorizationFailure) {
+      // Learn revocation immediately; purge waits for the in-flight response so
+      // an ACK cannot subsequently repopulate storage. Visible client data is
+      // hidden throughout that wait, and no later request may be started.
+      _transitioning = true;
+      _revocationReason = error.code;
+      _failPendingWaiters('authorization_changed');
+      stopWatching();
+      _notify();
+      final purge = _networkTail.then((_) => _purgeAndPause(error.code));
+      _networkTail = purge.then<void>(
+        (_) {},
+        onError: (Object failure, StackTrace stack) {
+          _lastError = failure;
+          if (!_closed) _notifyStatus();
+        },
+      );
+      return;
+    }
+    _notifyStatus();
+    if (error is TransportException && error.statusCode == 410) {
+      _hintResumeId = null;
+      _requestHintSync(generation);
+    }
+    _scheduleHintReconnect(
+      generation,
+      retryAfter: error is TransportException ? error.retryAfter : null,
+    );
+  }
+
+  void _scheduleHintReconnect(int generation, {Duration? retryAfter}) {
+    if (_closed ||
+        _closing ||
+        generation != _hintGeneration ||
+        cache.paused ||
+        _hintReconnectTimer != null) {
+      return;
+    }
+    var delay = Duration(seconds: 1 << min(_hintFailures++, 8));
+    if (retryAfter != null && retryAfter > delay) delay = retryAfter;
+    _hintReconnectTimer = Timer(delay, () {
+      _hintReconnectTimer = null;
+      unawaited(_connectHintStream(generation));
+    });
+  }
+
+  void _requestHintSync(int generation) {
+    if (_hintSyncBusy) {
+      _hintSyncAgain = true;
+      return;
+    }
+    _hintSyncBusy = true;
+    unawaited(() async {
+      try {
+        do {
+          _hintSyncAgain = false;
+          if (_closed ||
+              _closing ||
+              generation != _hintGeneration ||
+              cache.paused) {
+            break;
+          }
+          await sync();
+          if (_closed ||
+              _closing ||
+              generation != _hintGeneration ||
+              cache.paused) {
+            break;
+          }
+          await flush();
+        } while (_hintSyncAgain);
+      } catch (error) {
+        _lastError = error;
+        if (!_closed) _notifyStatus();
+      } finally {
+        _hintSyncBusy = false;
+        // A restarted watcher may have received a new hint while the previous
+        // generation was still finishing its request. Transfer that wakeup.
+        if (_hintSyncAgain &&
+            generation != _hintGeneration &&
+            _pollTimer != null &&
+            !_closed &&
+            !_closing &&
+            !cache.paused) {
+          _requestHintSync(_hintGeneration);
+        }
+      }
+    }());
+  }
+
   /// Waits for an in-flight operation before closing storage and transport.
   Future<void> close() async {
     if (_closed || _closing) return;
     _closing = true;
-    stopPolling();
+    _failPendingWaiters('closed');
+    stopWatching();
     await _networkTail;
     _closed = true;
     await _changes.close();
     await _statuses.close();
-    cache.close();
+    await cache.close();
     transport.close();
   }
 
@@ -410,23 +689,32 @@ class CosmosSyncClient {
     try {
       final actual = await transport.sessionInfo();
       if (!_session.sameScope(actual)) {
-        _purgeAndPause('scope_changed');
+        await _purgeAndPause('scope_changed');
         throw StateError(
           'Authorization scope changed. Cache purged; call resume() explicitly.',
         );
       }
       _restoreConsistencyToken();
     } on TransportException catch (error) {
-      if (error.authorizationFailure) _purgeAndPause(error.code);
+      if (error.authorizationFailure) await _purgeAndPause(error.code);
       rethrow;
     }
   }
 
-  void _purgeAndPause(String reason) {
-    cache.purgeAndPause(reason);
-    _setConsistencyToken(null);
-    stopPolling();
+  Future<void> _purgeAndPause(String reason) async {
+    _transitioning = true;
+    _revocationReason = reason;
+    _failPendingWaiters('authorization_changed');
+    stopWatching();
     _notify();
+    try {
+      await cache.purgeAndPause(reason);
+      _setConsistencyToken(null);
+      _revocationReason = null;
+      _notify();
+    } finally {
+      _transitioning = false;
+    }
   }
 
   String? get _consistencyToken {
@@ -449,6 +737,9 @@ class CosmosSyncClient {
   Future<T> _serialize<T>(Future<T> Function() action) {
     _assertOpen();
     if (_signingOut) throw StateError('Sign-out is in progress.');
+    if (_transitioning) {
+      throw StateError('Authorization transition is in progress.');
+    }
     final next = _networkTail.then((_) => action());
     _networkTail = next.then<void>(
       (_) {},
@@ -461,12 +752,47 @@ class CosmosSyncClient {
   }
 
   void _notify() {
+    _checkPendingWaiters();
     if (!_closed) _changes.add(null);
     _notifyStatus();
   }
 
   void _notifyStatus() {
     if (!_closed) _statuses.add(status);
+  }
+
+  void _checkPendingWaiters() {
+    if (_pendingWaiters.isEmpty || _closed) return;
+    final pendingById = {
+      for (final mutation in cache.pending) mutation.operationId: mutation,
+    };
+    for (final waiter in _pendingWaiters) {
+      if (waiter.completer.isCompleted) continue;
+      if (waiter.remaining.isEmpty) {
+        waiter.completer.complete();
+        continue;
+      }
+      for (final id in waiter.remaining) {
+        final mutation = pendingById[id];
+        if (mutation == null || mutation.state != MutationState.queued) {
+          waiter.completer.completeError(
+            PendingWritesException(
+              reason: mutation?.state.name ?? 'discarded',
+              operationId: id,
+            ),
+          );
+          break;
+        }
+      }
+    }
+  }
+
+  void _failPendingWaiters(String reason) {
+    for (final waiter in _pendingWaiters) {
+      if (!waiter.completer.isCompleted) {
+        waiter.completer.completeError(PendingWritesException(reason: reason));
+      }
+    }
   }
 
   void _assertOpen() {
@@ -476,7 +802,10 @@ class CosmosSyncClient {
   void _assertUsable() {
     _assertOpen();
     if (_signingOut) throw StateError('Sign-out is in progress.');
-    if (cache.paused) {
+    if (_transitioning) {
+      throw StateError('Authorization transition is in progress.');
+    }
+    if (cache.paused || _revocationReason != null) {
       throw StateError(
         'Synchronization is paused: ${cache.pauseReason}. Call resume() after signing in.',
       );
@@ -513,4 +842,10 @@ class CosmosSyncClient {
         .join();
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
+}
+
+class _PendingWritesWaiter {
+  _PendingWritesWaiter(this.remaining);
+  final Set<String> remaining;
+  final completer = Completer<void>();
 }

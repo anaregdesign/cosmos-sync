@@ -1,3 +1,6 @@
+@TestOn('vm')
+library;
+
 import 'dart:io';
 
 import 'package:cosmos_sync/cosmos_sync.dart';
@@ -13,7 +16,11 @@ void main() {
     path = '${directory.path}/cache.sqlite';
     cache = SqliteCache(path);
     cache.initialize(
-      const SessionInfo(scopeId: 'scope', permissionVersion: '1'),
+      const SessionInfo(
+        principalId: 'principal',
+        scopeId: 'scope',
+        permissionVersion: '1',
+      ),
     );
   });
   tearDown(() {

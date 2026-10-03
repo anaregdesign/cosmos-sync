@@ -1,11 +1,19 @@
+@TestOn('vm')
+library;
+
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:test/test.dart';
 
-const scope = SessionInfo(scopeId: 'alice-tenant', permissionVersion: '1');
+import '../support/testing_transport.dart' show TestServer, TestTransport;
+
+const scope = SessionInfo(
+  principalId: 'principal',
+  scopeId: 'alice-tenant',
+  permissionVersion: '1',
+);
 
 void main() {
   late Directory directory;
@@ -50,7 +58,7 @@ void main() {
         'title': 'offline',
         'nested': <Object?>['kept'],
       };
-      final operationId = client.put('note', data);
+      final operationId = await client.put('note', data);
       data['title'] = 'caller changed it';
       (data['nested'] as List)[0] = 'changed';
       expect(client.get('note')!.data, {
@@ -76,7 +84,7 @@ void main() {
     final values = <DocumentSnapshot?>[];
     final subscription = client.watch('note').listen(values.add);
     await Future<void>.delayed(Duration.zero);
-    client.put('note', {'title': 'hello'});
+    await client.put('note', {'title': 'hello'});
     await client.flush();
     await Future<void>.delayed(Duration.zero);
     expect(values.first, isNull);
@@ -94,10 +102,10 @@ void main() {
         await release.future;
       };
     final client = await open(transport: transport);
-    client.put('note', {'text': 'first'});
+    await client.put('note', {'text': 'first'});
     final flushing = client.flush(maxOperations: 1);
     await entered.future;
-    client.put('note', {'text': 'second'});
+    await client.put('note', {'text': 'second'});
     release.complete();
     await flushing;
     expect(client.get('note')!.data!['text'], 'second');
@@ -121,8 +129,8 @@ void main() {
           await release.future;
         };
       final client = await open(transport: transport);
-      client.put('note', {'text': 'in flight'});
-      client.put('later', {'text': 'must not send after logout'});
+      await client.put('note', {'text': 'in flight'});
+      await client.put('later', {'text': 'must not send after logout'});
       final flushing = client.flush();
       await entered.future;
       final signingOut = client.signOut();
@@ -149,7 +157,7 @@ void main() {
     () async {
       final transport = TestTransport(server)..loseNextAcknowledgement = true;
       var client = await open(transport: transport);
-      final operationId = client.put('note', {'text': 'once'});
+      final operationId = await client.put('note', {'text': 'once'});
       final first = await client.flush();
       expect(first.remaining, 1);
       expect(client.pending.single.baseVersion, 0);
@@ -176,8 +184,8 @@ void main() {
       final transport = TestTransport(server);
       final client = await open(transport: transport);
       await client.sync();
-      final conflictedId = client.put('note', {'text': 'mine'});
-      client.put('note', {'text': 'later'});
+      final conflictedId = await client.put('note', {'text': 'mine'});
+      await client.put('note', {'text': 'later'});
       server.externalPut('note', {'text': 'remote'});
       final result = await client.flush();
       expect(result.acknowledged, 0);
@@ -185,7 +193,7 @@ void main() {
       expect(client.pending.first.state, MutationState.conflict);
       expect(client.get('note')!.hasConflict, isTrue);
       expect(client.get('note')!.data!['text'], 'later');
-      final freshId = client.retryConflict(
+      final freshId = await client.retryConflict(
         conflictedId,
         data: {'text': 'merged'},
       );
@@ -206,13 +214,13 @@ void main() {
       server.externalPut('note', {'text': 'base'});
       final client = await open();
       await client.sync();
-      final operationId = client.put('note', {'text': 'mine'});
+      final operationId = await client.put('note', {'text': 'mine'});
       server.externalPut('note', {'text': 'remote'});
       await client.flush();
-      client.discard(operationId);
+      await client.discard(operationId);
       expect(client.get('note')!.data!['text'], 'remote');
       expect(client.get('note')!.hasPendingWrites, isFalse);
-      client.put('note', {'text': 'after'});
+      await client.put('note', {'text': 'after'});
       await client.flush();
       expect(server.documents['note']!.data!['text'], 'after');
     },
@@ -224,10 +232,10 @@ void main() {
       server.externalPut('note', {'text': 'base'});
       var client = await open();
       await client.sync();
-      final id = client.delete('note');
+      final id = await client.delete('note');
       server.externalPut('note', {'text': 'new'});
       await client.flush();
-      client.retryConflict(id);
+      await client.retryConflict(id);
       await client.close();
       client = await open();
       expect(client.pending.single.data, isNull);
@@ -241,8 +249,9 @@ void main() {
     () async {
       final transport = TestTransport(server);
       var client = await open(transport: transport);
-      client.put('private', {'secret': 'alice'});
+      await client.put('private', {'secret': 'alice'});
       server.session = const SessionInfo(
+        principalId: 'principal',
         scopeId: 'alice-tenant',
         permissionVersion: '2',
       );
@@ -276,7 +285,7 @@ void main() {
           session: scope,
         );
         clients.add(client);
-        client.put('private', {'secret': 'data'});
+        await client.put('private', {'secret': 'data'});
         if (code == 401) {
           transport.sessionFailure = TransportException(
             statusCode: code,
@@ -307,7 +316,7 @@ void main() {
         retryAfter: Duration(seconds: 20),
       );
     var client = await open(transport: transport);
-    final id = client.put('note', {'text': 'retry'});
+    final id = await client.put('note', {'text': 'retry'});
     final first = await client.flush();
     expect(first.retryAt, now.add(const Duration(seconds: 20)));
     expect(client.pending.single.attempts, 1);
@@ -332,7 +341,7 @@ void main() {
           message: 'retry',
         );
       final client = await open(transport: transport);
-      final id = client.put('note', {'text': 'keep'});
+      final id = await client.put('note', {'text': 'keep'});
       await client.flush();
       expect(client.pending.single.state, MutationState.queued);
       now = now.add(const Duration(minutes: 1));
@@ -344,7 +353,7 @@ void main() {
       await client.flush();
       expect(client.pending.single.state, MutationState.rejected);
       expect(client.pending.single.errorCode, 'invalid_request');
-      client.discard(id);
+      await client.discard(id);
       expect(client.get('note'), isNull);
     },
   );
@@ -367,7 +376,7 @@ void main() {
       expect(client.get('note')!.deleted, isTrue);
       expect(client.list(), isEmpty);
       expect(client.list(includeDeleted: true), hasLength(1));
-      client.put('note', {'text': 'recreated'});
+      await client.put('note', {'text': 'recreated'});
       await client.flush();
       expect(resumed.requests.single.baseVersion, 2);
       expect(client.get('note')!.deleted, isFalse);
@@ -378,7 +387,7 @@ void main() {
     'older replay ACK and sync pages cannot replace a newer confirmed version',
     () async {
       final client = await open();
-      client.cache.applyPage(
+      await client.cache.applyPage(
         SyncPage(
           changes: [
             ServerDocument(
@@ -393,7 +402,7 @@ void main() {
         ),
         'token-new',
       );
-      client.cache.applyPage(
+      await client.cache.applyPage(
         SyncPage(
           changes: [
             ServerDocument(
@@ -420,7 +429,7 @@ void main() {
       final transport = TestTransport(server);
       final client = await open(transport: transport);
       await client.sync();
-      client.put('note', {'text': 'local'});
+      await client.put('note', {'text': 'local'});
       final before = client.pending.single;
       transport.syncFailure = const TransportException(
         statusCode: 410,
@@ -447,7 +456,7 @@ void main() {
           message: 'rotated',
         );
       final client = await open(transport: transport);
-      final id = client.put('note', {'text': 'exact'});
+      final id = await client.put('note', {'text': 'exact'});
       await client.flush();
       expect(transport.requests, hasLength(2));
       expect(transport.requests.map((request) => request.operationId), [
@@ -468,7 +477,7 @@ void main() {
       final client = await open(transport: transport);
       await client.sync(pageSize: 1, maxPages: 1);
       expect(client.cache.bootstrapIncomplete, isTrue);
-      client.put('c', {'text': 'c'});
+      await client.put('c', {'text': 'c'});
       await client
           .flush(); // Flush completes the remaining bootstrap before sending.
       expect(transport.cursors, [null, '1']);
@@ -484,7 +493,7 @@ void main() {
       final transport = TestTransport(server);
       final client = await open(transport: transport);
       await client.sync();
-      client.put('note', {'text': 'from-v1'});
+      await client.put('note', {'text': 'from-v1'});
       expect(client.pending.single.observedVersion, 1);
       server.externalPut('note', {'text': 'remote-v2'});
       await client.sync();
@@ -502,8 +511,8 @@ void main() {
       final transport = TestTransport(server)..loseNextAcknowledgement = true;
       final client = await open(transport: transport);
       await client.sync();
-      final firstId = client.put('note', {'text': 'first'});
-      client.put('note', {'text': 'second'});
+      final firstId = await client.put('note', {'text': 'first'});
+      await client.put('note', {'text': 'second'});
       expect(client.pending.last.predecessorOperationId, firstId);
       await client
           .flush(); // First committed as version 2, but its ACK was lost.
@@ -529,7 +538,7 @@ void main() {
       server.externalPut('note', {'text': 'remote'});
       final transport = TestTransport(server);
       final client = await open(transport: transport);
-      client.put('note', {'text': 'unseen-local'});
+      await client.put('note', {'text': 'unseen-local'});
       await client.flush();
       expect(transport.requests.single.baseVersion, 0);
       expect(client.pending.single.state, MutationState.conflict);
@@ -574,7 +583,7 @@ void main() {
     () async {
       final transport = TestTransport(server);
       var client = await open(transport: transport);
-      client.put('note', {'text': 'one'});
+      await client.put('note', {'text': 'one'});
       await client.flush();
       expect(client.cache.consistencyToken, 'token-1');
       await client.close();
@@ -616,7 +625,7 @@ void main() {
         () => client.put('large', {'text': 'a' * (255 * 1024)}),
         throwsArgumentError,
       );
-      client.put('note', {
+      await client.put('note', {
         'nested': <Object?>['read-only'],
       });
       expect(
@@ -629,131 +638,4 @@ void main() {
       );
     },
   );
-}
-
-class TestServer {
-  SessionInfo session = scope;
-  int sequence = 0;
-  final documents = <String, ServerDocument>{};
-  final journal = <ServerDocument>[];
-  final receipts = <String, (String, ServerDocument)>{};
-
-  ServerDocument apply(MutationRequest request) {
-    final json = jsonEncode(request.toJson());
-    final receipt = receipts[request.operationId];
-    if (receipt != null) {
-      if (receipt.$1 != json) {
-        throw const TransportException(
-          statusCode: 409,
-          code: 'idempotency_mismatch',
-          message: 'different request',
-        );
-      }
-      return receipt.$2;
-    }
-    final current = documents[request.documentId];
-    if (request.baseVersion != (current?.version ?? 0)) {
-      throw TransportException(
-        statusCode: 409,
-        code: 'conflict',
-        message: 'stale',
-        current: current,
-      );
-    }
-    final document = ServerDocument(
-      id: request.documentId,
-      data: request.data,
-      version: ++sequence,
-      deleted: request.kind == MutationKind.delete,
-    );
-    documents[document.id] = document;
-    journal.add(document);
-    receipts[request.operationId] = (json, document);
-    return document;
-  }
-
-  void externalPut(String id, Map<String, Object?> data) {
-    final document = ServerDocument(
-      id: id,
-      data: data,
-      version: ++sequence,
-      deleted: false,
-    );
-    documents[id] = document;
-    journal.add(document);
-  }
-
-  void externalDelete(String id) {
-    final document = ServerDocument(
-      id: id,
-      data: null,
-      version: ++sequence,
-      deleted: true,
-    );
-    documents[id] = document;
-    journal.add(document);
-  }
-}
-
-class TestTransport implements SyncTransport, ConsistencyTokenTransport {
-  TestTransport(this.server);
-  final TestServer server;
-  final requests = <MutationRequest>[];
-  final cursors = <String?>[];
-  Future<void> Function(MutationRequest request)? beforeMutation;
-  TransportException? sessionFailure;
-  TransportException? mutationFailure;
-  TransportException? syncFailure;
-  bool loseNextAcknowledgement = false;
-  @override
-  String? consistencyToken;
-
-  @override
-  Future<SessionInfo> sessionInfo() async {
-    final error = sessionFailure;
-    if (error != null) throw error;
-    return server.session;
-  }
-
-  @override
-  Future<ServerDocument> mutate(MutationRequest request) async {
-    requests.add(request);
-    await beforeMutation?.call(request);
-    final error = mutationFailure;
-    mutationFailure = null;
-    if (error != null) throw error;
-    final document = server.apply(request);
-    consistencyToken = 'token-${server.sequence}';
-    if (loseNextAcknowledgement) {
-      loseNextAcknowledgement = false;
-      throw const TransportException(
-        code: 'network_error',
-        message: 'lost ACK',
-      );
-    }
-    return document;
-  }
-
-  @override
-  Future<SyncPage> sync({String? cursor, int limit = 100}) async {
-    cursors.add(cursor);
-    final error = syncFailure;
-    syncFailure = null;
-    if (error != null) throw error;
-    final after = cursor == null ? 0 : int.parse(cursor);
-    final changes = server.journal
-        .where((document) => document.version > after)
-        .take(limit)
-        .toList();
-    final next = changes.isEmpty ? after : changes.last.version;
-    consistencyToken = 'token-${server.sequence}';
-    return SyncPage(
-      changes: changes,
-      cursor: '$next',
-      hasMore: next < server.sequence,
-    );
-  }
-
-  @override
-  void close() {}
 }
