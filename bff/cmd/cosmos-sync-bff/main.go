@@ -29,6 +29,7 @@ func main() {
 	if value := os.Getenv("COSMOS_SYNC_CURSOR_KEY_BASE64"); value != "" {
 		cfg.CursorKeyBase64 = value
 	}
+	cfg.MetricsToken = os.Getenv("COSMOS_SYNC_METRICS_TOKEN")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	verifier, err := syncbff.NewOIDCVerifier(ctx, cfg.OIDC)

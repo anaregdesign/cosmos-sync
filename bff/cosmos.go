@@ -29,14 +29,16 @@ type CosmosConfig struct {
 type CosmosStore struct {
 	container *azcosmos.ContainerClient
 	client    *azcosmos.Client
+	retention retentionControls
 }
 type storedItem struct {
-	ID          string    `json:"id"`
-	ScopeID     string    `json:"scopeId"`
-	Kind        string    `json:"kind"`
-	Sequence    int64     `json:"sequence,omitempty"`
-	Document    *Document `json:"document,omitempty"`
-	RequestHash string    `json:"requestHash,omitempty"`
+	ID                     string    `json:"id"`
+	ScopeID                string    `json:"scopeId"`
+	Kind                   string    `json:"kind"`
+	Sequence               int64     `json:"sequence,omitempty"`
+	Document               *Document `json:"document,omitempty"`
+	RequestHash            string    `json:"requestHash,omitempty"`
+	EstimatedRetainedBytes int64     `json:"estimatedRetainedBytes,omitempty"`
 }
 
 func NewCosmosStore(ctx context.Context, c CosmosConfig) (*CosmosStore, error) {
@@ -128,14 +130,14 @@ func (accountGuard) Do(request *policy.Request) (*http.Response, error) {
 	}
 	response.Body = io.NopCloser(bytes.NewReader(body))
 	var account struct {
-		MultipleWrites bool              `json:"enableMultipleWriteLocations"`
+		MultipleWrites *bool             `json:"enableMultipleWriteLocations"`
 		Writes         []json.RawMessage `json:"writableLocations"`
 		Consistency    struct {
 			Level string `json:"defaultConsistencyLevel"`
 		} `json:"userConsistencyPolicy"`
 	}
-	if json.Unmarshal(body, &account) != nil || account.MultipleWrites || len(account.Writes) != 1 {
-		return nil, fmt.Errorf("Cosmos Sync requires exactly one write region")
+	if json.Unmarshal(body, &account) != nil || account.MultipleWrites == nil || *account.MultipleWrites || len(account.Writes) == 0 {
+		return nil, fmt.Errorf("Cosmos Sync requires explicit single-write mode and writable account metadata")
 	}
 	if account.Consistency.Level != "Session" && account.Consistency.Level != "Strong" && account.Consistency.Level != "BoundedStaleness" {
 		return nil, fmt.Errorf("Cosmos Sync requires Session or stronger account consistency")
@@ -143,6 +145,9 @@ func (accountGuard) Do(request *policy.Request) (*http.Response, error) {
 	return response, nil
 }
 func (s *CosmosStore) Close() { s.client.Close() }
+func (s *CosmosStore) ConfigureRetention(options RetentionOptions) error {
+	return s.retention.configure(options)
+}
 
 func (s *CosmosStore) read(ctx context.Context, scope, id, session string) (*storedItem, azcore.ETag, string, error) {
 	response, err := s.container.ReadItem(ctx, azcosmos.NewPartitionKeyString(scope), id, &azcosmos.ItemOptions{SessionToken: stringPointer(session), ConsistencyLevel: azcosmos.ConsistencyLevelSession.ToPtr()})
@@ -166,8 +171,9 @@ func (s *CosmosStore) read(ctx context.Context, scope, id, session string) (*sto
 
 func (s *CosmosStore) Mutate(ctx context.Context, scope string, m Mutation, hash, session string) (Document, string, error) {
 	pk := azcosmos.NewPartitionKeyString(scope)
+	receiptID := "r:" + mutationReceiptKey(m)
 	for attempt := 0; attempt < 12; attempt++ {
-		receipt, _, token, err := s.read(ctx, scope, "r:"+m.OperationID, session)
+		receipt, _, token, err := s.read(ctx, scope, receiptID, session)
 		session = token
 		if err != nil {
 			return Document{}, session, err
@@ -205,7 +211,7 @@ func (s *CosmosStore) Mutate(ctx context.Context, scope string, m Mutation, hash
 		if base != m.BaseVersion {
 			// The receipt404 and document read are not one snapshot. An overlapping
 			// retry may have committed this very operation while these reads ran.
-			replay, _, token, err := s.read(ctx, scope, "r:"+m.OperationID, session)
+			replay, _, token, err := s.read(ctx, scope, receiptID, session)
 			session = token
 			if err != nil {
 				return Document{}, session, err
@@ -230,10 +236,21 @@ func (s *CosmosStore) Mutate(ctx context.Context, scope string, m Mutation, hash
 		}
 		sequence++
 		document := Document{ID: m.DocumentID, Data: m.Data, Version: sequence, Deleted: m.Kind == "delete"}
-		headBody, _ := encodeJSON(storedItem{ID: "head", ScopeID: scope, Kind: "head", Sequence: sequence})
+		var retainedBytes int64
+		if head != nil {
+			retainedBytes = head.EstimatedRetainedBytes
+			if retainedBytes == 0 && head.Sequence > 0 {
+				retainedBytes = legacyRetainedEstimate(head.Sequence)
+			}
+		}
+		addition := retainedEstimate(document)
+		if !s.retention.allows(sequence-1, retainedBytes, addition) {
+			return Document{}, session, capacityError()
+		}
+		headBody, _ := encodeJSON(storedItem{ID: "head", ScopeID: scope, Kind: "head", Sequence: sequence, EstimatedRetainedBytes: retainedBytes + addition})
 		docBody, _ := encodeJSON(storedItem{ID: "d:" + m.DocumentID, ScopeID: scope, Kind: "document", Document: &document})
 		changeBody, _ := encodeJSON(storedItem{ID: fmt.Sprintf("c:%016d", sequence), ScopeID: scope, Kind: "change", Sequence: sequence, Document: &document})
-		receiptBody, _ := encodeJSON(storedItem{ID: "r:" + m.OperationID, ScopeID: scope, Kind: "receipt", RequestHash: hash, Document: &document})
+		receiptBody, _ := encodeJSON(storedItem{ID: receiptID, ScopeID: scope, Kind: "receipt", RequestHash: hash, Document: &document})
 		batch := s.container.NewTransactionalBatch(pk)
 		if head == nil {
 			batch.CreateItem(headBody, nil)

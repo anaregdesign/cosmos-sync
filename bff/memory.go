@@ -10,17 +10,22 @@ type receipt struct {
 	Document Document
 }
 type memoryPartition struct {
-	Sequence  int64
-	Documents map[string]Document
-	Journal   []Document
-	Receipts  map[string]receipt
+	Sequence               int64
+	Documents              map[string]Document
+	Journal                []Document
+	Receipts               map[string]receipt
+	EstimatedRetainedBytes int64
 }
 type MemoryStore struct {
 	mu         sync.Mutex
 	partitions map[string]*memoryPartition
+	retention  retentionControls
 }
 
 func NewMemoryStore() *MemoryStore { return &MemoryStore{partitions: map[string]*memoryPartition{}} }
+func (s *MemoryStore) ConfigureRetention(options RetentionOptions) error {
+	return s.retention.configure(options)
+}
 func (s *MemoryStore) partition(scope string) *memoryPartition {
 	p := s.partitions[scope]
 	if p == nil {
@@ -36,7 +41,7 @@ func (s *MemoryStore) Mutate(ctx context.Context, scope string, m Mutation, hash
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.partition(scope)
-	if receipt, ok := p.Receipts[m.OperationID]; ok {
+	if receipt, ok := p.Receipts[mutationReceiptKey(m)]; ok {
 		if receipt.Hash != hash {
 			return Document{}, session, protocolError(409, "idempotency_mismatch")
 		}
@@ -54,11 +59,16 @@ func (s *MemoryStore) Mutate(ctx context.Context, scope string, m Mutation, hash
 	if p.Sequence >= MaxSequence {
 		return Document{}, session, protocolError(503, "sequence_exhausted")
 	}
+	doc := Document{ID: m.DocumentID, Data: append([]byte(nil), m.Data...), Version: p.Sequence + 1, Deleted: m.Kind == "delete"}
+	addition := retainedEstimate(doc)
+	if !s.retention.allows(p.Sequence, p.EstimatedRetainedBytes, addition) {
+		return Document{}, session, capacityError()
+	}
 	p.Sequence++
-	doc := Document{ID: m.DocumentID, Data: append([]byte(nil), m.Data...), Version: p.Sequence, Deleted: m.Kind == "delete"}
+	p.EstimatedRetainedBytes += addition
 	p.Documents[doc.ID] = doc
 	p.Journal = append(p.Journal, doc)
-	p.Receipts[m.OperationID] = receipt{Hash: hash, Document: doc}
+	p.Receipts[mutationReceiptKey(m)] = receipt{Hash: hash, Document: doc}
 	return cloneDocument(doc), session, nil
 }
 func (s *MemoryStore) Sync(ctx context.Context, scope string, after int64, limit int, session string) (StorePage, string, error) {

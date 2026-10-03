@@ -87,10 +87,14 @@ func (api *testAPI) requestRaw(t *testing.T, token, method, endpoint string, raw
 			var binding struct {
 				ScopeID           string `json:"scopeId"`
 				PermissionVersion string `json:"permissionVersion"`
+				PrincipalID       string `json:"principalId"`
+				ScopeMode         string `json:"scopeMode"`
 			}
 			decode(t, session, &binding)
 			request.Header.Set("X-Cosmos-Sync-Scope", binding.ScopeID)
 			request.Header.Set("X-Cosmos-Sync-Permission", binding.PermissionVersion)
+			request.Header.Set(syncbff.PrincipalHeader, binding.PrincipalID)
+			request.Header.Set(syncbff.ScopeModeHeader, binding.ScopeMode)
 		}
 	}
 	recorder := httptest.NewRecorder()
@@ -165,6 +169,8 @@ func TestSessionBindingPreventsIdentityAndPermissionRaces(t *testing.T) {
 	var expected struct {
 		ScopeID           string `json:"scopeId"`
 		PermissionVersion string `json:"permissionVersion"`
+		PrincipalID       string `json:"principalId"`
+		ScopeMode         string `json:"scopeMode"`
 	}
 	decode(t, api.request(t, alice, http.MethodGet, "/v1/session", nil), &expected)
 	for _, endpoint := range []string{"/v1/sync", "/v1/mutations"} {
@@ -182,6 +188,8 @@ func TestSessionBindingPreventsIdentityAndPermissionRaces(t *testing.T) {
 			request.Header.Set("Authorization", "Bearer "+bob)
 			request.Header.Set(syncbff.ScopeHeader, expected.ScopeID)
 			request.Header.Set(syncbff.PermissionHeader, expected.PermissionVersion)
+			request.Header.Set(syncbff.PrincipalHeader, expected.PrincipalID)
+			request.Header.Set(syncbff.ScopeModeHeader, expected.ScopeMode)
 			recorder := httptest.NewRecorder()
 			api.handler.ServeHTTP(recorder, request)
 			errorCode(t, recorder, http.StatusForbidden, "session_mismatch")
@@ -191,6 +199,8 @@ func TestSessionBindingPreventsIdentityAndPermissionRaces(t *testing.T) {
 			request.Header.Set("Authorization", "Bearer "+alice)
 			request.Header.Set(syncbff.ScopeHeader, expected.ScopeID)
 			request.Header.Set(syncbff.PermissionHeader, "old-permissions")
+			request.Header.Set(syncbff.PrincipalHeader, expected.PrincipalID)
+			request.Header.Set(syncbff.ScopeModeHeader, expected.ScopeMode)
 			recorder := httptest.NewRecorder()
 			api.handler.ServeHTTP(recorder, request)
 			errorCode(t, recorder, http.StatusForbidden, "session_mismatch")
@@ -311,6 +321,8 @@ func TestSignedSessionMetadataIsBoundToIdentityAndPurpose(t *testing.T) {
 		var binding struct {
 			ScopeID           string `json:"scopeId"`
 			PermissionVersion string `json:"permissionVersion"`
+			PrincipalID       string `json:"principalId"`
+			ScopeMode         string `json:"scopeMode"`
 		}
 		decode(t, api.request(t, token, http.MethodGet, "/v1/session", nil), &binding)
 		request := httptest.NewRequest(http.MethodGet, "https://api.example.test/v1/sync", nil)
@@ -318,6 +330,8 @@ func TestSignedSessionMetadataIsBoundToIdentityAndPurpose(t *testing.T) {
 		request.Header.Set(syncbff.ScopeHeader, binding.ScopeID)
 		request.Header.Set(syncbff.PermissionHeader, binding.PermissionVersion)
 		request.Header.Set(syncbff.SessionHeader, session)
+		request.Header.Set(syncbff.PrincipalHeader, binding.PrincipalID)
+		request.Header.Set(syncbff.ScopeModeHeader, binding.ScopeMode)
 		recorder := httptest.NewRecorder()
 		api.handler.ServeHTTP(recorder, request)
 		return recorder
@@ -365,7 +379,13 @@ func TestDartFixture(t *testing.T) {
 	if readyFile == "" || stopFile == "" {
 		t.Skip("set COSMOS_SYNC_E2E_READY_FILE and COSMOS_SYNC_E2E_STOP_FILE for Dart/Go integration")
 	}
-	api := newTestAPI(t, nil, nil)
+	api := newTestAPI(t, nil, func(config *syncbff.Config) {
+		config.Events = syncbff.EventOptions{Enabled: true, PollMilliseconds: 20, HeartbeatMilliseconds: 50, MaxStreamSeconds: 2}
+		config.Snapshots = syncbff.SnapshotOptions{Enabled: true}
+		if origin := os.Getenv("COSMOS_SYNC_E2E_ORIGIN"); origin != "" {
+			config.AllowedOrigins = []string{origin}
+		}
+	})
 	server := httptest.NewServer(api.handler)
 	t.Cleanup(server.Close)
 	ready, err := json.Marshal(map[string]string{"url": server.URL, "token": api.issuer.token(t, nil)})

@@ -2,9 +2,28 @@
   {
     "tenant": "your-tenant",
     "subject": "your-end-user-subject",
+    "scopeMode": "user",
     "permissionVersion": "1",
     "active": true,
     "canRead": true,
     "canWrite": true
+  },
+  {
+    "tenant": "your-tenant",
+    "subject": "your-end-user-subject",
+    "scopeMode": "tenant",
+    "permissionVersion": "1",
+    "active": true,
+    "canRead": true,
+    "canWrite": true
+  },
+  {
+    "tenant": "your-tenant",
+    "subject": "another-member-subject",
+    "scopeMode": "tenant",
+    "permissionVersion": "1",
+    "active": true,
+    "canRead": true,
+    "canWrite": false
   }
 ]

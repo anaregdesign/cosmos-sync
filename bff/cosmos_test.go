@@ -253,6 +253,9 @@ func TestAccountGuardRejectsUnsafeCosmosConfiguration(t *testing.T) {
 		ok         bool
 	}{
 		{"session", `{"enableMultipleWriteLocations":false,"writableLocations":[{}],"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`, true},
+		{"singlewrite-multiple-advertised-locations", `{"enableMultipleWriteLocations":false,"writableLocations":[{},{}],"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`, true},
+		{"missing-write-mode", `{"writableLocations":[{}],"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`, false},
+		{"no-write-location", `{"enableMultipleWriteLocations":false,"writableLocations":[],"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`, false},
 		{"strong", `{"enableMultipleWriteLocations":false,"writableLocations":[{}],"userConsistencyPolicy":{"defaultConsistencyLevel":"Strong"}}`, true},
 		{"multiwrite", `{"enableMultipleWriteLocations":true,"writableLocations":[{},{}],"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`, false},
 		{"eventual", `{"enableMultipleWriteLocations":false,"writableLocations":[{}],"userConsistencyPolicy":{"defaultConsistencyLevel":"Eventual"}}`, false},

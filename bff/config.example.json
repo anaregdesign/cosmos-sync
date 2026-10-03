@@ -2,6 +2,33 @@
   "listen": ":8080",
   "development": false,
   "storage": "cosmos",
+  "historyEpoch": "1",
+  "allowedOrigins": ["https://your-app.example"],
+  "events": {
+    "enabled": true,
+    "pollMilliseconds": 1000,
+    "heartbeatMilliseconds": 15000,
+    "maxStreamSeconds": 60
+  },
+  "snapshots": {
+    "enabled": true,
+    "maxChanges": 4096,
+    "maxReplayBytes": 67108864
+  },
+  "limits": {
+    "enabled": true,
+    "maxConcurrentRequests": 64,
+    "maxConcurrentStreams": 8,
+    "requestsPerMinute": 120,
+    "burst": 30,
+    "maxPrincipalBuckets": 10000,
+    "maxDocumentBytes": 262144,
+    "maxSyncPageBytes": 4194304
+  },
+  "retention": {
+    "maxJournalEvents": 10000,
+    "maxEstimatedRetainedBytes": 134217728
+  },
   "oidc": {
     "issuer": "https://your-issuer.example/",
     "audience": "cosmos-sync-api",

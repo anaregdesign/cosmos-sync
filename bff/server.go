@@ -19,6 +19,8 @@ type Server struct {
 	store    Store
 	verifier *oidc.IDTokenVerifier
 	key      []byte
+	controls *runtimeControls
+	metrics  *metrics
 }
 
 func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Server, error) {
@@ -31,6 +33,14 @@ func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Ser
 	if config.OIDC.RequiredScope == "" {
 		config.OIDC.RequiredScope = "cosmos_sync"
 	}
+	if config.HistoryEpoch == "" {
+		config.HistoryEpoch = "1"
+	}
+	config.Grants = append([]Grant(nil), config.Grants...)
+	config.AllowedOrigins = append([]string(nil), config.AllowedOrigins...)
+	if err := validateGrantRoles(config.Grants); err != nil {
+		return nil, err
+	}
 	key, err := base64.StdEncoding.DecodeString(config.CursorKeyBase64)
 	if err != nil || len(key) < 32 {
 		return nil, fmt.Errorf("cursorKeyBase64 requires at least 32 random bytes shared by replicas")
@@ -38,35 +48,67 @@ func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Ser
 	if _, ok := store.(*MemoryStore); ok && !config.Development {
 		return nil, fmt.Errorf("memory storage is allowed only in development")
 	}
-	return &Server{config: config, store: store, verifier: verifier, key: key}, nil
+	controls, err := newRuntimeControls(config)
+	if err != nil {
+		return nil, err
+	}
+	if configurable, ok := store.(RetentionConfigurable); ok {
+		if err := configurable.ConfigureRetention(config.Retention); err != nil {
+			return nil, err
+		}
+	}
+	return &Server{config: config, store: store, verifier: verifier, key: key, controls: controls, metrics: newMetrics()}, nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	observed := newObservedResponse(w)
+	w = observed
+	defer s.metrics.record(r, observed)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
 	if !s.config.Development && r.TLS == nil {
 		s.writeError(w, protocolError(400, "https_required"))
 		return
 	}
+	if !s.cors(w, r) {
+		return
+	}
 	if r.URL.Path == "/healthz" && r.Method == http.MethodGet {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
 		return
 	}
+	if r.URL.Path == "/metrics" && r.Method == http.MethodGet {
+		s.serveMetrics(w, r)
+		return
+	}
+	if !s.controls.acquireRequest() {
+		s.writeError(w, &ProtocolError{Status: 429, Code: "concurrency_limit", RetryAfter: "1"})
+		return
+	}
+	defer s.controls.releaseRequest()
 	auth := strings.Fields(r.Header.Get("Authorization"))
 	if len(auth) != 2 || !strings.EqualFold(auth[0], "Bearer") {
 		s.writeError(w, protocolError(401, "unauthorized"))
 		return
 	}
-	scope, err := s.authorize(r.Context(), auth[1])
+	mode := r.Header.Get(ScopeModeHeader)
+	if r.URL.Path == "/v1/session" {
+		mode = r.URL.Query().Get("scope")
+	}
+	scope, err := s.authorize(r.Context(), auth[1], mode)
 	if err != nil {
 		s.writeError(w, err)
+		return
+	}
+	if !s.controls.allowPrincipal(scope.PrincipalID) {
+		s.writeError(w, &ProtocolError{Status: 429, Code: "rate_limit", RetryAfter: "1"})
 		return
 	}
 	if r.URL.Path == "/v1/session" && r.Method == http.MethodGet {
 		writeJSON(w, 200, scope)
 		return
 	}
-	if r.Header.Get(ScopeHeader) != scope.ID || r.Header.Get(PermissionHeader) != scope.PermissionVersion {
+	if r.Header.Get(ScopeHeader) != scope.ID || r.Header.Get(PermissionHeader) != scope.PermissionVersion || r.Header.Get(PrincipalHeader) != scope.PrincipalID || r.Header.Get(ScopeModeHeader) != scope.ScopeMode {
 		s.writeError(w, protocolError(403, "session_mismatch"))
 		return
 	}
@@ -81,7 +123,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	setSession := func(token string) {
 		if token != "" {
-			w.Header().Set(SessionHeader, s.sign("session-v1", signedContext{Version: 1, Scope: scope.ID, Permission: scope.PermissionVersion, Token: token}))
+			context := s.boundContext(scope, 0)
+			context.Token = token
+			w.Header().Set(SessionHeader, s.sign("session-v1", context))
 		}
 	}
 	switch {
@@ -106,9 +150,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, protocolError(400, "invalid_mutation"))
 			return
 		}
+		mutation.PrincipalID = scope.PrincipalID
 		hash, e := validateMutation(&mutation, scope.ID)
 		if e != nil {
 			s.writeError(w, e)
+			return
+		}
+		if len(mutation.Data) > s.controls.options.MaxDocumentBytes {
+			s.writeError(w, protocolError(400, "document_too_large"))
 			return
 		}
 		document, token, e := s.store.Mutate(r.Context(), scope.ID, mutation, hash, session)
@@ -150,8 +199,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, e)
 			return
 		}
-		cursor := s.sign("cursor-v1", signedContext{Version: 1, Scope: scope.ID, Permission: scope.PermissionVersion, Sequence: page.Sequence})
+		kept := boundedDocumentCount(page.Changes, s.controls.options.MaxSyncPageBytes)
+		if kept < len(page.Changes) {
+			if kept == 0 {
+				s.writeError(w, protocolError(413, "sync_page_too_large"))
+				return
+			}
+			page.Changes = page.Changes[:kept]
+			page.Sequence = page.Changes[kept-1].Version
+			page.HasMore = true
+		}
+		cursor := s.sign("cursor-v1", s.boundContext(scope, page.Sequence))
 		writeJSON(w, 200, map[string]any{"changes": page.Changes, "cursor": cursor, "hasMore": page.HasMore})
+	case r.URL.Path == "/v1/events" && r.Method == http.MethodGet:
+		s.serveEvents(w, r, scope, auth[1], session)
+	case r.URL.Path == "/v1/snapshot" && r.Method == http.MethodGet:
+		s.serveSnapshot(w, r, scope, session)
 	default:
 		s.writeError(w, protocolError(404, "not_found"))
 	}
