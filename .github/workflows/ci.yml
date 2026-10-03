@@ -134,6 +134,7 @@ jobs:
       - run: dart pub get
         working-directory: packages/cosmos_sync
       - run: python3 tools/cross_stack_smoke.py
+      - run: python3 tools/authorization_cross_stack_smoke.py
       - run: python3 tools/cache_crash_smoke.py
       - run: python3 tools/browser_cross_stack_smoke.py
         env:
