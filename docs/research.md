@@ -37,7 +37,14 @@ The API accepts an OIDC provider's **access JWT**, not an ID token. The Go verif
 
 Authentication alone does not authorize access to a particular document. Application code must evaluate the user and resource/operation. [Microsoft resource-based authorization guidance](https://learn.microsoft.com/en-us/aspnet/core/security/authorization/resource-based?view=aspnetcore-10.0)
 
-**Project decision:** server grants map a validated tenant/subject identity to one authorized scope. The BFF derives the partition and checks read/write permission on every request, including journal reads and notification hints. Request bodies and cursors cannot grant tenant, owner, or partition access. Issuers must be allowlisted; subject identifiers are only meaningful in their issuer's identity namespace. A configured single issuer keeps the first slice's mapping unambiguous.
+**Current project decision:** explicit built-in authorization maps a verified
+issuer/subject to a durable opaque account and personal scope. Fixed-owner shared
+scope memberships are stored and conditionally administered in Cosmos; provider
+roles/groups do not replace them. Legacy mode retains the original tenant/subject
+grants. The BFF derives the partition and checks current read/write permission on
+requests, journal reads and notification hints. Request bodies and cursors cannot
+grant owner or partition access. Issuers must be allowlisted; subjects are meaningful
+only in their issuer namespace. See the [authorization contract](authorization.md).
 
 Cosmos native data-plane RBAC scopes to an account, database, or container; its most granular documented role scope is a container. SDKs can authenticate with a server-side `TokenCredential`. [Cosmos data-plane RBAC](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-connect-role-based-access-control)
 

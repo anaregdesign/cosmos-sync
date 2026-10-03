@@ -32,7 +32,7 @@ An Apple/Google or broker **ID token** proves authentication to its intended
 relying party; it must not replace the API access token expected by existing
 sync routes. The selected design must validate its issuer/audience, signature
 and rotating keys, nonce/challenge/replay policy and flow-specific PKCE/state,
-then establish a separate API credential/session and current server grants.
+then establish a separate API credential/session and current BFF permissions.
 A broker-issued dedicated API access JWT supplies that credential directly,
 without an additional custom BFF token issuer. Firebase/direct ID proofs require
 the separate backend exchange.
@@ -105,8 +105,11 @@ callback. The checked-in callback is a demonstration default; confirm the native
 provider registration accepts it before login. Production products should choose
 their own application identifiers and review claimed HTTPS app/universal links
 if the provider supports them. The current adapter accepts private native schemes.
-Provider consent does not grant Cosmos document access: BFF server grants remain
-the separate tenant/user/role authority described in [security.md](security.md).
+Provider consent does not grant another account's data. In built-in mode, a
+correctly verified API access token establishes the caller's personal scope;
+shared access additionally requires owner-managed membership. Legacy mode
+retains explicit server grants. These data permissions are enforced independently
+of provider roles, as described in [authorization](authorization.md).
 
 ## Credential and cache lifecycle
 

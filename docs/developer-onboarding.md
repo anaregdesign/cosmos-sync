@@ -3,7 +3,7 @@
 The product goal is to deploy the supplied Cosmos Sync BFF on Azure Container
 Apps, connect the Dart SDK, and obtain the supported Firestore-inspired document,
 watch and offline experience without writing a synchronization or security BFF.
-This guide joins deployment, authentication, grants, the runnable app and
+This guide joins deployment, authentication, account/membership policy, the runnable app and
 operations into one journey. **The hosted clean-checkout acceptance is still
 open in [#32](https://github.com/anaregdesign/cosmos-sync/issues/32).** Existing
 local, emulator, native-provider and device results are separate evidence in
@@ -18,11 +18,12 @@ and stable account linking still tracked in [#26–30](social-auth.md). The
 implemented native path uses OIDC/PKCE and a dedicated API access token, with
 Entra used for actual provider validation. Provider registration, authorization
 policy and compatible Cosmos resources remain operator responsibilities.
-The selected hosted authorization model adds durable BFF accounts, personal
+The built-in authorization preview provides durable BFF accounts, personal
 self-access and fixed-owner shared scopes with reader/writer membership APIs.
-Implementation and security acceptance are tracked in
-[#33](https://github.com/anaregdesign/cosmos-sync/issues/33); do not infer completion
-from the selected design. Existing explicit server grants remain the legacy
+Implementation and security evidence are tracked in
+[#33](https://github.com/anaregdesign/cosmos-sync/issues/33); check the latest
+verified source and distinguish local tests from actual hosted acceptance.
+Existing explicit server grants remain the legacy
 mode. An empty legacy grants configuration deliberately denies document access.
 A healthy container is not yet the completed developer experience.
 
@@ -155,8 +156,9 @@ in the current form does not implement it. New provider registrations, credentia
 consent and Apple signing/capabilities require their concrete owner approval.
 
 The recommended configuration selects `authorization: {"mode": "builtin"}`.
-The selected interface is under implementation in #33; run its reviewed tests
-before using it as a delivered feature. Correctly verified API authentication
+The interface and revocation bounds are documented in [authorization](authorization.md);
+require the latest reviewed tests and a matching immutable BFF image.
+Correctly verified API authentication
 establishes a durable account and personal scope. Apps use the supplied management
 API instead of implementing policy storage or a permission service themselves.
 
