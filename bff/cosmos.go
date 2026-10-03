@@ -13,6 +13,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 )
@@ -46,7 +47,7 @@ func NewCosmosStore(ctx context.Context, c CosmosConfig) (*CosmosStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := azcosmos.NewClient(c.Endpoint, credential, &azcosmos.ClientOptions{ClientOptions: azcore.ClientOptions{PerCallPolicies: []policy.Policy{accountGuard{}}}})
+	client, err := azcosmos.NewClient(c.Endpoint, credential, &azcosmos.ClientOptions{ClientOptions: azcore.ClientOptions{PerCallPolicies: []policy.Policy{batchWirePolicy{}, accountGuard{}}}})
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +71,41 @@ func NewCosmosStore(ctx context.Context, c CosmosConfig) (*CosmosStore, error) {
 		return nil, fmt.Errorf("journal and receipts require a container without default expiry")
 	}
 	return &CosmosStore{container: container, client: client}, nil
+}
+
+// The pinned official SDK's outer batch encoder HTML-escapes raw item JSON. Keep
+// JSON string semantics but remove that avoidable sixfold expansion before send.
+// Cosmos request authentication does not sign the body. SetBody preserves retries.
+type batchWirePolicy struct{}
+
+func (batchWirePolicy) Do(request *policy.Request) (*http.Response, error) {
+	if !strings.EqualFold(request.Raw().Header.Get("x-ms-cosmos-is-batch-request"), "true") {
+		return request.Next()
+	}
+	body, err := io.ReadAll(io.LimitReader(request.Raw().Body, 8*1024*1024+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > 8*1024*1024 {
+		return nil, protocolError(400, "document_too_large")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	var value any
+	if err = decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	compact, err := encodeJSON(value)
+	if err != nil {
+		return nil, err
+	}
+	if len(compact) > 2*1024*1024 {
+		return nil, protocolError(400, "document_too_large")
+	}
+	if err = request.SetBody(streaming.NopCloser(bytes.NewReader(compact)), "application/json"); err != nil {
+		return nil, err
+	}
+	return request.Next()
 }
 
 // Validate the account metadata already fetched by the official SDK. This policy

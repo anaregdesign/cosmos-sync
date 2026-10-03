@@ -27,7 +27,7 @@ func testCosmos(t *testing.T, transport transportFunc) *CosmosStore {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := azcosmos.NewClientWithKey("https://cosmos.test", key, &azcosmos.ClientOptions{ClientOptions: azcore.ClientOptions{Transport: transport, Retry: policy.RetryOptions{MaxRetries: -1}}})
+	client, err := azcosmos.NewClientWithKey("https://cosmos.test", key, &azcosmos.ClientOptions{ClientOptions: azcore.ClientOptions{Transport: transport, Retry: policy.RetryOptions{MaxRetries: -1}, PerCallPolicies: []policy.Policy{batchWirePolicy{}, accountGuard{}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,6 +37,54 @@ func testCosmos(t *testing.T, transport transportFunc) *CosmosStore {
 		t.Fatal(err)
 	}
 	return &CosmosStore{container: container, client: client}
+}
+
+func TestCosmosActualBatchWireBoundaryAndAtomicOperations(t *testing.T) {
+	m := Mutation{OperationID: "11111111-1111-4111-8111-111111111111", DocumentID: "note", Kind: "put", Data: json.RawMessage(`{"text":"` + strings.Repeat("<", MaxDocumentBytes-len(`{"text":""}`)) + `"}`)}
+	hash, err := validateMutation(&m, "scope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batchCount int
+	store := testCosmos(t, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "" || r.URL.Path == "/" {
+			return cosmosResponse(r, 200, `{"readableLocations":[{"name":"Test","databaseAccountEndpoint":"https://cosmos.test"}],"writableLocations":[{"name":"Test","databaseAccountEndpoint":"https://cosmos.test"}],"enableMultipleWriteLocations":false,"userConsistencyPolicy":{"defaultConsistencyLevel":"Session"}}`, ""), nil
+		}
+		if r.Method == http.MethodGet {
+			return cosmosResponse(r, 404, `{"code":"NotFound","message":"missing"}`, "read-session"), nil
+		}
+		batchCount++
+		if r.Header.Get("x-ms-documentdb-partitionkey") != `["scope"]` || !strings.EqualFold(r.Header.Get("x-ms-cosmos-batch-atomic"), "true") {
+			t.Fatal("unscoped/non-atomic batch")
+		}
+		if r.Header.Get("x-ms-session-token") != "read-session" {
+			t.Fatal("batch did not propagate read session")
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(body) > 2*1024*1024 || strings.Contains(string(body), `\u003c`) {
+			t.Fatalf("actual SDK batch size/escaping wrong: %d", len(body))
+		}
+		var operations []struct {
+			Operation string     `json:"operationType"`
+			Item      storedItem `json:"resourceBody"`
+		}
+		if json.Unmarshal(body, &operations) != nil || len(operations) != 4 {
+			t.Fatal("batch must have four operations")
+		}
+		for i, kind := range []string{"head", "document", "change", "receipt"} {
+			if operations[i].Operation != "Create" || operations[i].Item.Kind != kind || operations[i].Item.ScopeID != "scope" {
+				t.Fatalf("wrong atomic member %+v", operations[i])
+			}
+		}
+		return cosmosResponse(r, 200, `[{"statusCode":201},{"statusCode":201},{"statusCode":201},{"statusCode":201}]`, "write-session"), nil
+	})
+	doc, session, err := store.Mutate(context.Background(), "scope", m, hash, "")
+	if err != nil || doc.Version != 1 || session != "write-session" || batchCount != 1 {
+		t.Fatalf("mutation result %+v %s batches%d err%v", doc, session, batchCount, err)
+	}
 }
 
 func TestCosmosOverlappingReceiptReplayAndSessionPropagation(t *testing.T) {
