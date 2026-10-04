@@ -13,11 +13,16 @@ ACA recovery returned ARM `Succeeded` without a static IP or platform resources;
 the app failed with zero revisions. A reviewed saved recovery plan subsequently
 replaced only these empty app/environment stubs and applied successfully on
 2026-10-04. Static IP, image/identity/secret-reference and role/PE/DNS metadata
-checks passed. One active provisioned revision has zero replicas, health None and
-running ActivationFailed; TLS-verified Envoy RBAC 403 on health remains under
-diagnosis. No application-data writes have occurred. Fresh native
-Mac login and both API JWT signature/issuer/audience/scope/tenant/owner checks
-passed separately. Actual endpoint/data and hosted SDK acceptance remain pending.
+checks passed. The explicit ACA command/no-args fix produced actual latest-ready
+Healthy, one Running container, zero restarts/listening and eleven runtime checks
+passed. The final 19/19 checkpoint observed min=0/max=1,
+Healthy/Provisioned/ScaledToZero and zero revision/actual replicas; retained
+charges remain and later requests can scale again. Five external health attempts include one Python CA failure and four macOS-TLS-verified Envoy RBAC 403 responses,
+with no SDK/data writes. Fresh Mac native lifecycle stages were observed, and
+independent API JWT signature/issuer/audience/scope/tenant/owner verification
+passed; the wrapper's exit 1 remains recorded separately. That credential session
+has expired, so a later hosted SDK run needs a coordinated fresh session. External
+endpoint/data and hosted SDK acceptance remain pending.
 Use the [retained topology and deploy sequence](aca-validation-plan.md) to reproduce
 those stages without interpreting resource creation as hosted acceptance.
 
@@ -51,6 +56,18 @@ Use the reviewed release commit recorded in [release](release.md). Confirm
 actual package publication and image digest there before using registry artifacts;
 a dry run or planned package URL does not establish availability. The source
 checkout remains usable for local preparation while those gates are open.
+
+The current verified public BFF is built from `76c1f46`, while the unchanged
+`cosmos_sync 0.2.0-dev.1` archive comes from `82e937c`. The actual Azure startup
+checkpoint still uses that original BFF image; new-image publication is not a
+hosted CRUD result. Use the [recorded immutable digests](release.md) and select
+one explicitly in the reviewed deployment plan.
+
+HTTP diagnostics are configured in a retained workspace with 30-day retention,
+0.023-GB/day cap and HTTP-only categories. Actual table/schema creation passed,
+but Dedicated/null readback and delivery remain unresolved after four API-200
+zero-row queries. Reuse the [recorded destination and bounded query procedure](aca-validation-plan.md#reuse-the-http-diagnostic-configuration);
+configuration alone is not cloud CRUD or a working diagnostic delivery result.
 
 Go 1.26+ and Dart 3.12+ are required; Flutter 3.44.6 is the measured native
 baseline. Docker is needed only for the emulator/container checks. Install the
@@ -113,7 +130,9 @@ out-of-band edits break the supported journal/receipt contract.
 
 Use the runbook's minimal single-replica configuration for a bounded validation:
 0.25 vCPU/0.5 GiB, replicas 0–1, operator `/32` HTTPS ingress, public GHCR digest,
-private backend endpoints, and no NAT or new log workspace. Scale-to-zero retains
+private backend endpoints, and no NAT. The initial hosting baseline creates no
+log workspace; the current HTTP-only diagnostic setup adds its retained workspace
+separately. Scale-to-zero retains
 fixed network charges; the original up-to-two-public-IP planning envelope is
 about $41.15/730-hour month before traffic, compute, storage and contract
 adjustments. Current platform inventory contains one public IP and one LB; the
@@ -139,6 +158,12 @@ identity. The shared cursor key uses a Key Vault secret reference. JWT checks
 remain production checks; never use development mode to workaround ingress or
 configuration problems. Follow the runbook for the exact supported transport
 boundary and the runtime source's validation results.
+
+Preserve the template's explicit ACA `command=["/cosmos-sync-bff"]` with `args`
+omitted when using environment JSON. The pinned image's default file-config CMD
+otherwise selects `/run/config/config.json` and fails before listening. The
+[actual startup fix](aca-validation-plan.md#service-side-failure-recovery) passed
+without changing the image or key. Startup alone does not prove external CRUD.
 
 Never place secret values in `terraform.tfvars`, committed JSON, plan output or
 chat. Secret-reference names/URIs are configuration; the cursor key, credentials
@@ -181,6 +206,13 @@ specific public native client with the exact callback
 required delegated scope. Configure the BFF's exact issuer, API audience and
 scope. The native client ID is not the API audience. Sign in through the system
 browser with PKCE; do not copy a token into the sample.
+
+The current BFF release can additionally restrict API admission with
+`oidc.allowed_client_ids`: an exact allowlist for signed `azp` client IDs. Use the
+registered native public client ID; do not substitute it for the API audience or
+document membership. This is opt-in and requires the newer verified BFF image;
+the original retained cloud image does not support the setting. See the
+[Container Apps inputs](../infra/terraform/azure-container-apps/README.md).
 
 Apple/Google raw ID tokens and unrelated Google/Graph API access tokens are not
 Cosmos Sync API credentials. The [social-auth roadmap](social-auth.md) defines the

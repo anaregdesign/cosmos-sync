@@ -78,14 +78,14 @@ deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
 
 | Check | Evidence scope |
 | --- | --- |
-| Flutter analysis and full app suite | No issues; latest 50 tests, including shared-scope selection plus auth lifecycle/native-adapter/secure-store tests |
+| Flutter analysis and full app suite | No issues; 50 tests at this checkpoint, including shared-scope selection plus auth lifecycle/native-adapter/secure-store tests; later source/CI evidence is below |
 | Latest native SDK suite | No analysis issues; all 165 tests passed, including typed account/membership management and shared-cache selection |
 | Latest Chromium SDK suite | All 146 tests passed with actual IndexedDB/Web Locks and shared authorization/cache selection coverage |
 | Release/environment control tools | Latest 127 tests passed, including bounded hosted acceptance and cursor-bootstrap guards; these unit tests perform no cloud resource or registry write |
 | macOS app integration | Actual Go HTTP BFF, disposable signed JWT/JWKS issuer, SQLite, document/conflict/pending UI and an isolated native Keychain key; provider is a test adapter |
 | Android physical SDK fixture | Pixel 9a / Android 17 API 37; actual SQLite and deterministic transport; cache close/reopen within the test process |
 | Android physical application | Pixel 9a / Android 17 API 37; actual Go HTTP BFF, SQLite, offline reconnect/conflict/delete/purge UI and isolated native secure storage; signed-fixture auth adapter |
-| Actual Entra native authentication | macOS system-browser AppAuth PKCE, callback, Keychain controller restore, provider refresh and local sign-out passed; both API JWTs independently verified against issuer/JWKS/audience/scope/tenant/approved owner |
+| Actual Entra native authentication | macOS AppAuth PKCE, callback, Keychain controller restore, refresh and local sign-out observed; both API JWTs independently verified; the latest wrapper failure is recorded separately below |
 | Normal iOS release build | Unsigned arm64 build passed from core `e7fa4ccb`; no physical install or Apple portal operation |
 | iOS simulator app integration | iPhone 16 Pro / iOS 26.5; actual HTTP BFF, SQLite and isolated Keychain probe; local ad-hoc simulator signing and ephemeral arm64 workaround, test auth adapter |
 | MIT archive | 85 KB strict dry-run with zero warnings; actual published 87,507-byte archive matched the reviewed source and self-contained documentation |
@@ -130,7 +130,7 @@ CI must pass for the release source; older green runs do not validate new change
 
 The Container Apps reference adds trusted HTTPS-ingress runtime mode,
 non-secret bounded JSON configuration, graceful process drain and pinned
-Terraform providers. The latest workload format/init/validate, 22 mock-only plan
+Terraform providers. The latest workload format/init/validate, 31 mock-only plan
 tests and TFLint passed; the new private-network prerequisites passed seven mock
 tests and the same static checks. These checks do not contact Azure.
 
@@ -184,24 +184,54 @@ this Mac's Python/OpenSSL has no default CA file or directory; macOS
 SecureTransport then verified TLS and returned Envoy `RBAC: access denied`.
 The current Mac IPv4 was independently confirmed and matches the sole ingress
 allow rule; one DNS A record matches the current static IP, there is no AAAA
-record or local proxy/tunnel, and environment public access is enabled. Three
-failed probe attempts are retained in the aggregate request budget.
+record or local proxy/tunnel, and environment public access is enabled.
 A reviewed app-only update temporarily raised the minimum to one replica without
 changing its image, ingress or permissions. This exposed the actual startup
 fatal: the published image's explicit `-config /run/config/config.json` default
 conflicts with `COSMOS_SYNC_CONFIG_JSON`. The environment configuration must
 explicitly invoke `/cosmos-sync-bff` without that file flag. No Cosmos permission
-denial is inferred from this configuration failure. The command repair and return
-to minimum zero are pending actual runtime verification. No application document
-write or successful BFF readiness result is claimed.
+denial is inferred from this configuration failure. The command-only saved plan
+was applied at 03:43 UTC. At 03:44:58 UTC, the actual latest revision was healthy
+and ready, with one running/started container, zero restarts and a listening log;
+all 11 scoped runtime checks passed. This includes startup initialization, not a
+document read/write contract. A protected saved plan restored minimum replicas to
+zero while preserving the command, image, ingress and permissions. Five failed
+probe attempts are retained in the aggregate request budget, including a further
+TLS-verified ingress denial after healthy startup. No hosted SDK execution or
+application document write is claimed.
+
+The environment-only Azure Monitor logging update was applied from a reviewed
+plan with one environment update and five no-ops. A retained PerGB2018 workspace
+reached `Succeeded`, with 30-day retention, a 0.023 GB/day cap and local key
+authentication disabled. The new diagnostic setting enables only HTTP;
+readback expands disabled categories and metrics, which remain disabled.
+Independent configuration checks passed 17/17. Requested `Dedicated` returned
+actual `null`; that RP difference is unresolved. A scoped ARM read confirmed
+HTTP schema availability. Three exact app/environment/request queries within
+74.793 seconds and one seven-second alternative allowing empty routing fields
+all succeeded with zero rows. Log delivery and the ingress rejection cause are
+unproven. A fresh two-service Mac IPv4 check still matched the allowed `/32`.
+No extra ingress allowance, IAM, credential or retry mutation was introduced.
+
+At 04:41:33 UTC, a fresh actual ARM checkpoint passed 19/19 checks. The app and
+environment were `Succeeded`, with min0/max1, the executable-only command,
+original pinned image, runtime configuration and sole `/32` unchanged. The
+latest-ready revision was `Healthy`/`Provisioned`/`ScaledToZero`; both its
+replica count and an independent actual replica list were zero. This is a dated
+zero-replica observation, not proof of a running pod's current readiness or
+permanent zero billing. Requests or later revisions can scale the app again;
+retained private networking, storage and logs have separate charges.
 The [retained deployment runbook](aca-validation-plan.md) documents topology,
 costs, bootstrap, deployment and reuse.
 
-A fresh macOS native AppAuth check passed after reopening the correct account's
-system-browser login: PKCE callback, Keychain controller restore, refresh and
-local sign-out. Initial and refreshed API JWTs passed independent signature,
+A fresh macOS native AppAuth lifecycle was observed after reopening the correct
+account's system-browser login: PKCE callback, Keychain controller restore,
+refresh and local sign-out. The native test log reported success, but its wrapper
+exited with a verification-phase failure; that failure is retained separately.
+Initial and refreshed API JWTs subsequently passed independent signature,
 issuer, audience, delegated scope, tenant and approved-owner checks, with a stable
-subject. This is workforce identity proof, not consumer-provider or Cosmos proof.
+subject. This is historical workforce identity proof, not consumer-provider or
+Cosmos proof. A later live window requires a new unexpired API JWT.
 
 The separate External ID directory reached `Succeeded` and was verified as CIAM.
 Its API and native apps, service principals, API identifier and API-only delegated
@@ -213,11 +243,15 @@ actual consumer login remain pending. See [External ID setup](external-id-setup.
 
 The new `tools/hosted_azure_live.py` is offline by default. Its 13 loopback/offline
 tests passed, as did Dart formatting/analysis. Approved execution uses one actual
-ACA replica and the fresh workforce API JWT with system TLS, private SQLite and
-a bounded window: 120 seconds, at most 36 SDK protocol calls plus four root health/readiness/denial
-probes, and three accepted create/update/tombstone mutations. The prepared execution
-uses a 90-second SDK bound, leaving 20 seconds for the four probes and 10 for
-setup within the total 120-second acceptance window. Protocol limits do
+ACA replica and a fresh workforce API JWT with system TLS, private SQLite and
+a bounded live window: at most 120 seconds, 40 aggregate BFF protocol attempts
+and three accepted create/update/tombstone mutations. Each readiness/denial or
+diagnostic probe counts against that request allowance. The latest offline-only
+manifest uses a 70-second SDK bound and 33 SDK calls. It is stale after five
+root attempts: 35 calls remain, and four new readiness/denial probes leave at
+most 31 SDK calls. Update it before execution from the preserved ledger. Infrastructure
+construction and separated failed diagnostic phases are not represented as one
+120-second wall-clock run. Protocol limits do
 not bound physical Cosmos SDK requests, retries, RU or billing. Actual execution
 results will be recorded here after the hosted endpoint is ready. It does not
 prove two replicas, another real user, ordinary Flutter UI, Android provider login,
@@ -249,3 +283,31 @@ corrects verification to pull child manifests without changing the original
 runtime/SDK artifacts. Final repository-authenticated verification passed in the
 [registry workflow](https://github.com/anaregdesign/cosmos-sync/actions/runs/37143709428);
 [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) is complete.
+
+## Native admission and Azure deployment source
+
+[PR #37](https://github.com/anaregdesign/cosmos-sync/pull/37) merged as
+`76c1f46876b3dfd13f4bd7d4dd144cdf74efa5c0`. All eight jobs passed in its
+[main CI](https://github.com/anaregdesign/cosmos-sync/actions/runs/37175675742).
+The new optional signed `azp` admission setting, Flutter broker navigation and
+Container Apps command fix are included in that source.
+The later Terraform enum/probe-order patch preserves all settings while matching
+actual ARM readback, preventing an unchanged app PUT for an environment-only
+logging update. Its fmt/validate/TFLint and all 31 mock checks passed; the real
+saved environment-only plan separately showed one update and five no-ops.
+
+The new source-addressed BFF image was actually published and verified by the
+[release workflow](https://github.com/anaregdesign/cosmos-sync/actions/runs/37176169762):
+
+```text
+ghcr.io/anaregdesign/cosmos-sync-bff@sha256:2651a4bca6df6f751b7f5e46d317ea9f6e4ca83081374badae142d57cdfc812a
+```
+
+The workflow verified public visibility, both authenticated platform pulls,
+source/version/MIT/nonroot configuration and SHA/subject-bound BuildKit
+provenance/SPDX SBOM. BuildKit provenance is not a signed GitHub attestation.
+The version remains `0.2.0-dev.1`; its source tag and immutable digest distinguish
+this BFF from the first image. The Dart SDK library is unchanged, so the existing
+pub.dev archive was preserved. The Azure runtime checkpoint above still refers
+to the first pinned image; publication does not establish new-image cloud
+acceptance, actual provider login or linked-identity behavior.

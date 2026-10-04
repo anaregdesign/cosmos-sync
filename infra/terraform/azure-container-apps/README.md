@@ -21,13 +21,19 @@ rejects that combination. Keep this explicit command when adapting the template.
 See [ACA command settings](https://learn.microsoft.com/en-us/azure/container-apps/containers#configuration)
 and [the CRI command rules](https://github.com/containerd/containerd/blob/main/internal/cri/opts/spec_opts.go#L53-L74).
 
+Ingress enum casing and probe ordering match observed ARM readback. This avoids
+an otherwise unchanged app update during an environment-only logging change;
+probe settings and security behavior are unchanged. The real saved plan and
+portable checks are distinguished in [verification](../../../docs/verification.md).
+
 `oidc.allowed_client_ids` optionally restricts API admission to exact signed
 `azp` client IDs in addition to the existing issuer, API audience and scope
 checks. It defaults to `[]`; empty/omitted values omit `allowedClientIds` from
 runtime JSON so already published strict-decoder images retain compatibility.
 Before opting in, pin an updated source-addressed image that implements this
-setting. The original public `0.2.0-dev.1` image from commit `82e937c` does not
-support this field and rejects it at startup. Use registered native public client
+setting. The [verified image from `76c1f46`](../../../docs/release.md) implements
+it. The original public `0.2.0-dev.1` image from commit `82e937c` does not support
+this field and rejects it at startup. Use registered native public client
 IDs, with at most 32 distinct visible ASCII
 values of 1–256 bytes, and configure every replica consistently. This restriction
 does not prove the native app binary or upstream Google/Apple authentication;

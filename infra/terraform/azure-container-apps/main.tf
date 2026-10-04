@@ -49,9 +49,9 @@ locals {
     retention = { maxJournalEvents = 10000, maxEstimatedRetainedBytes = 134217728 }
   }
   probes = [
-    { type = "Startup", httpGet = { path = "/readyz", port = 8080, scheme = "HTTP" }, initialDelaySeconds = 1, periodSeconds = 5, timeoutSeconds = 3, failureThreshold = 24, successThreshold = 1 },
+    { type = "Liveness", httpGet = { path = "/healthz", port = 8080, scheme = "HTTP" }, initialDelaySeconds = 1, periodSeconds = 15, timeoutSeconds = 3, failureThreshold = 3, successThreshold = 1 },
     { type = "Readiness", httpGet = { path = "/readyz", port = 8080, scheme = "HTTP" }, initialDelaySeconds = 1, periodSeconds = 10, timeoutSeconds = 3, failureThreshold = 3, successThreshold = 1 },
-    { type = "Liveness", httpGet = { path = "/healthz", port = 8080, scheme = "HTTP" }, initialDelaySeconds = 1, periodSeconds = 15, timeoutSeconds = 3, failureThreshold = 3, successThreshold = 1 }
+    { type = "Startup", httpGet = { path = "/readyz", port = 8080, scheme = "HTTP" }, initialDelaySeconds = 1, periodSeconds = 5, timeoutSeconds = 3, failureThreshold = 24, successThreshold = 1 }
   ]
 }
 
@@ -159,8 +159,8 @@ resource "azapi_resource" "app" {
           external              = true
           allowInsecure         = false
           targetPort            = 8080
-          transport             = "http"
-          clientCertificateMode = "ignore"
+          transport             = "Http"
+          clientCertificateMode = "Ignore"
           traffic               = [{ latestRevision = true, weight = 100 }]
           ipSecurityRestrictions = [for i, cidr in var.network.ingress_allow_cidrs : {
             name = "allowed-${i}", ipAddressRange = cidr, action = "Allow", description = "Explicit operator-approved ingress network"
