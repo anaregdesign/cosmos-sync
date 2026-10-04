@@ -71,6 +71,21 @@ run "standard_security_boundary" {
   }
 }
 
+run "environment_json_replaces_image_file_config_command" {
+  command = plan
+  assert {
+    condition = (
+      one(azapi_resource.app.body.properties.template.containers[0].command) == "/cosmos-sync-bff" &&
+      !can(azapi_resource.app.body.properties.template.containers[0].args) &&
+      one([
+        for entry in azapi_resource.app.body.properties.template.containers[0].env : entry.value
+        if entry.name == "COSMOS_SYNC_CONFIG_JSON"
+      ]) == jsonencode(local.runtime_config)
+    )
+    error_message = "ACA must launch the BFF directly with environment JSON, overriding the image's default -config CMD rather than combining configuration sources."
+  }
+}
+
 run "explicit_authorized_clients_render_exactly" {
   command = plan
   variables {

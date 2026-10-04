@@ -14,6 +14,13 @@ explicit compatible-image/new-namespace verification assertion. Explicit legacy
 mode contains empty grants and denies all end users. Neither mode adopts legacy
 data or provisions identity-provider accounts automatically.
 
+ACA launches `command = ["/cosmos-sync-bff"]` with no `args`, taking configuration
+from `COSMOS_SYNC_CONFIG_JSON`. This replaces the published image's default
+file-config command and avoids combining `-config` with environment JSON; the BFF
+rejects that combination. Keep this explicit command when adapting the template.
+See [ACA command settings](https://learn.microsoft.com/en-us/azure/container-apps/containers#configuration)
+and [the CRI command rules](https://github.com/containerd/containerd/blob/main/internal/cri/opts/spec_opts.go#L53-L74).
+
 `oidc.allowed_client_ids` optionally restricts API admission to exact signed
 `azp` client IDs in addition to the existing issuer, API audience and scope
 checks. It defaults to `[]`; empty/omitted values omit `allowedClientIds` from

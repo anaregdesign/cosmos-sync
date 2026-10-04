@@ -172,8 +172,10 @@ resource "azapi_resource" "app" {
       template = {
         terminationGracePeriodSeconds = 15
         containers = [{
-          name      = "bff"
-          image     = var.image
+          name  = "bff"
+          image = var.image
+          # Use env JSON alone; the image defaults to a file-config CMD.
+          command   = ["/cosmos-sync-bff"]
           resources = { cpu = var.scale.cpu, memory = var.scale.memory }
           env = concat([
             { name = "COSMOS_SYNC_CONFIG_JSON", value = jsonencode(local.runtime_config) },

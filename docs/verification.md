@@ -182,10 +182,18 @@ and private-endpoint/DNS configuration. A zero-replica revision reported
 console logs had no running replica. The initial HTTPS check failed because
 this Mac's Python/OpenSSL has no default CA file or directory; macOS
 SecureTransport then verified TLS and returned Envoy `RBAC: access denied`.
-The current Mac egress and ingress allow rule are being reconciled before any
-SDK operation. Both failed probe attempts are retained in the aggregate request
-budget. No application document write or successful BFF readiness result is
-claimed.
+The current Mac IPv4 was independently confirmed and matches the sole ingress
+allow rule; one DNS A record matches the current static IP, there is no AAAA
+record or local proxy/tunnel, and environment public access is enabled. Three
+failed probe attempts are retained in the aggregate request budget.
+A reviewed app-only update temporarily raised the minimum to one replica without
+changing its image, ingress or permissions. This exposed the actual startup
+fatal: the published image's explicit `-config /run/config/config.json` default
+conflicts with `COSMOS_SYNC_CONFIG_JSON`. The environment configuration must
+explicitly invoke `/cosmos-sync-bff` without that file flag. No Cosmos permission
+denial is inferred from this configuration failure. The command repair and return
+to minimum zero are pending actual runtime verification. No application document
+write or successful BFF readiness result is claimed.
 The [retained deployment runbook](aca-validation-plan.md) documents topology,
 costs, bootstrap, deployment and reuse.
 
