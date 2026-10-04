@@ -73,6 +73,40 @@ and excludes unrelated directory access.
 [Tenant creation](https://learn.microsoft.com/en-us/entra/external-id/customers/quickstart-tenant-setup),
 [Tenant Creator role](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference#tenant-creator).
 
+### Dedicated management access, 2026-10-04
+
+The owner has explicitly resumed all historical owner-paused work. Existing
+CLI Graph access could read registrations and flows but the provider API denied
+the missing `IdentityProvider.Read.All`/`IdentityProvider.ReadWrite.All` OAuth
+permission. A narrow Azure CLI interactive scope request then returned
+`AADSTS65002`, Microsoft's first-party preauthorization restriction. Do not
+work around that restriction by changing product permissions or directory roles.
+
+A separate, secret-free single-tenant public **setup operator** registration and
+service principal were created and read back. They declare only Graph delegated
+`IdentityProvider.ReadWrite.All` and `EventListener.ReadWrite.All`. Administrator
+consent is `Principal`, limited to the existing operator, not `AllPrincipals`.
+The product API/native registrations and their API-only consent are unchanged;
+no new user, directory role, application permission or client secret was created.
+Management uses the registered loopback return and standard MSAL code/PKCE flow.
+
+The current operator authentication passed independently verified ID-JWT
+signature, exact issuer/client audience, tenant and existing-owner checks.
+Microsoft Graph accepted the separate scoped management API credential and
+returned the provider inventory. A redundant self-profile probe and subsequent
+unbounded Python connection failure were not counted as passes. Bounded IPv4
+system-TLS transport resolved the management discovery/call failure without
+disabling certificate verification or adding `User.Read`. Tokens/actual IDs stay
+private; the reusable public-client registration contains no secret.
+
+This is **administrative Microsoft authentication, not customer CIAM login**.
+The existing administrative record uses the `ExternalAzureAD` identity namespace,
+distinct from the documented workforce-federated customer namespace. Do not
+alter that privileged record or silently create another customer profile to
+make a user flow succeed. The one-real-owner/no-new-user limit remains a separate
+scope decision; resumed work and unavailable physical iOS do not supply customer
+login, hosted data or linking/broker-bypass evidence.
+
 Customer users cannot perform their own API permission consent in external
 tenants. An existing authorized administrator must therefore grant only the
 API-specific permission above. The walkthrough's default Graph permission is

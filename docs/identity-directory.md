@@ -71,12 +71,28 @@ the committed challenge, if any, still cannot assign twice.
 This is a small, serialized reference boundary, not a production-scale directory.
 It retains at most 64 accounts, 256 identity bindings, 256 challenges, 512 proof
 digests, 256 audits and 512 KiB of serialized state. An account has at most eight
-active identities and four unexpired pending challenges; directory revision and
-session generation stop at 10,000. There is no TTL/GC. Capacity exhaustion is an
-explicit 507 and can also block unlink: reserved security-operation capacity,
-recovery/cleanup, production sizing and contention review are activation gates,
-not delivered guarantees. A single hot record intentionally serializes writers.
-No cross-partition transaction or monetary cost ceiling is claimed.
+active identities. Normal operations can use three unexpired pending challenges;
+a fourth slot is reserved for unlink. Directory revision and session generation
+stop at 10,000. Unused expired challenges are removed only inside the next valid
+conditional transaction; consumed challenges, proofs, audit and ownership
+tombstones are never pruned or given TTL.
+
+Admission reserves metadata for removing every additional active credential
+while retaining one. It budgets a challenge/commit revision pair, an audit,
+two proof digests, worst-size approved callbacks and counter digit growth per
+potential unlink. Only one allocated unlink challenge per account receives
+credit, because generation advancement invalidates that account's other
+challenges. Registration/link cannot spend those reservations. Normal saturation
+therefore returns an explicit 507 before consuming the reserved unlink path,
+under the unchanged reviewed target configuration. Individual challenge limits,
+last-credential denial, unavailable/corrupt storage, entropy and ambiguous-write
+failures remain distinct; there is no universal recovery guarantee.
+Previously saturated experimental records are not silently repaired or migrated;
+the reservation guarantee applies to state admitted under the new rules.
+
+Production sizing, target-configuration changes, cleanup/recovery and contention
+review remain activation gates. A single hot record intentionally serializes
+writers. No cross-partition transaction or monetary cost ceiling is claimed.
 
 Unlinked identity ownership remains as a tombstone. Only its original account
 can relink it with fresh proof; another account cannot adopt it. Reassignment,
@@ -92,7 +108,12 @@ tests use actual RSA-signed local TLS/JWKS ID-token fixtures, **not actual
 provider connections or a production broker-binding contract**. They cover account/namespace
 isolation, stable ownership, freshness/callback/session/operation binding,
 replay and simultaneous assignment, last-credential denial, retained tombstones,
-corruption, bounded retries, ambiguous outcomes and capacity limits. Official-SDK
+corruption, bounded retries, ambiguous outcomes and capacity limits. Capacity
+tests reach the exact revision/generation boundaries, audit/proof saturation and
+the serialized byte limit with JSON-expanding large callbacks, then actually
+unlink every additional credential without changing ownership. They also verify
+the reserved challenge slot, unused-challenge expiry and pending-generation
+credit independently across accounts. Official-SDK
 transport tests verify the actual one-partition create/conditional-replace wire,
 operation count, ETag and session propagation. These are offline tests, not
 live Cosmos acceptance. The actual emulator contention test now verifies signed
@@ -100,7 +121,7 @@ local proofs before racing independent SDK clients; it does not activate HTTP
 linking or establish a CIAM/provider deployment.
 
 Before production use, settle and verify the CIAM upstream-binding/fresh-auth
-adapter and out-of-band mutation policy; review capacity reservations and
+adapter and out-of-band mutation policy; review production capacity and
 recovery; wire every account lookup, authorization management route, session,
 cursor and client cache surface; and provide common External ID OIDC, cloud and
 the final Android evidence required by the active Issues. Deterministic signed

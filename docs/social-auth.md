@@ -136,7 +136,7 @@ disabled. The [staged internal identity-directory core](identity-directory.md) n
 this transactional model with a bounded, single-record Cosmos adapter and
 explicitly labeled internal proof-stamp tests. It is disconnected from production
 factories and routes. Trusted upstream/fresh-auth proof, broker self-service
-enforcement, production session/cursor/cache wiring, capacity reservations and
+enforcement, production session/cursor/cache wiring, production capacity and
 recovery remain activation gates. This chosen contract adds no endpoints, Graph
 write grants, active session generations, custom refresh families or broker-wide
 linking controls to the published preview.

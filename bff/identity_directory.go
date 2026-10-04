@@ -16,16 +16,17 @@ import (
 )
 
 const (
-	identityChallengeLifetime = 300 * time.Second
-	maxIdentityAccounts       = 64
-	maxIdentityBindings       = 256
-	maxIdentityChallenges     = 256
-	maxIdentityProofs         = 512
-	maxIdentityAudits         = 256
-	maxIdentityDirectoryBytes = 512 * 1024
-	maxAccountIdentities      = 8
-	maxOpenIdentityChallenges = 4
-	maxIdentityGeneration     = 10000
+	identityChallengeLifetime   = 300 * time.Second
+	maxIdentityAccounts         = 64
+	maxIdentityBindings         = 256
+	maxIdentityChallenges       = 256
+	maxIdentityProofs           = 512
+	maxIdentityAudits           = 256
+	maxIdentityDirectoryBytes   = 512 * 1024
+	maxAccountIdentities        = 8
+	maxOpenIdentityChallenges   = 4
+	maxNormalIdentityChallenges = maxOpenIdentityChallenges - 1
+	maxIdentityGeneration       = 10000
 )
 
 // This internal core has no production factory, configuration or HTTP route.
@@ -299,7 +300,13 @@ func (d *identityDirectory) edit(ctx context.Context, apply func(*identityDirect
 			}
 			state = &copy
 		}
-		if err := apply(state, d.now().UTC().Truncate(time.Second)); err != nil {
+		now := d.now().UTC().Truncate(time.Second)
+		for digest, challenge := range state.Challenges {
+			if !challenge.Consumed && !challenge.ExpiresAt.After(now) {
+				delete(state.Challenges, digest)
+			}
+		}
+		if err := apply(state, now); err != nil {
 			return err
 		}
 		state.Revision++
@@ -316,6 +323,9 @@ func (d *identityDirectory) edit(ctx context.Context, apply func(*identityDirect
 		}
 		if !validIdentityDirectory(state) {
 			return protocolError(503, "identity_directory_unavailable")
+		}
+		if err := d.checkSecurityCapacity(state, now); err != nil {
+			return err
 		}
 		err = d.store.compareIdentityDirectory(ctx, version, state)
 		if err == nil {
@@ -375,7 +385,11 @@ func (d *identityDirectory) begin(ctx context.Context, session *directorySession
 					open++
 				}
 			}
-			if open >= maxOpenIdentityChallenges {
+			limit := maxNormalIdentityChallenges
+			if operation == "unlink" {
+				limit = maxOpenIdentityChallenges
+			}
+			if open >= limit {
 				return protocolError(429, "identity_challenge_limit")
 			}
 			challenge.AccountID, challenge.Generation = account.AccountID, account.Generation

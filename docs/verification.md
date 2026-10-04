@@ -435,3 +435,37 @@ replica, secret or application-data write was performed. Common actual CIAM
 login, production trusted linking/Web lifecycle, hosted Cosmos/onboarding and
 final Android OS/real-cloud acceptance remain open; inactive proof and
 simulator successes cannot close those criteria.
+
+## Resumed security capacity and management access, 2026-10-04
+
+The owner lifted the historical blanket work pause and directed tasks that do
+not need physical iOS to proceed first. The remaining Issue bodies now carry
+that active authorization; cancelled actual Google/Apple connections, narrow
+network/live bounds and separate physical evidence remain unchanged.
+
+The inactive directory now reserves audit/proof/challenge/revision/generation
+and serialized-byte capacity for unlinking every additional active credential
+while keeping one. Normal challenges leave a fourth slot for unlink. Only unused
+expired challenges can be pruned inside a valid conditional operation;
+consumed proof/challenge/audit and owner tombstones remain retained. Exact counter
+boundaries, audit/proof saturation, generation-invalidated pending challenges,
+and JSON-expanding large callbacks passed real removal of every additional
+credential. Normal-capacity failures did not partially commit. This does not
+activate any production identity/session/HTTP/client boundary or establish
+universal recovery for old saturated metadata, storage failures or changed targets.
+
+Full BFF vet/race/build and all eight actual official-SDK Cosmos emulator subtests
+passed after this change. The fresh emulator container was removed. Protocol
+mirrors and package-doc checks remain aligned; no protocol wire surface changed.
+
+CIAM management provider access initially failed for missing operator OAuth
+permissions, then Azure CLI's requested scope flow returned first-party
+`AADSTS65002`. A separate secret-free setup public client was verified with
+exactly two Graph delegated management permissions and `Principal` consent for
+the existing administrator. Product API/native permissions, users and roles were
+unchanged. Its MSAL code/PKCE callback, independently verified ID JWT and scoped
+Graph provider read passed through bounded IPv4 system TLS. Earlier failed
+self-profile/network attempts remain separate and supply no acceptance claim.
+This administrative authentication is not a customer user flow. No additional
+customer profile, actual common CIAM login, hosted data write, publication or
+physical device operation occurred at this checkpoint.

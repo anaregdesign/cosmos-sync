@@ -428,7 +428,7 @@ func TestIdentityDirectoryRetainedCapacityAndCredentialLimits(t *testing.T) {
 	_, err = f.d.change(context.Background(), session, raw, "link",
 		f.proof(t, raw, f.google, "owner"), f.proof(t, raw, f.apple, "overflow"))
 	requireAuthorizationCode(t, err, "identity_credential_limit")
-	for i := 1; i < maxOpenIdentityChallenges; i++ {
+	for i := 1; i < maxNormalIdentityChallenges; i++ {
 		if _, err := f.d.begin(context.Background(), &session, "link", f.apple, ""); err != nil {
 			t.Fatal(err)
 		}
