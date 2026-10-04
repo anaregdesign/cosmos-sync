@@ -8,9 +8,15 @@ subset. [The onboarding acceptance](developer-onboarding.md) tracks the complete
 journey. Actual Azure work is now staged: the private prerequisites and cursor
 bootstrap/reuse passed, and the workload's UAMI plus exact container/secret roles
 exist. An environment recovery PUT returned `Succeeded`, but no static IP or
-platform resources appeared; the app failed with zero revisions.
-**The reviewed replacement of only these empty app/environment stubs is underway;
-runtime acceptance is pending**. Hosted managed-identity/network,
+platform resources appeared; the app failed with zero revisions. The exact saved
+recovery apply subsequently replaced only those empty stubs and completed
+successfully on 2026-10-04.
+**The environment/app are created; actual endpoint/data acceptance is pending**.
+Post-apply static IP, image/UAMI/versioned Vault reference and role/PE/DNS metadata
+checks passed. One active provisioned revision has zero replicas, health None and
+running ActivationFailed; TLS-verified `/healthz` returns Envoy RBAC 403.
+Environment public access is Enabled/internal false. The Mac address matches the sole Allow `/32`; the cause is
+under diagnosis, with no application-data writes. Hosted managed-identity/network,
 readiness, SDK and rollout acceptance remain open. The
 [retained topology and portable deployment sequence](aca-validation-plan.md)
 records completed stages, exact settings/IAM, costs and current blockers;
@@ -249,8 +255,10 @@ same private state before a new saved plan. Check actual static IP, owned
 platform-managed LB/IP resources and serving revisions, not just ARM status.
 The current feature/provider read Registered, but a recovery PUT produced no
 infrastructure and its app failed with zero revisions. The saved recovery plan
-therefore replaces only the same-name, proven unused empty app/environment stubs;
-four IAM resources are no-ops and persistent key/data/network resources are retained.
+therefore replaced only the same-name, proven unused empty app/environment stubs
+and completed successfully; four IAM resources were no-ops and persistent
+key/data/network resources are retained. The completed apply is distinct from
+endpoint/readiness or managed-identity data acceptance.
 The one-off guard exception is confined to the private recovery copy; tracked
 module destruction guards remain enabled. Do not blindly repeat PUTs, manually
 delete a service association link/subnet/platform group, create an alternate
@@ -289,9 +297,11 @@ rates. Do not log JWTs, authorization headers, grant JSON or document contents.
 
 Zero replicas reduces ACA compute usage, not retained Cosmos storage/throughput,
 Key Vault operations or the VNet environment's managed LB/IP and backend
-endpoint/DNS fees. The selected network base is approximately **$41.15 per
-730-hour month**, before traffic, DNS queries, compute/storage and contract/tax
-adjustments; it is an estimate, not an observed bill. See the
+endpoint/DNS fees. The original up-to-two-public-IP planning envelope is
+approximately **$41.15 per 730-hour month**, before traffic, DNS queries,
+compute/storage and contract/tax adjustments. Current platform inventory has one
+public IP and one LB; the envelope is not an observed invoice or a claim that two
+IPs were created. See the
 [cost breakdown](aca-validation-plan.md#cost-and-retention-choices). Replica caps
 are not spend caps; polling, snapshots and retry traffic consume Cosmos RU.
 Review current regional prices, owner-defined budget alerts and cost attribution

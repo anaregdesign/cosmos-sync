@@ -7,16 +7,23 @@ resources applied successfully. The cursor key was initialized once; the public
 bootstrap tool subsequently reused the same version's metadata with no PUT.
 The dedicated BFF UAMI and exact container/secret permissions are also created.
 
-**The BFF app has not run. A reviewed replacement of the empty ACA stubs is in
-progress.** The environment's recovery ARM PUT returned `Succeeded`, but readback
-showed no static IP and no resources in its owned platform group. The app failed
-after approximately 21 minutes with zero revisions. The saved recovery plan
-replaces only those same-name unused app/environment stubs; its four IAM resources
-are unchanged. App deletion completed and environment deletion is underway.
-No BFF protocol calls or application-data writes have occurred. HTTPS readiness,
-private DNS from the runtime, Key Vault reference resolution, managed-identity
-Cosmos access and the bounded SDK contract remain unperformed. ARM status and
-role-assignment success do not close those runtime gates. See
+**The reviewed workload recovery apply completed successfully at 02:49:28 UTC
+on 2026-10-04; actual endpoint/data acceptance is still pending.** Its saved plan
+replaced only the same-name unused app/environment stubs and left the four IAM
+resources unchanged. The earlier environment recovery PUT had returned
+`Succeeded` without a static IP or platform resources, and its app failed after
+approximately 21 minutes with zero revisions. The completed replacement records
+control-plane creation, not verified HTTPS readiness, private DNS from the runtime,
+Key Vault reference resolution, managed-identity Cosmos access or the bounded SDK
+contract. Subsequent metadata checks passed the static IP, exact image/UAMI,
+versioned Vault reference, role assignments and Private Endpoint/DNS configuration.
+There is one provisioned active revision with zero replicas, `healthState=None`
+and `runningState=ActivationFailed`; it has not passed serving acceptance.
+macOS SecureTransport verified endpoint TLS, but `/healthz` returned an Envoy
+RBAC 403. Two public-IP services confirmed the current Mac address matches the
+sole ingress Allow `/32`; the cause of the edge denial is under diagnosis.
+No application-data writes have occurred. ARM status and role-assignment success
+do not close the remaining runtime gates. See
 [verification](verification.md) for the latest acceptance record.
 
 The owner authorized necessary minimal Azure resources/settings in the selected
@@ -46,11 +53,11 @@ Only the successful compatible account and dedicated retained group are used.
 | Vault Private Endpoint | Created for this vault, `vault` subresource, dedicated NIC and private DNS zone group |
 | Private DNS | Created: `privatelink.documents.azure.com` and `privatelink.vaultcore.azure.net`, linked to this VNet, automatic registration disabled |
 | Cursor secret | Initialized once outside Terraform: `cosmos-sync-cursor`, 32 random bytes in standard Base64; actual version URI retained, metadata-only reuse passed |
-| BFF UAMI | Created: `PREFIX-bff`; serving workload association is pending the app |
+| BFF UAMI | Created: `PREFIX-bff`; workload association applied, actual runtime use awaits acceptance |
 | Cosmos native role/assignment | Created: only `ACCOUNT/dbs/DATABASE/colls/CONTAINER`; metadata read, item read/create/replace, query and readChangeFeed |
 | Vault secret assignment | Created: Key Vault Secrets User only at `VAULT/secrets/cosmos-sync-cursor`, assigned to the BFF UAMI |
-| ACA environment/app | Empty failed stubs are being replaced through the reviewed saved plan; no serving revision. Selected Consumption profile, HTTPS with current operator `/32` ingress, peer encryption, 0.25 vCPU/0.5 GiB, replicas 0–1 |
-| Platform infrastructure | Exact managed-group name supplied through `infrastructure_resource_group_name`; failed environment had no static IP and zero group resources. Expected Standard LB and ingress/egress IPv4 require actual readback after recovery |
+| ACA environment/app | ARM Succeeded after reviewed recovery; exact image/UAMI/versioned secret reference metadata passed. One active provisioned revision, zero replicas, health None/running ActivationFailed; edge RBAC 403 is under diagnosis. Environment public access Enabled/internal false. Selected Consumption profile, HTTPS with current operator `/32` ingress, peer encryption, 0.25 vCPU/0.5 GiB, replicas 0–1 |
+| Platform infrastructure | Exact managed-group name supplied through `infrastructure_resource_group_name`; current readback finds one public IP and one LB. Static IP metadata passed; the earlier failed environment had zero platform resources |
 
 The prerequisite module manages ten resources: VNet, two subnets, vault, two
 Private Endpoints, two DNS zones and two VNet links. NICs, DNS zone groups/records
@@ -63,9 +70,9 @@ VPN, private ACA ingress or subscription-wide runtime role.
 flowchart LR
   Native["Flutter native app / Dart SDK"] -->|"browser PKCE; API access JWT"| Workforce["Workforce Entra: validated native login"]
   Native -. "consumer login pending" .-> CIAM["Separate CIAM API/native apps + API-only consent"]
-  Native -. "HTTPS + API JWT; operator /32" .-> Edge["ACA empty-stub replacement in progress"]
+  Native -. "verified TLS; current health RBAC 403" .-> Edge["ACA ARM Succeeded; ingress denial under diagnosis"]
   subgraph VNet["Dedicated retained VNet: 10.227.40.0/24"]
-    BFF["BFF has no serving revision; selected .25 vCPU / .5 GiB; 0–1 replicas"]
+    BFF["BFF activation under diagnosis; selected .25 vCPU / .5 GiB; 0–1 replicas"]
     DNS["Linked private DNS zones"]
     CosmosPE["Sql Private Endpoint: separate PE subnet"]
     VaultPE["vault Private Endpoint: separate PE subnet"]
@@ -299,14 +306,29 @@ Activity Logs contain only the original six IP-creation attempts rejected for
 the missing feature; no later LB/IP retry appeared during that reconciliation.
 ARM `Succeeded` alone therefore did not establish a usable environment.
 
-The current recovery applies a separately saved and reviewed plan replacing only
+The completed recovery applied a separately saved and reviewed plan replacing only
 the **same-name, proven empty and unused** app/environment stubs. Three independent
 reviews checked the two replacements and four IAM no-ops. A one-off private copy
 permits only these two guarded replacements; the tracked module's destruction
-guards remain enabled. App deletion completed and empty-environment deletion is
-underway. Cosmos/database/container, Vault, key/version, Private Endpoints, DNS,
+guards remain enabled. Both empty stubs were replaced, and the exact saved apply
+completed successfully at 02:49:28 UTC on 2026-10-04. Cosmos/database/container, Vault, key/version, Private Endpoints, DNS,
 VNet/subnets, UAMI and all four IAM resources are retained. No alternate
 environment, policy exception or BFF application-data write is introduced.
+
+Current post-recovery metadata checks find the expected static IP, one public IP
+and one LB in the exact owned platform group, plus the exact image/UAMI/versioned
+Vault reference and scoped roles. There is one active provisioned revision with
+zero replicas, `healthState=None` and `runningState=ActivationFailed`.
+Endpoint/data acceptance remains open, and a TLS-verified macOS request returns Envoy RBAC
+403 on `/healthz`. The observed system event only reports KEDA deactivation; it
+does not establish a BFF/Cosmos fault or a permanent app failure. Environment
+readback shows `publicNetworkAccess=Enabled` and `internal=false`, ruling out the
+disabled-public-environment hypothesis. Diagnose the ingress evidence without
+assuming the cause or widening the allowed `/32`. Two independent IP services matched the actual
+Mac address to that sole Allow rule. The first Python probe could not establish
+TLS because its local default CA file/directory were absent; use a correctly
+trusted TLS client rather than disabling verification or attributing this client
+trust failure to the service.
 
 For another subscription, inspect the needed providers and the exact service
 error. If that feature is required, enroll only it within the operator's authority,
@@ -331,10 +353,15 @@ assumed available.
 
 | Network fixed component | Hourly/monthly estimate |
 | --- | --- |
-| Two Standard static IPv4 plus Standard LB | $0.035/hour; about $25.55/730 hours |
+| Planning envelope: up to two Standard static IPv4 plus Standard LB | $0.035/hour; about $25.55/730 hours |
 | Two backend Private Endpoints | $0.02/hour combined; about $14.60/730 hours |
 | Two Private DNS zones | About $1.00/month combined, plus queries |
-| **Retained total network base** | **About $41.15/730-hour month**, before data/queries/extra platform rules |
+| **Two-IP planning network base** | **About $41.15/730-hour month**, before data/queries/extra platform rules |
+
+Actual platform inventory currently contains **one public IP and one LB**. The
+$41.15 figure retains the original up-to-two-IP planning envelope; it is not an
+observed invoice or a claim that two public IPs were created. Confirm actual
+billable meters, durations, platform rules and contract adjustments separately.
 
 LB processing is $0.005/GB; endpoint processing starts at $0.01/GB; actual
 platform rule counts must be checked for additional LB rules. Private Endpoint
@@ -357,7 +384,8 @@ Retain-for-reuse is the current default: the reusable resources stay. A temporar
 hosted verification followed by explicit retirement of only the new ACA app,
 environment and managed LB/IP removes that component but leaves approximately
 $15.60/month for retained endpoint/DNS connectivity. Scaling/stopping the app
-does not remove the $25.55 network component. Such retirement needs a separate
+does not remove the managed LB/IP fixed charges (up to $25.55 in this planning
+envelope). Such retirement needs a separate
 review and owner authorization; it never authorizes removing Cosmos, Entra,
 cursor key, data or the validation group. No teardown permission is inferred.
 
@@ -372,13 +400,18 @@ this selected configuration. The initial hosted smoke avoids new Mac private net
 The prerequisite apply and cursor initialization/reuse are actual Azure results;
 the runtime identity/role resources are also created. ARM environment recovery
 did not produce platform infrastructure or a serving app. The reviewed empty-stub
-replacement is in progress; app/runtime acceptance gates are still pending, with
-no BFF protocol calls or application-data writes. The latest local suite passed 22
+replacement workload apply then completed successfully; actual endpoint/data
+acceptance is still pending. Static IP, image/UAMI/versioned Vault reference,
+scoped role and PE/DNS metadata checks passed. One provisioned active revision
+has zero replicas, health None and running ActivationFailed; it and the
+Envoy RBAC 403 remain under diagnosis; no application-data writes have occurred.
+The latest local suite passed 22
 workload-module mock plans, seven prerequisite mock plans, both pinned validators
 and 127 Python tool tests (84 existing, 13 hosted-gate, 30 bootstrap tests). These
 checks establish source/guard behavior, not hosted health or data access.
 
-Fresh workforce Mac AppAuth passed its callback, Keychain restore, refresh and
-API JWT proof. It is distinct from the new CIAM registrations and from hosted
+Fresh workforce Mac AppAuth passed its callback, Keychain restore and refresh.
+Both fresh API JWTs passed signature, issuer, audience, delegated scope, tenant
+and approved-owner validation. This is distinct from the new CIAM registrations and from hosted
 Cosmos/ACA acceptance. Preserve that separation in Issues and
 [verification](verification.md). Credentials never need to be pasted into chat.

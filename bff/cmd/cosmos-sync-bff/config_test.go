@@ -21,6 +21,17 @@ func TestConfigurationEnvironmentDoesNotRequireFile(t *testing.T) {
 	}
 }
 
+func TestConfigurationReadsOptionalClientAdmission(t *testing.T) {
+	const id = "00000000-0000-0000-0000-000000000004"
+	cfg, err := readConfiguration("missing.json", false, configEnv(`{"oidc":{"allowedClientIds":["`+id+`"]}}`, true))
+	if err != nil || len(cfg.OIDC.AllowedClientIDs) != 1 || cfg.OIDC.AllowedClientIDs[0] != id {
+		t.Fatal("optional signed-azp client admission configuration was not loaded")
+	}
+	if _, err := readConfiguration("missing.json", false, configEnv(`{"oidc":{"allowedClientIds":[7]}}`, true)); err == nil {
+		t.Fatal("malformed client admission identifier accepted")
+	}
+}
+
 func TestConfigurationRejectsInvalidOrLargeEnvironmentWithoutValues(t *testing.T) {
 	secret := "never-print-this-secret"
 	for _, value := range []string{"", `{`, `{"unknown":"` + secret + `"}`, `{} {}`, `{"tlsMode":"container-apps"}`, strings.Repeat(secret, maxConfigBytes/len(secret)+1)} {

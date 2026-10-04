@@ -10,9 +10,14 @@ local, emulator, native-provider and device results are separate evidence in
 [verification](verification.md). Actual private-network/Vault prerequisites,
 cursor initialization/reuse and exact runtime roles are now created. The retained
 ACA recovery returned ARM `Succeeded` without a static IP or platform resources;
-the app failed with zero revisions. A reviewed saved plan is replacing only these
-empty app/environment stubs. No BFF protocol calls or application-data writes have
-occurred; hosted SDK acceptance remains pending.
+the app failed with zero revisions. A reviewed saved recovery plan subsequently
+replaced only these empty app/environment stubs and applied successfully on
+2026-10-04. Static IP, image/identity/secret-reference and role/PE/DNS metadata
+checks passed. One active provisioned revision has zero replicas, health None and
+running ActivationFailed; TLS-verified Envoy RBAC 403 on health remains under
+diagnosis. No application-data writes have occurred. Fresh native
+Mac login and both API JWT signature/issuer/audience/scope/tenant/owner checks
+passed separately. Actual endpoint/data and hosted SDK acceptance remain pending.
 Use the [retained topology and deploy sequence](aca-validation-plan.md) to reproduce
 those stages without interpreting resource creation as hosted acceptance.
 
@@ -109,8 +114,10 @@ out-of-band edits break the supported journal/receipt contract.
 Use the runbook's minimal single-replica configuration for a bounded validation:
 0.25 vCPU/0.5 GiB, replicas 0–1, operator `/32` HTTPS ingress, public GHCR digest,
 private backend endpoints, and no NAT or new log workspace. Scale-to-zero retains
-fixed network charges; the selected network estimate is about $41.15/730-hour
-month before traffic, compute, storage and contract adjustments.
+fixed network charges; the original up-to-two-public-IP planning envelope is
+about $41.15/730-hour month before traffic, compute, storage and contract
+adjustments. Current platform inventory contains one public IP and one LB; the
+envelope is not an observed invoice.
 Scaling beyond one replica requires a shared signing key and a selected
 authorization source with a documented revocation delay; a stale per-replica
 grants file must not become the deployment's permission authority. The selected
@@ -159,8 +166,9 @@ plans do not prove Azure permissions, image availability, firewall connectivity
 or managed-identity data access. Record actual apply/readiness separately in #32.
 For this repository's current work, the owner authorized necessary minimal Azure
 resources/settings in the selected subscription and the needed tenant setup.
-Prerequisites and runtime role resources are created; the app/runtime gates remain
-pending. Keep using that exact reviewed target and saved plans. Retain reusable
+Prerequisites, runtime roles and the replacement environment/app are created;
+actual endpoint/data gates remain pending. Keep using that exact reviewed target
+and saved plans. Retain reusable
 Cosmos, Entra, Vault, network and hosting resources; no automatic retirement is
 included. A future deployment must be within its own operator authority.
 

@@ -14,6 +14,18 @@ explicit compatible-image/new-namespace verification assertion. Explicit legacy
 mode contains empty grants and denies all end users. Neither mode adopts legacy
 data or provisions identity-provider accounts automatically.
 
+`oidc.allowed_client_ids` optionally restricts API admission to exact signed
+`azp` client IDs in addition to the existing issuer, API audience and scope
+checks. It defaults to `[]`; empty/omitted values omit `allowedClientIds` from
+runtime JSON so already published strict-decoder images retain compatibility.
+Before opting in, pin an updated source-addressed image that implements this
+setting. The original public `0.2.0-dev.1` image from commit `82e937c` does not
+support this field and rejects it at startup. Use registered native public client
+IDs, with at most 32 distinct visible ASCII
+values of 1–256 bytes, and configure every replica consistently. This restriction
+does not prove the native app binary or upstream Google/Apple authentication;
+see [the BFF admission boundary](../../../bff/README.md).
+
 Set optional `infrastructure_resource_group_name` to a new, unused unqualified
 resource group name when the owner needs a deterministic ACA infrastructure cost
 scope. The platform creates/manages that group in the approved environment/subnet

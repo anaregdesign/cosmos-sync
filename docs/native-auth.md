@@ -1,8 +1,9 @@
 # Native end-user authentication
 
 Apple and Google are the intended practical end-user login providers. This page
-describes the implemented native OIDC API-access-token adapter; the dedicated
-Entra validation path is not an Apple/Google implementation. The
+describes the implemented native OIDC API-access-token adapter and its opt-in
+External ID provider navigation; the dedicated workforce Entra validation does
+not establish an actual Apple/Google login. The
 [social-login design](social-auth.md) covers their additional trust boundary,
 identity linking, platform requirements and acceptance work.
 
@@ -16,7 +17,56 @@ See [AppAuth Android](https://github.com/openid/AppAuth-Android),
 [AppAuth iOS/macOS](https://github.com/openid/AppAuth-iOS) and the
 [Flutter adapter](https://pub.dev/packages/flutter_appauth).
 
-## Apple and Google roadmap
+## Apple and Google broker navigation
+
+The sample supports typed Google/Apple navigation through the same AppAuth
+Authorization Code with PKCE flow. Microsoft documents
+[`domain_hint=google` and `domain_hint=apple`](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-authentication-methods-customers#issuer-acceleration)
+for External ID issuer acceleration. The adapter sends that single additional
+parameter only on the interactive authorization request. Refresh, logout and
+Cosmos Sync requests receive no provider preference, extra scopes or provider
+credentials. This hint directs browser navigation; it is not verified provider
+identity, a link request or a data permission.
+
+Provider buttons are hidden by default. After enabling each provider on the
+native client's associated External ID user flow and verifying real login,
+operators can supply this **public build configuration** in a local
+`broker-capabilities.json` file:
+
+```json
+{
+  "COSMOS_SYNC_ENTRA_BROKER_CAPABILITIES": "{\"version\":1,\"issuer\":\"https://YOUR-TENANT-ID.ciamlogin.com/YOUR-TENANT-ID/v2.0\",\"clientId\":\"YOUR-NATIVE-PUBLIC-CLIENT-ID\",\"providers\":[\"google\",\"apple\"]}"
+}
+```
+
+```sh
+cd examples/flutter_app
+flutter run --dart-define-from-file=/absolute/path/broker-capabilities.json
+```
+
+Advertise only the providers actually enabled and verified for that application.
+The JSON parser accepts version 1 and only the issuer/client/provider fields;
+unknown providers, duplicate or empty lists, embedded credentials and invalid
+HTTPS origins are rejected with fixed errors. The current capability validator
+supports `*.ciamlogin.com` issuers with a tenant path; branded custom domains
+need a separately reviewed extension. The issuer and native client ID must match
+the form exactly before Google/Apple buttons appear. Changing either field hides
+them. A caller requesting an unavailable provider fails before browser launch or
+credential replacement. Saved connection preferences cannot enable provider
+buttons; only the current operator-supplied build configuration does.
+
+The generic **Save and sign in** button remains available and sends no hint.
+All sign-in buttons share the existing busy/cancellation lifecycle. A late
+callback after cancellation cannot activate credentials or reopen a cache.
+The preference is excluded from stored credential/cache bindings: every new
+interactive login still generates a new credential session and requires a
+BFF-verified owner before cache access. Buttons do not enforce which identity
+provider the broker ultimately used. There is no direct Google/Apple SDK, custom
+token exchange, account linking or provider-ID-token admission in this adapter.
+The current consumer deployment has not yet configured or verified either
+provider, so its capability flags must remain disabled.
+
+## Apple and Google deployment and remaining work
 
 The first integration candidate is a consumer identity broker that federates
 Apple/Google login and issues an access token for the Cosmos Sync API. Microsoft
@@ -198,7 +248,13 @@ Keychain Sharing entitlement is needed for its local legacy mode. Apple native
 startup disables shared `URLCache` token-response caching. Review the platform
 files if changing application IDs, redirect schemes or signing teams.
 
-Run `flutter test test/auth` for offline unit/security regressions. They cover
+Run `flutter test test/auth test/ui_test.dart test/app_lifecycle_test.dart` for
+offline unit/security regressions. They additionally cover typed provider
+request parameters, exact capability binding, hidden/default buttons,
+unavailable-provider rejection, cancellation/late callbacks and BFF-established
+cache ownership during a Google/Apple navigation switch. These use simulated
+provider and BFF responses; real provider registration/login and platform
+acceptance remain in #28 and #30. Existing regressions cover
 refresh concurrency/rotation and synchronous listener reentry, missing access
 tokens, cancellation during a secure
 write, late authorization/refresh completion after logout, config/account binding,

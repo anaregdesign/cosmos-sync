@@ -71,7 +71,8 @@ class AuthSessionController extends ChangeNotifier {
       );
     }
     _generation++;
-    _config = config;
+    // Navigation intent belongs to one authorization request, not a session.
+    _config = config.withBrokerCapabilities(config.brokerCapabilities);
     _forgetCredentials();
     _setState(AuthSessionState.signedOut);
   }
@@ -159,8 +160,11 @@ class AuthSessionController extends ChangeNotifier {
     }
   }
 
-  Future<void> signIn() {
-    final config = _requireConfig();
+  Future<void> signIn({BrokerProvider? provider}) {
+    final configured = _requireConfig();
+    final config = provider == null
+        ? configured
+        : configured.forBrokerProvider(provider);
     if (_signInFlight != null ||
         _restoreFlight != null ||
         _state == AuthSessionState.signingOut) {

@@ -22,13 +22,13 @@ locals {
     storage        = "cosmos"
     historyEpoch   = var.history_epoch
     allowedOrigins = var.allowed_origins
-    oidc = {
+    oidc = merge({
       issuer        = var.oidc.issuer
       audience      = var.oidc.audience
       requiredScope = var.oidc.required_scope
       tenantClaim   = var.oidc.tenant_claim
       tokenUse      = var.oidc.token_use
-    }
+    }, length(var.oidc.allowed_client_ids) == 0 ? {} : { allowedClientIds = var.oidc.allowed_client_ids })
     cosmos = {
       endpoint          = var.cosmos.endpoint
       database          = var.cosmos.database

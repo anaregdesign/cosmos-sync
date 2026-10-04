@@ -55,11 +55,12 @@ variable "cosmos" {
 variable "oidc" {
   description = "Dedicated API access JWT verification. Provider registration, consent and end-user grants remain operator prerequisites."
   type = object({
-    issuer         = string
-    audience       = string
-    required_scope = string
-    tenant_claim   = optional(string, "tid")
-    token_use      = optional(string, "")
+    issuer             = string
+    audience           = string
+    required_scope     = string
+    tenant_claim       = optional(string, "tid")
+    token_use          = optional(string, "")
+    allowed_client_ids = optional(list(string), [])
   })
   validation {
     condition = (
@@ -69,6 +70,14 @@ variable "oidc" {
       length(var.oidc.tenant_claim) > 0
     )
     error_message = "Set an HTTPS issuer, API audience, one delegated scope and tenant claim; never configure an ID-token audience."
+  }
+  validation {
+    condition = (
+      length(var.oidc.allowed_client_ids) <= 32 &&
+      length(distinct(var.oidc.allowed_client_ids)) == length(var.oidc.allowed_client_ids) &&
+      alltrue([for id in var.oidc.allowed_client_ids : can(regex("^[!-~]{1,256}$", id))])
+    )
+    error_message = "Optional allowed_client_ids must contain at most 32 distinct nonempty visible ASCII client IDs of at most 256 bytes; matching signed azp is exact."
   }
 }
 

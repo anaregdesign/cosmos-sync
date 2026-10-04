@@ -16,6 +16,9 @@ oidc = {
   issuer         = "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000002/v2.0"
   audience       = "00000000-0000-0000-0000-000000000003"
   required_scope = "Cosmos.Sync"
+  # Opt in only with an image supporting allowedClientIds. Empty/omitted keeps
+  # existing behavior and omits the new JSON key for older strict-decoder images.
+  # allowed_client_ids = ["00000000-0000-0000-0000-000000000004"]
 }
 image = "ghcr.io/anaregdesign/cosmos-sync-bff@sha256:0000000000000000000000000000000000000000000000000000000000000000"
 key_vault = {

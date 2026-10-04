@@ -169,15 +169,23 @@ and zero revisions. Scoped Activity Logs contain the original six missing-featur
 IP failures and no later IP/LB retry, supporting the inference that the update
 did not rebuild the execution infrastructure.
 
-A reviewed V4 plan replaces only that unused empty environment and failed app,
-with the same names; four UAMI/IAM resources are no-op. Independent plan/source
-checks passed 26, 24 and 28 checks. The two destroy-guard exceptions exist only
-in the private recovery copy; published module guards remain enabled. The app
-has been deleted and environment deletion is underway. Cosmos, Key Vault/key,
+The reviewed V4 saved plan successfully recreated only that unused empty
+environment and failed app at 2026-10-04 02:49:28 UTC, with the same names;
+four UAMI/IAM resources were no-op. Independent plan/source checks passed
+26, 24 and 28 checks. The two destroy-guard exceptions exist only in the private
+recovery copy; published module guards remain enabled. Cosmos, Key Vault/key,
 private endpoints/DNS/VNet, identity/permissions and the old East US record are
-retained. No BFF protocol request or application document write has occurred.
-A fresh endpoint/static IP, owned platform resources and ready revision must be
-verified before hosted acceptance.
+retained. Actual readback verified a static IP, the owned platform load balancer
+and IP, pinned image, managed identity, versioned secret reference, scoped roles
+and private-endpoint/DNS configuration. A zero-replica revision reported
+`ActivationFailed`; system logs contained only normal KEDA deactivation and
+console logs had no running replica. The initial HTTPS check failed because
+this Mac's Python/OpenSSL has no default CA file or directory; macOS
+SecureTransport then verified TLS and returned Envoy `RBAC: access denied`.
+The current Mac egress and ingress allow rule are being reconciled before any
+SDK operation. Both failed probe attempts are retained in the aggregate request
+budget. No application document write or successful BFF readiness result is
+claimed.
 The [retained deployment runbook](aca-validation-plan.md) documents topology,
 costs, bootstrap, deployment and reuse.
 

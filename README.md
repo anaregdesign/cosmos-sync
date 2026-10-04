@@ -152,9 +152,14 @@ private backend prerequisites applied; the cursor key was initialized once and
 metadata-only public-tool reuse returned the same version without PUT. The BFF
 UAMI and exact container/secret roles are created. ACA recovery returned ARM
 `Succeeded` without a static IP or platform resources; the app failed with zero
-revisions. The reviewed saved plan is replacing only those same-name empty
-app/environment stubs while retaining the key, data, network and IAM resources.
-No BFF protocol calls or application-data writes have occurred.
+revisions. The exact reviewed recovery plan subsequently replaced only those
+same-name empty app/environment stubs and applied successfully on 2026-10-04,
+retaining the key, data, network and IAM resources. Post-apply static IP,
+image/identity/secret-reference and role/PE/DNS metadata checks passed; current
+platform inventory has one public IP and one LB. One active provisioned revision
+has zero replicas, health None and running ActivationFailed; TLS-verified Envoy
+RBAC 403 on health remains under diagnosis, with no application
+data writes. Fresh Mac native login and both API JWT validations passed separately.
 **Runtime private DNS/Vault/managed-identity acceptance and the hosted SDK test
 remain pending**.
 The Mac IP ACL does not provide direct Cosmos connectivity.

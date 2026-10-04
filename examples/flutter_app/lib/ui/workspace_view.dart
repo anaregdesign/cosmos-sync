@@ -48,6 +48,21 @@ class _WorkspaceViewState extends State<WorkspaceView>
     }
     _sharedScopeId = widget.controller.sharedScopeId ?? _sharedScopeId;
     if (_sharedScopeId != null) _scope = SyncScopeMode.shared;
+    _issuer.addListener(_providerSettingsChanged);
+    _clientId.addListener(_providerSettingsChanged);
+  }
+
+  void _providerSettingsChanged() => setState(() {});
+
+  List<BrokerProvider> get _brokerProviders {
+    final capabilities = widget.controller.brokerCapabilities;
+    return capabilities != null &&
+            capabilities.matches(
+              issuer: _issuer.text.trim(),
+              clientId: _clientId.text.trim(),
+            )
+        ? capabilities.providers
+        : const [];
   }
 
   @override
@@ -305,10 +320,20 @@ class _WorkspaceViewState extends State<WorkspaceView>
               key: const Key('sign-in'),
               onPressed: working || widget.controller.auth.isSignedIn
                   ? null
-                  : _signIn,
+                  : () => _signIn(),
               icon: const Icon(Icons.login),
               label: const Text('Save and sign in'),
             ),
+            for (final provider in _brokerProviders)
+              OutlinedButton(
+                key: Key('sign-in-${provider.name}'),
+                onPressed: working || widget.controller.auth.isSignedIn
+                    ? null
+                    : () => _signIn(provider: provider),
+                child: Text(
+                  'Continue with ${provider == BrokerProvider.google ? 'Google' : 'Apple'}',
+                ),
+              ),
             OutlinedButton(
               key: const Key('connect-online'),
               onPressed: widget.controller.canConnect
@@ -436,7 +461,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
     );
   }
 
-  void _signIn() {
+  void _signIn({BrokerProvider? provider}) {
     if (!_form.currentState!.validate()) return;
     try {
       if (Uri.parse(_redirect.text.trim()).scheme !=
@@ -460,7 +485,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
         ),
       );
       setState(() => _formError = null);
-      unawaited(widget.controller.signIn(settings));
+      unawaited(widget.controller.signIn(settings, provider: provider));
     } catch (_) {
       setState(
         () => _formError =

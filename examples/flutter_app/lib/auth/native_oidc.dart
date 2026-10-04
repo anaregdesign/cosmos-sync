@@ -35,6 +35,9 @@ class NativeOidcClient implements OidcClient {
             config.redirectUrl,
             discoveryUrl: config.discoveryUrl,
             scopes: config.scopes,
+            additionalParameters: config.brokerProvider == null
+                ? null
+                : {'domain_hint': config.brokerProvider!.name},
             allowInsecureConnections: false,
             externalUserAgent: ExternalUserAgent.asWebAuthenticationSession,
           ),
