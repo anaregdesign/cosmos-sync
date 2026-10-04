@@ -4,6 +4,31 @@ The retained West US2 validation environment was created on 2026-10-04. It has a
 
 The [retained deployment runbook](aca-validation-plan.md) describes the actual topology and portable prerequisite, key-bootstrap and workload steps. [Verification](verification.md) distinguishes control-plane setup, native identity proof and actual cloud data evidence. Existing authorization covers this environment; a future operator must establish their own target and permission. Owner-specific identifiers and credentials stay in ignored private files. No policy exception or public-network bypass was used.
 
+The BFF reached actual healthy startup after overriding the image's default
+file-config command with `command=["/cosmos-sync-bff"]` and no arguments. Actual
+readback confirmed min0/max1 while retaining the pinned image, managed identity,
+versioned cursor-key reference and sole Mac `/32`. That checkpoint still uses the
+first BFF image; a newer source-addressed public image is available in
+[release details](release.md). Five external probe attempts have not established
+health/readiness through ingress: the latest system-TLS-verified request still
+received Envoy `RBAC: access denied`, despite a fresh matching Mac IPv4 check.
+Hosted SDK execution and application document writes remain zero.
+At 04:41:33 UTC, actual revision metadata and an independent replica list both
+confirmed zero replicas, with `Healthy`/`Provisioned`/`ScaledToZero` metadata.
+This dated observation does not promise persistent zero compute or zero total
+billing; retained network endpoints/DNS/load balancer/IP, storage and logs still
+have separate charges.
+
+HTTP-only diagnostics now have a retained PerGB2018 workspace, 30-day retention
+and 0.023 GB/day cap, plus the existing environment's Azure Monitor destination.
+Readback verified HTTP as the only enabled category, with metrics and all other
+categories disabled. The service returned `logAnalyticsDestinationType: null`
+despite the requested `Dedicated`; this difference remains unresolved. Actual
+HTTP table schema exists, but four bounded correlated queries returned no rows.
+Configuration and schema availability do not establish log delivery or the cause
+of the ingress rejection. The cap can overshoot and is not a spending ceiling.
+These diagnostics use the existing CLI identity and no new IAM, keys or consent.
+
 For the actual hosted single-replica SDK contract, copy the [bounded hosted manifest](../ops/azure/hosted-validation.example.json) and follow the [deployment acceptance sequence](aca-validation-plan.md#portable-deployment-and-acceptance-sequence). The older two-local-BFF harness below remains a separate unverified contract.
 
 Environment/operations are tracked in [#16](https://github.com/anaregdesign/cosmos-sync/issues/16), and the app → OIDC → BFF → Azure → device chain in [#24](https://github.com/anaregdesign/cosmos-sync/issues/24). Dedicated workforce Entra settings are in [identity setup](entra-setup.md); consumer registrations and remaining Google/Apple provider configuration are in [External ID setup](external-id-setup.md).

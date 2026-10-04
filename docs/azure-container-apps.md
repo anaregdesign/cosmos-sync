@@ -11,13 +11,20 @@ exist. An environment recovery PUT returned `Succeeded`, but no static IP or
 platform resources appeared; the app failed with zero revisions. The exact saved
 recovery apply subsequently replaced only those empty stubs and completed
 successfully on 2026-10-04.
-**The environment/app are created; actual endpoint/data acceptance is pending**.
+**Actual BFF startup/readiness passed after the command fix; external endpoint
+and SDK acceptance remain blocked**.
 Post-apply static IP, image/UAMI/versioned Vault reference and role/PE/DNS metadata
-checks passed. One active provisioned revision has zero replicas, health None and
-running ActivationFailed; TLS-verified `/healthz` returns Envoy RBAC 403.
-Environment public access is Enabled/internal false. The Mac address matches the sole Allow `/32`; the cause is
-under diagnosis, with no application-data writes. Hosted managed-identity/network,
-readiness, SDK and rollout acceptance remain open. The
+checks passed. At 03:44:58 UTC on 2026-10-04 the latest-ready revision was Healthy,
+with one Running container, zero restarts/listening and eleven runtime checks
+passed. The saved min=1-to-zero restoration and configuration readback passed.
+The final 04:41:33 UTC checkpoint passed 19/19, observing latest-ready equal to
+latest, Healthy/Provisioned/ScaledToZero and both revision/actual replica counts
+zero. This observation does not guarantee persistent zero or remove retained
+fees. Five external attempts include one Python CA failure and four macOS-TLS-verified
+Envoy RBAC 403 responses; the Mac IPv4 matches the sole Allow `/32`. Environment public access is
+Enabled/internal false. The cause is under diagnosis, with no SDK execution or
+application-data writes. Authenticated CRUD, reconnect and rollout acceptance
+remain open. The
 [retained topology and portable deployment sequence](aca-validation-plan.md)
 records completed stages, exact settings/IAM, costs and current blockers;
 [verification](verification.md) is the acceptance record.
@@ -102,6 +109,24 @@ managed identity credentials or cursor key. It explicitly selects
 the selected UAMI. The runtime must support these settings and
 `COSMOS_SYNC_TLS_MODE=container-apps` before using this template's image.
 
+The container's ACA `command` is explicitly `["/cosmos-sync-bff"]`, with `args`
+omitted. The published image defaults to `CMD ["-config",
+"/run/config/config.json"]`; inheriting that explicit file argument conflicts with
+environment-only JSON. Preserve and inspect the command override in the saved
+plan and actual revision. The reviewed override applied at 03:43 UTC and produced
+actual Healthy/listening startup; no image rebuild, key rotation or configuration
+file mount was needed. [ACA command/arguments](https://learn.microsoft.com/en-us/azure/container-apps/containers#configuration).
+
+The retained Azure checkpoint uses the original image from source `82e937c`.
+The newer [verified public BFF release](release.md), from `76c1f46`, is available
+for a reviewed new deployment/upgrade; its digest is recorded in the
+[image/source split](aca-validation-plan.md#traffic-and-cursor-key-bootstrap).
+Its optional `oidc.allowed_client_ids` checks exact signed `azp` client IDs in
+addition to issuer/API audience/scope. Select the registered native public client
+ID there when restricting API admission; shared membership remains server-managed.
+The original image does not implement that option. Publishing the new image did
+not change the retained runtime or establish its hosted acceptance.
+
 ACA terminates external TLS at its edge ingress. `allowInsecure=false` prevents
 plain HTTP application traffic; the app uses port 8080 and HTTP between its
 process and the platform proxy. Peer encryption protects the platform network
@@ -172,7 +197,8 @@ backend creation/migration is claimed.
 The successful retained West US 2 account has governance-enforced public network
 access disabled. Its retained Mac IP rule provides no direct route. The private
 Cosmos/Vault endpoints, DNS links and separate delegated ACA subnet are now
-created; runtime route/secret resolution remains an acceptance gate. This module
+created; actual startup/readiness has now passed. Authenticated item CRUD through
+the external ingress and the complete SDK contract remain acceptance gates. This module
 does not change the Cosmos firewall. Use the
 [retained topology](aca-validation-plan.md) rather than an outbound-IP allowlist;
 public restoration and policy exceptions are excluded. Returned ACA outbound
@@ -265,6 +291,14 @@ delete a service association link/subnet/platform group, create an alternate
 environment or discard a secret receipt as recovery. See
 [service-side recovery](aca-validation-plan.md#service-side-failure-recovery).
 
+After replacement, the image's file-config CMD caused a separate startup failure.
+The explicit BFF command/no-args override fixed it; actual latest-ready Healthy,
+one Running container, zero restarts/listening and eleven runtime checks passed.
+That does not close the external path: five external attempts include one Python
+CA failure and four macOS-TLS-verified Envoy RBAC 403 responses from the matched
+allowed Mac `/32`, with no SDK/data writes.
+Do not disable TLS validation or widen ingress to obtain a passing result.
+
 After apply, record the stable `endpoint`, app/revision IDs and identity metadata.
 Test HTTPS-only ingress, startup/probes, actual managed-identity data access,
 unauthorized requests, the sample's authenticated CRUD/watch/offline/reconnect,
@@ -289,8 +323,21 @@ or data migration merely to recover an image.
 The workload defaults avoid dedicated profiles, premium ingress, Log Analytics
 and automatic data provisioning. The selected private backend requires the
 separate retained VNet/endpoint/DNS prerequisites. `log_destination=none` has no
-durable centralized container logs; use a separately approved existing Azure
-Monitor destination, diagnostic settings, alerts and retention before production.
+durable centralized container logs in that baseline. The current environment's
+saved update to `log_destination="azure-monitor"` completed with five no-ops.
+A retained PerGB2018 workspace and HTTP-only diagnostic setting were created:
+30-day retention, 0.023-GB/day cap, local auth disabled, authenticated public
+ingestion/query access. Exactly HTTP logging is enabled; six other categories and
+AllMetrics are disabled, with no extra exports. Independent configuration review
+passed 17/17. Actual HTTP table/schema exists, but requested Dedicated reads null
+and remains unresolved; all four bounded correlated queries returned API 200
+with zero rows. Configuration/schema do not prove delivery or diagnose the 403.
+Follow [the portable setup and reuse sequence](aca-validation-plan.md#reuse-the-http-diagnostic-configuration).
+[Log options](https://learn.microsoft.com/en-us/azure/container-apps/log-options).
+
+Console/`allLogs` are excluded and these diagnostic resources do not change the network base
+estimate into a bill. Production still needs a selected Azure Monitor destination,
+diagnostic settings, alerts and retention.
 Measure per-replica memory/CPU, HTTP errors and restarts, protected BFF metrics,
 Cosmos RU/throttling/storage, Key Vault access failures and client pending/conflict
 rates. Do not log JWTs, authorization headers, grant JSON or document contents.
@@ -304,6 +351,9 @@ public IP and one LB; the envelope is not an observed invoice or a claim that tw
 IPs were created. See the
 [cost breakdown](aca-validation-plan.md#cost-and-retention-choices). Replica caps
 are not spend caps; polling, snapshots and retry traffic consume Cosmos RU.
+The added HTTP workspace's ingestion is outside that network envelope. Its cap
+can overshoot and is not an invoice/billing ceiling; reuse the exact retained
+owned workspace rather than create one per diagnostic retry.
 Review current regional prices, owner-defined budget alerts and cost attribution
 before apply. [ACA billing](https://learn.microsoft.com/en-us/azure/container-apps/billing).
 

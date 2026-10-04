@@ -130,20 +130,29 @@ The Flutter app, durable authorization and hosting preparation were merged in
 [main checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37140346546)
 passed at release source `82e937c8659e9ec0263a78e6e3ad2f43e05be20a`.
 The MIT [cosmos_sync 0.2.0-dev.1 preview](https://pub.dev/packages/cosmos_sync/versions/0.2.0-dev.1)
-is published, with archive/source and clean hosted-consumer verification.
+is published from that original source, with archive/source and clean pub.dev
+consumer verification. Its archive is unchanged; no SDK republication was performed.
 GitHub source is public and private vulnerability reporting is enabled.
-The [public BFF image](https://github.com/anaregdesign/cosmos-sync/pkgs/container/cosmos-sync-bff)
-uses the same artifact source; pin its index digest
-`sha256:a23ab75eb4518597aa26e4833787b9b77a07def717868e080944555594adc1b3`.
+The current [public BFF image](https://github.com/anaregdesign/cosmos-sync/pkgs/container/cosmos-sync-bff)
+is released from `76c1f46876b3dfd13f4bd7d4dd144cdf74efa5c0`, after all eight
+[main checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37175675742)
+passed. Pin its immutable index digest
+`sha256:2651a4bca6df6f751b7f5e46d317ea9f6e4ca83081374badae142d57cdfc812a`.
+The [successful release verification](https://github.com/anaregdesign/cosmos-sync/actions/runs/37176169762)
+confirmed public manifest access, amd64/arm64 content, MIT/nonroot metadata and
+bound SBOM/BuildKit provenance; see [release](docs/release.md).
 Exact registry access/verification evidence is recorded in
 [#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and
 [#23](https://github.com/anaregdesign/cosmos-sync/issues/23).
-The later [verification-tool correction](https://github.com/anaregdesign/cosmos-sync/issues/34)
-preserves those published artifacts. [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2)
+The earlier [verification-tool correction](https://github.com/anaregdesign/cosmos-sync/issues/34)
+preserved the original artifacts. [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2)
 keeps actual Azure, hosted onboarding and consumer-provider gates separate.
 
-Dedicated Entra registration and actual macOS browser PKCE, API-token validation,
-secure credential restore, refresh and local sign-out passed. Physical Android
+Dedicated Entra registration is complete. macOS browser PKCE, secure credential
+restore, refresh and local sign-out lifecycle stages were observed; independent
+API JWT verification passed. The native wrapper's separate exit 1 is preserved
+in [verification](docs/verification.md), rather than reported as an overall runner
+success. Physical Android
 app integration also passed real HTTP/SQLite with fixture authentication. The
 retained East US environment contains its failed serverless account record.
 The retained West US 2 serverless account, database/container and exact human
@@ -156,13 +165,29 @@ revisions. The exact reviewed recovery plan subsequently replaced only those
 same-name empty app/environment stubs and applied successfully on 2026-10-04,
 retaining the key, data, network and IAM resources. Post-apply static IP,
 image/identity/secret-reference and role/PE/DNS metadata checks passed; current
-platform inventory has one public IP and one LB. One active provisioned revision
-has zero replicas, health None and running ActivationFailed; TLS-verified Envoy
-RBAC 403 on health remains under diagnosis, with no application
-data writes. Fresh Mac native login and both API JWT validations passed separately.
-**Runtime private DNS/Vault/managed-identity acceptance and the hosted SDK test
-remain pending**.
+platform inventory has one public IP and one LB. This actual Azure checkpoint
+still pins the original source `82e937c8659e9ec0263a78e6e3ad2f43e05be20a` image
+`sha256:a23ab75eb4518597aa26e4833787b9b77a07def717868e080944555594adc1b3`;
+publication of the newer image does not establish its runtime acceptance.
+The original pinned image's file-config
+CMD conflicted with environment JSON; the reviewed explicit ACA command/no-args
+override fixed startup. Actual latest-ready Healthy, one Running container, zero
+restarts/listening and eleven runtime checks passed. The saved return to min=0
+applied and configuration readback passed. The final 19/19 checkpoint observed
+Healthy/Provisioned/ScaledToZero and zero revision/actual replicas, with retained
+charges and later scaling still possible. Five external health attempts include one Python CA failure and four macOS-TLS-verified Envoy RBAC 403 responses, with no
+SDK execution or data writes. Fresh native lifecycle stages were observed and
+independent API JWT verification passed; the wrapper's exit 1 is retained
+separately, and that session has expired.
+**External HTTPS access and the hosted SDK contract remain blocked**.
 The Mac IP ACL does not provide direct Cosmos connectivity.
+
+The environment's Azure Monitor destination, retained capped workspace and
+HTTP-only diagnostic setting are configured and verified. The HTTP table/schema
+exists, but requested Dedicated reads null and four bounded queries returned
+API 200/zero rows: delivery and the 403 cause remain unverified. The
+[diagnostic reuse procedure](docs/aca-validation-plan.md#reuse-the-http-diagnostic-configuration)
+keeps actual target/correlation data private and does not create resources per retry.
 
 Use the [retained private topology and portable deployment sequence](docs/aca-validation-plan.md)
 for the exact settings, narrow IAM, immutable state/bootstrap workflow, saved

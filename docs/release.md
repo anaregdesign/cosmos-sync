@@ -8,6 +8,24 @@ verified. The BFF image from that same source is public at the index digest belo
 full read-only registry evidence is tracked in
 [#15](https://github.com/anaregdesign/cosmos-sync/issues/15).
 
+The BFF was subsequently published from
+`76c1f46876b3dfd13f4bd7d4dd144cdf74efa5c0` after all eight
+[main checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37175675742)
+passed. Its [successful public release and verification](https://github.com/anaregdesign/cosmos-sync/actions/runs/37176169762)
+records the immutable index:
+
+```text
+ghcr.io/anaregdesign/cosmos-sync-bff@sha256:2651a4bca6df6f751b7f5e46d317ea9f6e4ca83081374badae142d57cdfc812a
+```
+
+This source implements optional signed native-client admission. Both platforms,
+public anonymous manifest access, authenticated pulls, source/version/MIT/nonroot
+metadata and subject-bound BuildKit provenance/SPDX SBOM were verified. Its
+source-SHA tag distinguishes it from the first BFF image while retaining version
+`0.2.0-dev.1`. The SDK library and existing pub.dev archive are unchanged. Cloud
+runtime and consumer-provider acceptance remain separate gates in
+[verification](verification.md).
+
 On 2026-10-03 the owner explicitly approved
 **MIT**, copyright 2026 anaregdesign, **public GitHub source and public GHCR**, and
 the initial prerelease **0.2.0-dev.1**. The chosen pub.dev Google account is kept
