@@ -137,11 +137,29 @@ class NativeControl:
 
 
 def native_target(arguments):
-    if arguments.device == "android":
-        return android_target(arguments, arguments.flutter_bin)[0]
+    if arguments.device in ("android", "android-emulator"):
+        return android_target(
+            arguments, arguments.flutter_bin, emulator=arguments.device == "android-emulator",
+        )[0]
+    if arguments.device != "macos":
+        raise ValueError("unsupported_native_auth_target")
     if arguments.device_id_file or arguments.authorize_install:
         raise ValueError("android_options_require_android_target")
     return "macos"
+
+
+def successful_native_evidence(device):
+    if device not in ("macos", "android", "android-emulator"):
+        raise ValueError("unsupported_native_auth_target")
+    return {
+        "platform": "macos" if device == "macos" else "android",
+        "physicalDevice": device == "android", "emulator": device == "android-emulator",
+        "actualNativeAppAuth": True, "actualSecureRestore": True, "actualRefresh": True,
+        "localSignout": True, "verifiedApiSignatureIssuerAudienceScopeTenantOwner": True,
+        "apiSubjectStableAcrossRefresh": True, "proposedSingleUserGrant": True,
+        "grantsApplied": False, "processRestartVerified": False,
+        "multiPrincipalRealProviderVerified": False, "cosmosConnectionVerified": False,
+    }
 
 
 def cleanup_native_run(process, control, reverse):
@@ -162,7 +180,7 @@ def interrupt_native_run(unused_signal, unused_frame):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--owner-assisted", action="store_true", required=True)
-    parser.add_argument("--device", choices=("macos", "android"), default="macos")
+    parser.add_argument("--device", choices=("macos", "android", "android-emulator"), default="macos")
     parser.add_argument("--device-id-file")
     parser.add_argument("--authorize-install", action="store_true")
     parser.add_argument("--output")
@@ -198,7 +216,7 @@ def main():
     control = NativeControl(directory, config)
     control.start()
     flutter_process = None
-    reverse = AndroidReverse(target) if args.device == "android" else None
+    reverse = AndroidReverse(target) if args.device in ("android", "android-emulator") else None
     report = None
     try:
         private_json(directory / "run.local.json", {"controlUrl": control.url, "storeKey": control.store_key})
@@ -249,12 +267,7 @@ def main():
         after = private_input(directory / "refresh-proof/identity.local.json")
         if any(before[key] != after[key] for key in ("tenantId", "ownerObjectId", "subject")):
             raise RuntimeError("refresh_principal_changed")
-        report = {"platform": args.device, "physicalDevice": args.device == "android",
-                  "actualNativeAppAuth": True, "actualSecureRestore": True, "actualRefresh": True,
-                  "localSignout": True, "verifiedApiSignatureIssuerAudienceScopeTenantOwner": True,
-                  "apiSubjectStableAcrossRefresh": True, "proposedSingleUserGrant": True,
-                  "grantsApplied": False, "processRestartVerified": False,
-                  "multiPrincipalRealProviderVerified": False, "cosmosConnectionVerified": False}
+        report = successful_native_evidence(args.device)
     finally:
         cleanup_native_run(flutter_process, control, reverse)
     private_json(directory / "proof.json", report)

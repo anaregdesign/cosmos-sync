@@ -144,7 +144,49 @@ class NativeTargetTests(unittest.TestCase):
                               authorize_install=True, output="artifacts/native.json")
         with patch.object(native, "android_target", return_value=("private-device", {})) as resolve:
             self.assertEqual(native_target(args), "private-device")
-            resolve.assert_called_once_with(args, "flutter")
+            resolve.assert_called_once_with(args, "flutter", emulator=False)
+
+    def test_emulator_reuses_exact_target_without_physical_fallback(self):
+        args = self.arguments(device="android-emulator", device_id_file=".cache/emulator.txt",
+                              authorize_install=True)
+        with patch.object(native, "android_target", return_value=("emulator-5562", {})) as resolve:
+            self.assertEqual(native_target(args), "emulator-5562")
+            resolve.assert_called_once_with(args, "flutter", emulator=True)
+
+    def test_emulator_denial_precedes_receipt_or_cloud_access(self):
+        args = self.arguments(device="android-emulator")
+        with patch.object(native, "private_input") as read:
+            with self.assertRaises(ValidationError):
+                native_target(args)
+            read.assert_not_called()
+
+    def test_emulator_resolution_failure_cannot_retry_a_physical_target(self):
+        args = self.arguments(device="android-emulator", device_id_file=".cache/emulator.txt",
+                              authorize_install=True)
+        with patch.object(native, "android_target", side_effect=ValidationError("not_an_emulator")) as resolve:
+            with self.assertRaisesRegex(ValidationError, "not_an_emulator"):
+                native_target(args)
+            resolve.assert_called_once_with(args, "flutter", emulator=True)
+
+    def test_success_evidence_keeps_target_kinds_and_cloud_gaps_distinct(self):
+        for device in ("macos", "android", "android-emulator"):
+            with self.subTest(device=device):
+                proof = native.successful_native_evidence(device)
+                self.assertEqual(proof["platform"], "macos" if device == "macos" else "android")
+                self.assertEqual(proof["physicalDevice"], device == "android")
+                self.assertEqual(proof["emulator"], device == "android-emulator")
+                self.assertFalse(proof["processRestartVerified"])
+                self.assertFalse(proof["cosmosConnectionVerified"])
+                self.assertFalse(proof["multiPrincipalRealProviderVerified"])
+                self.assertFalse(proof["grantsApplied"])
+
+    def test_unknown_target_cannot_silently_select_macos_or_claim_success(self):
+        with patch.object(native, "android_target") as resolve:
+            for operation in (lambda: native_target(self.arguments(device="ios")),
+                              lambda: native.successful_native_evidence("ios")):
+                with self.assertRaisesRegex(ValueError, "unsupported_native_auth_target"):
+                    operation()
+            resolve.assert_not_called()
 
     def test_android_install_denial_precedes_receipt_or_cloud_access(self):
         args = self.arguments(device="android")

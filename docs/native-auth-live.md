@@ -1,6 +1,6 @@
 # Owner-assisted actual Entra validation
 
-Run the actual macOS or physical Android AppAuth target after the owner-approved dedicated
+Run the actual macOS, Android-emulator or physical Android AppAuth target after the owner-approved dedicated
 registrations in [entra-setup.md](entra-setup.md) have been created and read back.
 The operator's ignored `.cache/entra-azure` directory contains 0600
 `approved-owner.local.json` and `registration-receipt.local.json`. Their actual
@@ -26,6 +26,23 @@ capability-bound loopback control port. It neither exposes the control server to
 the LAN nor forwards cloud endpoints. Cleanup removes only that exact mapping
 while it still matches the runner's destination; cleanup failure cannot report
 success. No iOS signing, pairing, provisioning or installation is performed.
+
+For simulator-first development, use a fresh supported Android emulator and its
+exact ignored 0600 identity file instead:
+
+```sh
+python3 tools/native_entra_auth.py --owner-assisted --device android-emulator \
+  --device-id-file .cache/devices/emulator.txt --authorize-install \
+  --output artifacts/native-entra-emulator.json
+```
+
+This mode requires the exact selected Flutter device to be a supported Android
+emulator with an `emulator-<port>` identity. It cannot fall back to an attached
+physical Android or another emulator. Both Android modes preserve explicit
+installation authorization and owned ADB reverse cleanup. A successful emulator
+receipt records `physicalDevice=false` and `emulator=true`; it cannot supply the
+final physical-device gate. The added selection/evidence regressions are offline
+tests, **not a newly executed native OIDC login**.
 
 These commands are manual and never perform
 CI sign-in. The owner operates the system browser's credentials/MFA and reviews
