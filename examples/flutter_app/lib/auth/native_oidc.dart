@@ -5,6 +5,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'oidc.dart';
 
 /// AppAuth owns state, nonce, PKCE verifier and the external browser callback.
+OidcClient createOidcClient() => NativeOidcClient();
+RefreshTokenStore createTokenStore() => NativeRefreshTokenStore();
+String defaultRedirectUrl() =>
+    'com.anaregdesign.cosmossync://auth/oauthredirect';
+
 class NativeOidcClient implements OidcClient {
   NativeOidcClient({FlutterAppAuth? appAuth})
     : _appAuth = appAuth ?? const FlutterAppAuth();
@@ -27,6 +32,12 @@ class NativeOidcClient implements OidcClient {
   @override
   Future<OidcTokens> signIn(OidcConfig config) async {
     _checkPlatform();
+    if (config.browser) {
+      throw const AuthException(
+        'invalid_config',
+        'Use a registered native callback for native authentication.',
+      );
+    }
     return _run(
       () async => _convert(
         await _appAuth.authorizeAndExchangeCode(

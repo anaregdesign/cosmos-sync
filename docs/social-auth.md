@@ -179,7 +179,7 @@ migration because its subject namespace can change. See the
 ## Current token contract
 
 The selected first External ID integration reuses the existing BFF verifier and
-native browser adapter. Directory creation alone does not prove that an actual
+native AppAuth or separate [Web MSAL adapter](web-auth.md). Directory creation alone does not prove that an actual
 consumer token or callback meets this contract.
 
 | Boundary | Current preview behavior |
@@ -191,6 +191,7 @@ consumer token or callback meets this contract.
 | JWKS | Pinned `go-oidc` v3.16.0 retains cached keys without a TTL or proactive refresh. Cache verification failure, including an unknown `kid`, triggers one remote fetch with shared in-flight suppression. There is no cross-request fetch cooldown or automatic retry loop |
 | Native login | Pinned `flutter_appauth` 12.1.0 delegates state, nonce, S256 PKCE and system-browser callback handling to platform AppAuth; the BFF verifies the separate API JWT and receives no login nonce |
 | Native credentials | Access token remains in RAM; refresh credential and the optional logout ID-token hint use platform secure storage. The controller refreshes before the provider expiration with a 30-second margin; restore must rebind through the existing verified BFF/session policy |
+| Web login/credentials | Locally bundled MSAL Browser 5.24.0 handles popup code/PKCE through an exact same-origin SPA redirect bridge. Account/refresh credentials stay in MSAL memory; only the API access response reaches Dart. A new document must sign in and verify the BFF online before reopening persisted IndexedDB |
 
 If a required discovery/key fetch or signature/claim check fails, authentication
 fails. During a JWKS outage, a token which still verifies with cached keys can
@@ -274,7 +275,7 @@ verification is Android-only and deferred until development is complete.
 | --- | --- | --- |
 | iOS | External ID browser PKCE with the registered native callback; Apple broker registration requires its own developer-team approval. Native provider SDK capabilities/signing would be a separate change. | Signed physical-device return, consent/cancel/deny, Apple private relay, refresh/re-auth, app termination/restart, offline reconnect and purge. The owner chose unsigned testing, so build/simulator evidence remains separate from physical-device acceptance. |
 | Android | External ID browser PKCE with exact native callback. The Google client for federation is a broker Web application; Android signing fingerprints apply only if a direct native Google SDK is later selected. | Pixel login/callback, browser/account switching, cancellation, reinstall, refresh/revocation and authenticated offline outbox replay. |
-| Web | New web login adapter and runnable web sample; exact origins and HTTPS returns, popup/redirect recovery and CSRF protection; review persistence/XSS exposure. | Real browsers with popup denial, restricted third-party storage, reload/back navigation, account switching and offline IndexedDB purge. The current native sample has no web AppAuth adapter. |
+| Web | The ordinary sample has a separate memory-only MSAL popup adapter, exact SPA bridge and BFF-verified IndexedDB lifecycle; no Web AppAuth or full-page login redirect. | Signed-fixture UI/reload/rebind/purge evidence does not prove live provider login, popup denial, restricted third-party storage, back navigation or mobile browsers. |
 | macOS | Confirm selected broker/native SDK support, bundle callbacks and Keychain behavior. Firebase macOS setup calls for Keychain Sharing, unlike the present local legacy-Keychain sample. | Actual provider return, approved signing/capabilities where required, restart/restore, cancel/deny and revoke/purge. Do not infer this from current Entra success. |
 
 Firebase's Flutter guide documents Apple and Google provider flows, native versus

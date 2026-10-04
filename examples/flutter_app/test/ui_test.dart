@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:cosmos_sync_example/auth/auth_session_controller.dart';
 import 'package:cosmos_sync_example/data/workspace_repository.dart';
+import 'package:cosmos_sync_example/data/settings_store_native.dart';
 import 'package:cosmos_sync_example/main.dart';
 import 'package:cosmos_sync_example/ui/app_controller.dart';
 import 'package:cosmos_sync_example/ui/workspace_controller.dart';
@@ -22,7 +23,9 @@ void main() {
         workspace: WorkspaceController(
           repository: WorkspaceRepository(directory: directory),
         ),
-        settingsFile: File('${directory.path}/connection.json'),
+        settingsStore: FileSettingsStore(
+          File('${directory.path}/connection.json'),
+        ),
         sharedScopeId: 'b' * 64,
       );
       await tester.pumpWidget(CosmosSyncApp(controller: controller));
@@ -48,7 +51,9 @@ void main() {
         workspace: WorkspaceController(
           repository: WorkspaceRepository(directory: directory),
         ),
-        settingsFile: File('${directory.path}/connection.json'),
+        settingsStore: FileSettingsStore(
+          File('${directory.path}/connection.json'),
+        ),
       );
       await tester.pumpWidget(CosmosSyncApp(controller: controller));
       expect(find.byKey(const Key('bff-url')), findsOneWidget);
@@ -99,7 +104,9 @@ void main() {
           workspace: WorkspaceController(
             repository: WorkspaceRepository(directory: directory),
           ),
-          settingsFile: File('${directory.path}/connection.json'),
+          settingsStore: FileSettingsStore(
+            File('${directory.path}/connection.json'),
+          ),
           brokerCapabilities: EntraBrokerCapabilities(
             issuer: issuer,
             clientId: 'native-public',

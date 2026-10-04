@@ -10,8 +10,10 @@ documentation is included in this package; using it does not require repository 
 Apple and Google are the intended end-user login providers. The SDK accepts a
 dedicated BFF API access token through `tokenProvider`; it does not implement a
 provider login or turn a provider ID token into API authorization. The native
-sample currently validates Entra OIDC/PKCE. Apple/Google adapters and explicit
-account linking remain planned in the [social-login roadmap](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/social-auth.md).
+sample currently validates Entra OIDC/PKCE; its separate Web target uses
+memory-only MSAL and BFF-verified IndexedDB ownership. Actual Google/Apple
+connections are cancelled for this delivery, not passed. Explicit account
+linking remains tracked in the [social-login roadmap](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/social-auth.md).
 
 ## Durable local writes
 
@@ -152,6 +154,13 @@ opens within an isolate and uses advisory file locks across processes; separate
 isolates in one process must coordinate ownership at the application level.
 Browser persistence requires IndexedDB and Web Locks, with strict transaction
 commit and typed capability/busy failures. Do not substitute an in-memory fallback.
+Browser-only application adapters can import
+`package:cosmos_sync/cosmos_sync_browser.dart` to explicitly open `IndexedDbCache`;
+use the ordinary public import or a conditional adapter for shared native code.
+The ordinary [Flutter Web sample](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/web-auth.md)
+keeps provider credentials in memory. Full reload retains the durable outbox but
+requires new sign-in and online BFF verification before cache reuse; SDK session
+metadata is not a substitute for current API authentication.
 Browser storage remains subject to eviction/user deletion; other browsers are
 unverified until measured. Native SQLite is plaintext; logical purge cannot erase
 backups/WAL/snapshots forensically. Larger native caches should use a dedicated
@@ -168,7 +177,7 @@ automatic merge, external Cosmos writer ingestion or cloud RU/SLA is promised.
 | Android | Real SQLite SDK fixture on Android 14/API 34 arm64 emulator and physical Pixel 9a Android 17/API 37; physical app UI also passed actual Go HTTP/offline/conflict/purge | App authentication uses a signed-fixture adapter; real provider sign-in, suspension and Azure app flow remain unverified. |
 | iOS | Flutter app + real SQLite on iOS 26.5 arm64 simulator | Physical device, suspension and production sign-in remain unverified. |
 | macOS | Flutter app + real SQLite on macOS 26.7 arm64 | No x86_64 or minimum-OS support claim. |
-| Web | Chromium IndexedDB/Web Locks, browser reload and actual BFF HTTP/SSE | Other browsers, persistent-storage eviction and mobile-browser behavior are unverified. |
+| Web | Chromium IndexedDB/Web Locks, browser reload and actual BFF HTTP/SSE; ordinary Flutter UI signed-fixture reload/rebind/ACK/purge | Live Web/customer OIDC, other browsers, persistent-storage eviction and mobile-browser behavior are unverified. |
 
 Linux and Windows are not declared supported Flutter targets until app runtime
 validation is completed. Linux CI verifies native Dart/SQLite contracts; this does

@@ -68,6 +68,7 @@ void main() {
       expect(stored['refreshToken'], 'refresh-secret');
       expect(auth.credentialSessionId, matches(r'^[A-Za-z0-9_-]{32}$'));
       expect(auth.restoredSession, false);
+      expect(auth.supportsCredentialRestore, true);
       expect(auth.hasStoredSession, true);
       expect(oidc.refreshCalls, 0);
     },

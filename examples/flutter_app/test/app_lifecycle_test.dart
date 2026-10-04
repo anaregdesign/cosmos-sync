@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:cosmos_sync_example/auth/auth_session_controller.dart';
 import 'package:cosmos_sync_example/data/workspace_repository.dart';
+import 'package:cosmos_sync_example/data/settings_store_native.dart';
 import 'package:cosmos_sync_example/ui/app_controller.dart';
 import 'package:cosmos_sync_example/ui/workspace_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,7 +45,9 @@ void main() {
           transportFactory: (_, token) => _TokenTransport(server, token),
         ),
       ),
-      settingsFile: File('${directory.path}/connection.json'),
+      settingsStore: FileSettingsStore(
+        File('${directory.path}/connection.json'),
+      ),
     );
     await app.signIn(settings);
     expect(app.workspace.connected, true);
@@ -81,7 +84,7 @@ void main() {
       expect(app.workspace.documents, isEmpty);
       expect(app.auth.credentialSessionId, null);
       expect(store.value, null);
-      expect(await app.workspace.repository.directory.exists(), false);
+      expect(await Directory('${directory.path}/workspaces').exists(), false);
     },
   );
 
@@ -103,7 +106,7 @@ void main() {
     expect(app.workspace.connected, false);
     expect(app.workspace.documents, isEmpty);
     expect(app.workspace.pending, isEmpty);
-    expect(await app.workspace.repository.directory.exists(), false);
+    expect(await Directory('${directory.path}/workspaces').exists(), false);
     expect(store.value, null);
   });
 
@@ -142,7 +145,9 @@ void main() {
             transportFactory: (_, token) => _TokenTransport(server, token),
           ),
         ),
-        settingsFile: File('${directory.path}/connection.json'),
+        settingsStore: FileSettingsStore(
+          File('${directory.path}/connection.json'),
+        ),
         brokerCapabilities: EntraBrokerCapabilities(
           issuer: issuer,
           clientId: 'native-public',
@@ -172,14 +177,8 @@ void main() {
       expect(app.auth.credentialSessionId, isNot(previousBinding));
       expect(app.workspace.documents, isEmpty);
       expect(app.workspace.pending, isEmpty);
-      expect(
-        await app.settingsFile.readAsString(),
-        isNot(contains('domain_hint')),
-      );
-      expect(
-        await app.settingsFile.readAsString(),
-        isNot(contains('providers')),
-      );
+      expect(await app.settingsStore.read(), isNot(contains('domain_hint')));
+      expect(await app.settingsStore.read(), isNot(contains('providers')));
     },
   );
 }

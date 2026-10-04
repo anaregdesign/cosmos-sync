@@ -4,7 +4,9 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
-import 'native_oidc.dart';
+import 'native_oidc.dart'
+    if (dart.library.js_interop) 'web_oidc.dart'
+    as platform;
 import 'oidc.dart';
 
 export 'oidc.dart';
@@ -26,8 +28,8 @@ class AuthSessionController extends ChangeNotifier {
     OidcClient? oidc,
     RefreshTokenStore? tokenStore,
     DateTime Function()? clock,
-  }) : _oidc = oidc ?? NativeOidcClient(),
-       _store = tokenStore ?? NativeRefreshTokenStore(),
+  }) : _oidc = oidc ?? platform.createOidcClient(),
+       _store = tokenStore ?? platform.createTokenStore(),
        _clock = clock ?? DateTime.now;
 
   final OidcClient _oidc;
@@ -56,6 +58,7 @@ class AuthSessionController extends ChangeNotifier {
   bool get hasStoredSession =>
       _credentialSessionId != null && _refreshToken != null;
   bool get restoredSession => _restoredSession;
+  bool get supportsCredentialRestore => _oidc is! MemoryOidcClient;
   String? get credentialSessionId => _credentialSessionId;
 
   void configure(OidcConfig config) {
@@ -118,6 +121,11 @@ class AuthSessionController extends ChangeNotifier {
 
   Future<void> _performRestore(OidcConfig config, int generation) async {
     try {
+      if (_oidc is MemoryOidcClient) {
+        await _clearCredentials();
+        _ensureCurrent(generation);
+        return;
+      }
       final value = await _queuedStore(_store.read);
       _ensureCurrent(generation);
       if (value == null) {
@@ -133,7 +141,7 @@ class AuthSessionController extends ChangeNotifier {
             r'^[A-Za-z0-9_-]{32}$',
           ).hasMatch(decoded['credentialSessionId'] as String) ||
           (decoded['idToken'] != null && decoded['idToken'] is! String)) {
-        await _queuedStore(_store.clear);
+        await _clearCredentials();
         _ensureCurrent(generation);
         return;
       }
@@ -146,7 +154,7 @@ class AuthSessionController extends ChangeNotifier {
       _ensureCurrent(generation);
       _forgetCredentials();
       if (error is FormatException) {
-        await _queuedStore(_store.clear);
+        await _clearCredentials();
         _ensureCurrent(generation);
         _setState(AuthSessionState.signedOut);
         return;
@@ -204,7 +212,7 @@ class AuthSessionController extends ChangeNotifier {
   Future<void> _performSignIn(OidcConfig config, int generation) async {
     try {
       // An interrupted account switch must never restore the prior credentials.
-      await _queuedStore(_store.clear);
+      await _clearCredentials();
       _ensureCurrent(generation);
       final tokens = await _oidc.signIn(config);
       _ensureCurrent(generation);
@@ -219,6 +227,21 @@ class AuthSessionController extends ChangeNotifier {
     } catch (error) {
       if (!_isCurrent(generation)) {
         throw const AuthException('cancelled', 'Sign-in was cancelled.');
+      }
+      if (_oidc is MemoryOidcClient) {
+        try {
+          await _clearCredentials();
+        } catch (_) {
+          _ensureCurrent(generation);
+          _forgetCredentials();
+          final safe = const AuthException(
+            'storage_failed',
+            'Browser credentials could not be removed. Retry sign-out.',
+          );
+          _setState(AuthSessionState.error, safe);
+          throw safe;
+        }
+        _ensureCurrent(generation);
       }
       _forgetCredentials();
       if (error is OidcFailure && error.kind == OidcFailureKind.cancelled) {
@@ -236,8 +259,7 @@ class AuthSessionController extends ChangeNotifier {
     }
   }
 
-  /// Invalidates any late native callback; close the OS browser to dismiss it.
-  /// AppAuth does not expose portable programmatic browser dismissal.
+  /// Invalidates late callbacks; close the authentication browser to dismiss it.
   Future<void> cancelSignIn() async {
     _checkDisposed();
     if (_state != AuthSessionState.authorizing) {
@@ -247,7 +269,7 @@ class AuthSessionController extends ChangeNotifier {
     _forgetCredentials();
     _setState(AuthSessionState.signedOut);
     try {
-      await _queuedStore(_store.clear);
+      await _clearCredentials();
       _ensureCurrent(generation);
     } catch (_) {
       _ensureCurrent(generation);
@@ -286,7 +308,7 @@ class AuthSessionController extends ChangeNotifier {
     if (_refreshFlight != null) {
       return _refreshFlight!;
     }
-    if (_refreshToken == null) {
+    if (_refreshToken == null && _oidc is! MemoryOidcClient) {
       _forgetCredentials();
       final safe = const AuthException(
         'sign_in_required',
@@ -296,7 +318,7 @@ class AuthSessionController extends ChangeNotifier {
       return Future.error(safe);
     }
     final generation = _generation;
-    final refreshToken = _refreshToken!;
+    final refreshToken = _refreshToken;
     final binding = _credentialSessionId!;
     // A refreshing listener can ask for a token before _performRefresh returns.
     final completion = Completer<String>();
@@ -324,13 +346,21 @@ class AuthSessionController extends ChangeNotifier {
   Future<String> _performRefresh(
     OidcConfig config,
     int generation,
-    String refreshToken,
+    String? refreshToken,
     String binding,
   ) async {
     try {
       _setState(AuthSessionState.refreshing);
       _ensureCurrent(generation);
-      final tokens = await _oidc.refresh(config, refreshToken);
+      final OidcTokens tokens;
+      final client = _oidc;
+      if (refreshToken != null) {
+        tokens = await client.refresh(config, refreshToken);
+      } else if (client is MemoryOidcClient) {
+        tokens = await client.refreshCurrent(config);
+      } else {
+        throw const OidcFailure(OidcFailureKind.interactionRequired);
+      }
       _ensureCurrent(generation);
       _validateTokens(tokens, config);
       final next = OidcTokens(
@@ -370,7 +400,7 @@ class AuthSessionController extends ChangeNotifier {
               );
         _setState(AuthSessionState.signedOut, safe);
         try {
-          await _queuedStore(_store.clear);
+          await _clearCredentials();
         } catch (_) {
           _ensureCurrent(generation);
           final storageError = const AuthException(
@@ -405,7 +435,7 @@ class AuthSessionController extends ChangeNotifier {
     _forgetCredentials();
     _setState(AuthSessionState.signingOut);
     try {
-      await _queuedStore(_store.clear);
+      await _clearCredentials();
       _ensureCurrent(generation);
     } catch (error) {
       _ensureCurrent(generation);
@@ -443,6 +473,12 @@ class AuthSessionController extends ChangeNotifier {
     String? idToken,
     String binding,
   ) {
+    if (_oidc is MemoryOidcClient && _nonEmpty(refreshToken)) {
+      throw const AuthException(
+        'invalid_token_response',
+        'Browser refresh credentials must remain inside the provider SDK.',
+      );
+    }
     if (!_nonEmpty(refreshToken)) {
       return _queuedStore(_store.clear);
     }
@@ -506,6 +542,12 @@ class AuthSessionController extends ChangeNotifier {
     return result;
   }
 
+  Future<void> _clearCredentials() async {
+    await _queuedStore(_store.clear);
+    final client = _oidc;
+    if (client is MemoryOidcClient) await client.clearSession();
+  }
+
   OidcConfig _requireConfig() {
     _checkDisposed();
     return _config ??
@@ -541,6 +583,27 @@ class AuthSessionController extends ChangeNotifier {
   }
 
   static bool _nonEmpty(Object? value) => value is String && value.isNotEmpty;
+
+  /// Native app close preserves its secure restore record. Browser close also
+  /// invalidates late callbacks and releases the SDK's in-memory credentials.
+  Future<void> close() async {
+    if (_disposed) return;
+    if (_oidc is MemoryOidcClient) {
+      _generation++;
+      _forgetCredentials();
+      try {
+        await _clearCredentials();
+      } catch (_) {
+        final safe = const AuthException(
+          'storage_failed',
+          'Browser credentials could not be removed. Retry closing the session.',
+        );
+        _setState(AuthSessionState.error, safe);
+        throw safe;
+      }
+    }
+    dispose();
+  }
 
   @override
   void dispose() {

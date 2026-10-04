@@ -2,9 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:cosmos_sync/cosmos_sync.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../auth/auth_session_controller.dart';
+import '../auth/native_oidc.dart'
+    if (dart.library.js_interop) '../auth/web_oidc.dart'
+    as platform_auth;
 import '../data/workspace_repository.dart';
 import 'app_controller.dart';
 
@@ -23,7 +27,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
   final _issuer = TextEditingController();
   final _clientId = TextEditingController();
   final _redirect = TextEditingController(
-    text: 'com.anaregdesign.cosmossync://auth/oauthredirect',
+    text: platform_auth.defaultRedirectUrl(),
   );
   final _scopes = TextEditingController(text: 'openid offline_access');
   SyncScopeMode _scope = SyncScopeMode.user;
@@ -233,10 +237,16 @@ class _WorkspaceViewState extends State<WorkspaceView>
                 ],
                 const SizedBox(height: 24),
                 const Text(
-                  'Native sample for Cosmos DB for NoSQL via the BFF. '
-                  'Credentials remain in OS secure storage; Cosmos credentials '
-                  'are never accepted. SQLite documents are not encrypted. '
-                  'Offline access cannot observe server revocation until reconnect.',
+                  kIsWeb
+                      ? 'Browser sample for Cosmos DB for NoSQL via the BFF. '
+                            'MSAL credentials stay in memory. Reload requires a '
+                            'new sign-in and online BFF verification before '
+                            'reopening IndexedDB. Cached documents are not '
+                            'encrypted. Cosmos credentials are never accepted.'
+                      : 'Native sample for Cosmos DB for NoSQL via the BFF. '
+                            'Credentials remain in OS secure storage; Cosmos credentials '
+                            'are never accepted. SQLite documents are not encrypted. '
+                            'Offline access cannot observe server revocation until reconnect.',
                 ),
               ],
             ),
@@ -257,8 +267,12 @@ class _WorkspaceViewState extends State<WorkspaceView>
         ),
         const SizedBox(height: 8),
         const Text(
-          'Configure an HTTPS BFF and a public native OIDC client with an API '
-          'scope. Sign-in opens the provider in a system browser using PKCE.',
+          kIsWeb
+              ? 'Configure an HTTPS BFF and a public Entra SPA client with an '
+                    'API scope and this exact same-origin redirect bridge. '
+                    'MSAL opens a popup using authorization code and PKCE.'
+              : 'Configure an HTTPS BFF and a public native OIDC client with an API '
+                    'scope. Sign-in opens the provider in a system browser using PKCE.',
         ),
         const SizedBox(height: 16),
         _field(_bff, 'BFF URL', 'bff-url', enabled: !working),
@@ -266,7 +280,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
         _field(_clientId, 'Public client ID', 'oidc-client', enabled: !working),
         _field(
           _redirect,
-          'Native callback URL',
+          kIsWeb ? 'Registered Web redirect bridge' : 'Native callback URL',
           'oidc-redirect',
           enabled: false,
         ),
@@ -464,11 +478,11 @@ class _WorkspaceViewState extends State<WorkspaceView>
   void _signIn({BrokerProvider? provider}) {
     if (!_form.currentState!.validate()) return;
     try {
-      if (Uri.parse(_redirect.text.trim()).scheme !=
-          'com.anaregdesign.cosmossync') {
-        throw const FormatException(
-          'Callback scheme does not match this build.',
-        );
+      if (kIsWeb
+          ? _redirect.text.trim() != platform_auth.defaultRedirectUrl()
+          : Uri.parse(_redirect.text.trim()).scheme !=
+                'com.anaregdesign.cosmossync') {
+        throw const FormatException('Callback does not match this build.');
       }
       final settings = AppSettings(
         connection: ConnectionConfig(
@@ -482,6 +496,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
           clientId: _clientId.text.trim(),
           redirectUrl: _redirect.text.trim(),
           scopes: _scopes.text.trim().split(RegExp(r'\s+')),
+          browser: kIsWeb,
         ),
       );
       setState(() => _formError = null);

@@ -18,7 +18,9 @@ The runnable sample is `examples/flutter_app`. Its native login adapter uses
 Code with PKCE and validates its browser callback/state/nonce; Android uses an
 external browser/Custom Tab and Apple platforms use the native web authentication
 session. The sample sends no client secret and never uses an embedded WebView.
-The plugin does not provide web, Linux or Windows login in this sample.
+The plugin does not provide Web, Linux or Windows login. The ordinary app now
+selects a separate [MSAL Browser adapter](web-auth.md) for its Web target;
+native callbacks and secure restore are not reused in the browser.
 See [AppAuth Android](https://github.com/openid/AppAuth-Android),
 [AppAuth iOS/macOS](https://github.com/openid/AppAuth-iOS) and the
 [Flutter adapter](https://pub.dev/packages/flutter_appauth).
@@ -127,8 +129,9 @@ only `Cosmos.Sync` is verified. It adds no Graph data permissions or client
 preauthorization. Workforce consent/configuration remains separate. No Google/Apple
 owning account or credential input is requested for this delivery. Current one-account
 verification and unsigned iOS choices remain in
-force. The pure Dart SDK has Chromium cache coverage; the current native Flutter
-app has no Web login target. Cancellation/denial, reinstall/relogin, account
+force. The ordinary Flutter app now has a separate MSAL/IndexedDB Web target
+and actual signed-fixture Chromium lifecycle evidence, not live customer OIDC.
+Cancellation/denial, reinstall/relogin, account
 switch/linking, refresh/revocation and offline-cache isolation need automated
 coverage. Any claimed actual common-provider/platform result requires separate
 recorded evidence; Google/Apple live evidence is outside current scope.

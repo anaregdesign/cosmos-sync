@@ -153,6 +153,39 @@ void main() {
   });
 
   test(
+    'learned session denial cannot reopen the prior verified cache offline',
+    () async {
+      final client = await repository.open(
+        config: config,
+        credentialBinding: 'same-session',
+        tokenProvider: () async => 'test-access',
+      );
+      await client.put('private', {'title': 'must be purged'});
+      await client.close();
+      server.revoked = true;
+      await expectLater(
+        repository.open(
+          config: config,
+          credentialBinding: 'same-session',
+          tokenProvider: () async => 'test-access',
+        ),
+        throwsA(isA<TransportException>()),
+      );
+      expect(await repository.directory.exists(), false);
+      await expectLater(
+        repository.open(
+          config: config,
+          credentialBinding: 'same-session',
+          tokenProvider: () async =>
+              throw StateError('No offline token request.'),
+          offline: true,
+        ),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
     'signout drains a late HTTP ACK before deleting every cache file',
     () async {
       final workspace = WorkspaceController(repository: repository);

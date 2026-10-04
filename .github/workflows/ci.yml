@@ -103,6 +103,52 @@ jobs:
       - run: flutter test
         working-directory: examples/flutter_app
       - run: python3 tools/flutter_app_smoke.py
+  flutter-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CHROME_EXECUTABLE: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: bff/go.mod
+          cache-dependency-path: bff/go.sum
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: examples/flutter_app/package-lock.json
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: flutter/flutter
+          ref: ee80f08bbf97172ec030b8751ceab557177a34a6 # Flutter 3.44.6
+          path: .ci/flutter
+          persist-credentials: false
+      - name: Restore verified Flutter release metadata
+        run: |
+          git -C .ci/flutter fetch --depth=1 origin refs/tags/3.44.6:refs/tags/3.44.6
+          test "$(git -C .ci/flutter rev-parse '3.44.6^{commit}')" = ee80f08bbf97172ec030b8751ceab557177a34a6
+      - run: echo "$GITHUB_WORKSPACE/.ci/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter --version
+      - run: flutter config --no-analytics --enable-web
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: examples/flutter_app
+      - run: npm test && npm run build:auth
+        working-directory: examples/flutter_app
+      - run: flutter pub get
+        working-directory: examples/flutter_app
+      - run: dart format --output=none --set-exit-if-changed lib test integration_test
+        working-directory: examples/flutter_app
+      - run: flutter analyze --fatal-infos
+        working-directory: examples/flutter_app
+      - run: flutter test
+        working-directory: examples/flutter_app
+      - run: flutter test --platform chrome test/browser test/auth/memory_session_test.dart
+        working-directory: examples/flutter_app
+      - run: flutter build web --no-pub --no-web-resources-cdn
+        working-directory: examples/flutter_app
+      - run: python3 tools/flutter_web_smoke.py
   release-tools:
     runs-on: ubuntu-latest
     timeout-minutes: 15

@@ -95,7 +95,6 @@ fixture's lockfile records the resolved graph.
 uses the SDK's real Chromium suite separately; this fixture deliberately imports
 `dart:io` and is native only.
 
-
 The Android run used emulator 36.6.11.0, a new AVD with disposable user data and
 an installed Android 34 Google APIs arm64 image. Existing SDK license acceptance
 allowed Gradle to install required Android SDK Platform 35 during the build.
@@ -114,3 +113,29 @@ and its UI integration test executed successfully. The results above mean the
 native SQLite ABI, filesystem path and SDK scenario ran on the named platform;
 they do not prove an arbitrary production app, device backup policy, encrypted
 storage, suspended background sync or physical-device behavior.
+
+## Ordinary Flutter Web application
+
+`examples/flutter_app` now builds the same ordinary UI/controllers for Web with
+memory-only MSAL and IndexedDB/Web Locks. Native SQLite, secure storage and
+custom-scheme callbacks remain separate. Follow the
+[Web setup](web-auth.md), including the exact SPA redirect bridge and BFF origin.
+
+```sh
+python3 tools/flutter_web_smoke.py --output artifacts/flutter-web-fixture.json
+```
+
+Use a fresh ignored evidence path. This runner uses owned headless Chromium,
+actual signed Go HTTP/JWT validation and real IndexedDB. It separately observes
+a full document reload, then verifies retained exact pending operations, refusal
+to reopen offline before fresh BFF verification, online ACK and logout purge.
+Its test-only auth adapter is not production MSAL and cannot prove live CIAM,
+hosted Azure/Cosmos, physical devices or other browser support.
+
+The 2026-10-04 fourth attempt passed this actual Web UI flow from the dirty tree
+based on `0cc3a8d`. The first three failures remain distinct receipts; they were
+not relabeled as success or later-commit evidence. The reload failure exposed
+native-only startup purging when browser memory credentials disappeared.
+Startup now retains locked browser storage while still requiring interactive
+auth and online BFF rebind; native missing-credential purge remains unchanged.
+Owned browser/HTTP/Go helpers were cleaned up after every attempt.

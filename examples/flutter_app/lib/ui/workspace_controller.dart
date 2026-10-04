@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:flutter/foundation.dart';
 
-import '../data/workspace_repository.dart';
+import '../data/workspace_repository_base.dart';
 
 /// UI state for one verified workspace. The SDK owns queue/cursor semantics.
 class WorkspaceController extends ChangeNotifier {
   WorkspaceController({required this.repository});
 
-  final WorkspaceRepository repository;
+  final WorkspaceRepositoryBase repository;
   CosmosSyncClient? _client;
   StreamSubscription<List<DocumentSnapshot>>? _documentsSubscription;
   StreamSubscription<SyncStatus>? _statusSubscription;

@@ -469,3 +469,42 @@ self-profile/network attempts remain separate and supply no acceptance claim.
 This administrative authentication is not a customer user flow. No additional
 customer profile, actual common CIAM login, hosted data write, publication or
 physical device operation occurred at this checkpoint.
+
+## Shared native/Web application checkpoint, 2026-10-04
+
+The ordinary Flutter application now has a Web target with locally bundled
+MSAL Browser 5.24.0, memory-only credentials, an exact same-origin SPA redirect
+bridge and real IndexedDB/Web Locks. It shares the native UI, auth controller,
+transport and BFF-verified cache ownership; native AppAuth, secure restore and
+SQLite paths remain intact. No new sync wire endpoint, cookie-auth boundary,
+production auth bypass or package publication was introduced.
+
+| Check | Measured evidence and limits |
+| --- | --- |
+| MSAL adapter | All 14 Node tests passed, including the actual pinned constructor, renewal/account pinning, sanitized failures, late callbacks, bounded initialization/cleanup and failed-logout cleanup; provider responses are deterministic fixtures |
+| Ordinary Flutter application | Analysis/format clean, all 70 native app tests and 18 actual Chromium repository/interop/memory-auth tests passed |
+| Ordinary production Web build | `flutter build web --no-pub --no-web-resources-cdn` succeeded with local auth and engine resources; compilation is not live OIDC |
+| Actual Chromium Web UI | Attempts 4 and 5 passed signed Go HTTP/JWT validation, real IndexedDB, separately observed full page reload, exact pending operation retention, refused offline rebind, online BFF rebind, server ACK and logout purge |
+| SDK and BFF preservation | SDK analysis/format, all 165 native and 146 actual Chromium SDK tests, full Go vet/race/build passed |
+| Portable control tools | All 146 Python tests, package-doc mirror check and prepare-only release preflight passed |
+
+Both successful Web runtime receipts identify the dirty tree based on `0cc3a8d`,
+not an exact subsequent commit. The first three failures remain preserved.
+The reload failure exposed startup purging that assumed native credential
+restore: a fresh browser document now retains the locked outbox but has no
+offline cache authority until new sign-in and online BFF verification. Native
+missing-credential purge is preserved. Actual Web helpers cleaned up their
+owned browser/HTTP/Go processes; no physical or hosted cloud operation occurred.
+
+CI now includes a ninth `flutter-web` job with pinned Flutter/action sources,
+locked local MSAL dependencies, native/browser regressions, the production Web
+build and actual signed-Go-HTTP Web UI/reload fixture. The release verifier also
+requires this job. Older eight-job green runs do not validate this source.
+Exact-head remote results must be recorded separately.
+
+The owner explicitly approved exactly one customer profile for the same existing
+human in [#2](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-5980142363).
+That resolves the unanswered permission exception; no profile/flow write or live
+customer login is inferred. Actual CIAM, trusted production linking,
+hosted Cosmos/onboarding and final physical Android remain separate open gates.
+Physical iOS and cancelled actual Google/Apple connections are not blockers.

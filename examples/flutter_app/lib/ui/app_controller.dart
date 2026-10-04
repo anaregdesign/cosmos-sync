@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:flutter/foundation.dart';
 
 import '../auth/auth_session_controller.dart';
 import '../data/workspace_repository.dart';
+import '../data/settings_store.dart';
 import 'workspace_controller.dart';
 
 class AppSettings {
@@ -23,6 +23,7 @@ class AppSettings {
       'scopes': oidc.scopes,
       'discoveryUrl': oidc.discoveryUrl,
       'postLogoutRedirectUrl': oidc.postLogoutRedirectUrl,
+      if (oidc.browser) 'browser': true,
     },
   };
 
@@ -39,6 +40,7 @@ class AppSettings {
         scopes: (oidc['scopes'] as List).cast<String>(),
         discoveryUrl: oidc['discoveryUrl'] as String?,
         postLogoutRedirectUrl: oidc['postLogoutRedirectUrl'] as String?,
+        browser: oidc['browser'] as bool? ?? false,
       ),
     );
   }
@@ -49,7 +51,7 @@ class AppController extends ChangeNotifier {
   AppController({
     required this.auth,
     required this.workspace,
-    required this.settingsFile,
+    required this.settingsStore,
     this.sharedScopeId,
     this.brokerCapabilities,
   }) {
@@ -59,7 +61,7 @@ class AppController extends ChangeNotifier {
 
   final AuthSessionController auth;
   final WorkspaceController workspace;
-  final File settingsFile;
+  final SettingsStore settingsStore;
 
   /// Optional build-selected, server-created shared scope. The BFF still checks
   /// current membership; this identifier grants no permission.
@@ -79,46 +81,40 @@ class AppController extends ChangeNotifier {
   bool get canConnect => auth.credentialSessionId != null && !busy;
 
   Future<void> initialize() => _run(() async {
-    if (!await settingsFile.exists()) return;
+    final saved = await settingsStore.read();
+    if (saved == null) return;
     settings = _selectedSettings(
-      AppSettings.fromJson(
-        (jsonDecode(await settingsFile.readAsString()) as Map)
-            .cast<String, Object?>(),
-      ),
+      AppSettings.fromJson((jsonDecode(saved) as Map).cast<String, Object?>()),
     );
     auth.configure(settings!.oidc);
     await auth.restore();
-    if (auth.credentialSessionId == null) {
+    if (auth.credentialSessionId == null && auth.supportsCredentialRestore) {
       await workspace.repository.purge();
     }
   });
 
-  Future<void> signIn(AppSettings value, {BrokerProvider? provider}) => _run(
-    () async {
-      if (workspace.connected) {
-        throw StateError('Sign out before changing the connection.');
-      }
-      final selected = _selectedSettings(value);
-      if (provider != null) selected.oidc.forBrokerProvider(provider);
-      // Validate the transport URL without requesting credentials or data.
-      final check = HttpSyncTransport(
-        baseUri: selected.connection.bffUri,
-        scopeMode: selected.connection.scopeMode,
-        sharedScopeId: selected.connection.sharedScopeId,
-        allowInsecureLocalhost: selected.connection.allowInsecureLocalhost,
-        tokenProvider: () async => throw StateError('Validation only.'),
-      );
-      check.close();
-      auth.configure(selected.oidc);
-      settings = selected;
-      await settingsFile.parent.create(recursive: true);
-      final temporary = File('${settingsFile.path}.tmp');
-      await temporary.writeAsString(jsonEncode(selected.toJson()), flush: true);
-      await temporary.rename(settingsFile.path);
-      await auth.signIn(provider: provider);
-      if (auth.credentialSessionId != null) await _connect(offline: false);
-    },
-  );
+  Future<void> signIn(AppSettings value, {BrokerProvider? provider}) =>
+      _run(() async {
+        if (workspace.connected) {
+          throw StateError('Sign out before changing the connection.');
+        }
+        final selected = _selectedSettings(value);
+        if (provider != null) selected.oidc.forBrokerProvider(provider);
+        // Validate the transport URL without requesting credentials or data.
+        final check = HttpSyncTransport(
+          baseUri: selected.connection.bffUri,
+          scopeMode: selected.connection.scopeMode,
+          sharedScopeId: selected.connection.sharedScopeId,
+          allowInsecureLocalhost: selected.connection.allowInsecureLocalhost,
+          tokenProvider: () async => throw StateError('Validation only.'),
+        );
+        check.close();
+        auth.configure(selected.oidc);
+        settings = selected;
+        await settingsStore.write(jsonEncode(selected.toJson()));
+        await auth.signIn(provider: provider);
+        if (auth.credentialSessionId != null) await _connect(offline: false);
+      });
 
   AppSettings _selectedSettings(AppSettings value) {
     value.connection.validateScopeSelection();
@@ -219,10 +215,11 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> close() async {
+    if (_disposed) return;
     await workspace.disconnect();
+    await auth.close();
     dispose();
     workspace.dispose();
-    auth.dispose();
   }
 
   @override

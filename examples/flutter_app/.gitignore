@@ -32,6 +32,10 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/node_modules/
+/web/auth.js
+/web/auth-redirect.js
+/web/auth*.js.LEGAL.txt
 
 # Symbolication related
 app.*.symbols

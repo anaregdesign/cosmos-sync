@@ -59,6 +59,8 @@ When enabled, `GET /v1/events` streams authenticated SSE. `Last-Event-ID` resume
 
 Browsers use streamed fetch with bearer authorization headers, not token URLs or cookie authentication. `allowedOrigins` is an explicit exact-origin list; wildcard origins are rejected. Preflight permits only supported routes/methods/headers. Responses expose the consistency envelope and Retry-After. Browser storage requires IndexedDB and lifetime exclusive Web Locks; unsupported persistent storage fails explicitly.
 
+The ordinary [Flutter Web application](web-auth.md) keeps MSAL API/ID/refresh credentials in memory, separate from durable documents/outbox and SDK session/cursor metadata. A fresh document cannot restore offline authority: interactive sign-in and online BFF verification are required before reopening the retained cache. Native secure credential restore remains a separate application policy; neither platform derives cache ownership from client-decoded JWT claims.
+
 ## Errors and lifecycle
 
 Errors are JSON `{code:string,...}`. HTTP401/403 purge local cache/outbox and pause synchronization, including a principal switch within a shared scope. Offline revocation is unknowable until reconnect. `await signOut()` waits for in-flight work before purging; close cancels notification/ACK waits and releases storage ownership.

@@ -179,6 +179,10 @@ class ReleaseGuardsTest(unittest.TestCase):
             with patch.object(release, "gh", side_effect=[{"object": {"sha": SHA}}, {"workflow_runs": [run]}, {"jobs": failing}]):
                 with self.assertRaises(release.ReleaseError):
                     release.successful_main_ci(SHA)
+        without_web = [job for job in jobs if job["name"] != "flutter-web"]
+        with patch.object(release, "gh", side_effect=[{"object": {"sha": SHA}}, {"workflow_runs": [run]}, {"jobs": without_web}]):
+            with self.assertRaises(release.ReleaseError):
+                release.successful_main_ci(SHA)
 
     def test_latest_failed_run_cannot_reuse_older_success(self):
         older = {"head_sha": SHA, "head_branch": "main", "event": "push", "conclusion": "success", "status": "completed", "run_number": 10}

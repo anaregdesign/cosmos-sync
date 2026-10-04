@@ -25,7 +25,7 @@ IMAGE = "ghcr.io/anaregdesign/cosmos-sync-bff"
 SOURCE = "https://github.com/" + REPOSITORY
 PLATFORMS = {"linux/amd64", "linux/arm64"}
 REQUIRED_JOBS = {
-    "bff", "dart", "browser", "cosmos-emulator", "flutter-macos", "container",
+    "bff", "dart", "browser", "cosmos-emulator", "flutter-macos", "flutter-web", "container",
     "cross-stack",
     "release-tools",
 }

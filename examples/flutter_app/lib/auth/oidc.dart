@@ -79,7 +79,7 @@ class EntraBrokerCapabilities {
       this.issuer == issuer && this.clientId == clientId;
 }
 
-/// Public native-client configuration. There is deliberately no client secret.
+/// Public client configuration. There is deliberately no client secret.
 class OidcConfig {
   factory OidcConfig({
     required String issuer,
@@ -89,6 +89,7 @@ class OidcConfig {
     String? discoveryUrl,
     String? postLogoutRedirectUrl,
     EntraBrokerCapabilities? brokerCapabilities,
+    bool browser = false,
   }) {
     final issuerUri = _httpsUri(issuer);
     final discovery =
@@ -105,9 +106,11 @@ class OidcConfig {
         'Check the provider and client configuration.',
       );
     }
-    _callbackUri(redirectUrl);
+    browser ? _browserCallbackUri(redirectUrl) : _callbackUri(redirectUrl);
     if (postLogoutRedirectUrl != null) {
-      _callbackUri(postLogoutRedirectUrl);
+      browser
+          ? _browserCallbackUri(postLogoutRedirectUrl)
+          : _callbackUri(postLogoutRedirectUrl);
     }
     final copiedScopes = List<String>.unmodifiable(scopes);
     if (!copiedScopes.contains('openid') ||
@@ -130,6 +133,7 @@ class OidcConfig {
       postLogoutRedirectUrl,
       brokerCapabilities,
       null,
+      browser,
     );
   }
 
@@ -142,6 +146,7 @@ class OidcConfig {
     this.postLogoutRedirectUrl,
     this.brokerCapabilities,
     this.brokerProvider,
+    this.browser,
   );
 
   final String issuer;
@@ -155,6 +160,7 @@ class OidcConfig {
   /// Ephemeral authorization-request intent. Excluded from credential/cache
   /// bindings and never forwarded to refresh, logout or BFF requests.
   final BrokerProvider? brokerProvider;
+  final bool browser;
 
   OidcConfig withBrokerCapabilities(EntraBrokerCapabilities? capabilities) =>
       OidcConfig(
@@ -165,6 +171,7 @@ class OidcConfig {
         discoveryUrl: discoveryUrl,
         postLogoutRedirectUrl: postLogoutRedirectUrl,
         brokerCapabilities: capabilities,
+        browser: browser,
       );
 
   OidcConfig forBrokerProvider(BrokerProvider provider) {
@@ -183,6 +190,7 @@ class OidcConfig {
       postLogoutRedirectUrl,
       brokerCapabilities,
       provider,
+      browser,
     );
   }
 
@@ -198,6 +206,7 @@ class OidcConfig {
     scopes,
     discoveryUrl,
     postLogoutRedirectUrl,
+    if (browser) 'browser',
   ]);
 
   static const _identityScopes = {
@@ -239,6 +248,25 @@ class OidcConfig {
       throw const AuthException(
         'invalid_config',
         'Use the registered lowercase native redirect scheme and path.',
+      );
+    }
+  }
+
+  static void _browserCallbackUri(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        RegExp(r'\s').hasMatch(value) ||
+        !uri.path.endsWith('/auth-redirect.html') ||
+        (uri.scheme != 'https' &&
+            !(uri.scheme == 'http' &&
+                {'localhost', '127.0.0.1', '::1'}.contains(uri.host)))) {
+      throw const AuthException(
+        'invalid_config',
+        'Use the registered same-origin browser redirect bridge.',
       );
     }
   }
@@ -287,6 +315,12 @@ abstract interface class OidcClient {
   Future<OidcTokens> signIn(OidcConfig config);
   Future<OidcTokens> refresh(OidcConfig config, String refreshToken);
   Future<void> endSession(OidcConfig config, String? idToken);
+}
+
+/// A browser SDK owns its in-memory refresh credential; it is never exported.
+abstract interface class MemoryOidcClient implements OidcClient {
+  Future<OidcTokens> refreshCurrent(OidcConfig config);
+  Future<void> clearSession();
 }
 
 /// A single replaceable secure record. Implementations must fail on failed writes.
