@@ -1,6 +1,6 @@
 # Owner-assisted actual Entra validation
 
-Run the actual macOS AppAuth target after the owner-approved dedicated
+Run the actual macOS or physical Android AppAuth target after the owner-approved dedicated
 registrations in [entra-setup.md](entra-setup.md) have been created and read back.
 The operator's ignored `.cache/entra-azure` directory contains 0600
 `approved-owner.local.json` and `registration-receipt.local.json`. Their actual
@@ -11,7 +11,23 @@ python3 tools/native_entra_auth.py --owner-assisted
 ```
 
 Set `FLUTTER_BIN`/`GO_BIN` or `--flutter-bin`/`--go-bin` if those tools are not on
-PATH. The runner supports macOS here; this command is manual and never performs
+PATH. macOS remains the default. For Android, select the exact supported physical
+device in an ignored 0600 identity file and explicitly authorize installation:
+
+```sh
+python3 tools/native_entra_auth.py --owner-assisted --device android \
+  --device-id-file .cache/devices/android.txt --authorize-install \
+  --output artifacts/native-entra-android.json
+```
+
+The evidence destination must be fresh and under ignored `artifacts/`. The runner
+uses only a new `adb -s <selected-device> reverse --no-rebind` mapping for its
+capability-bound loopback control port. It neither exposes the control server to
+the LAN nor forwards cloud endpoints. Cleanup removes only that exact mapping
+while it still matches the runner's destination; cleanup failure cannot report
+success. No iOS signing, pairing, provisioning or installation is performed.
+
+These commands are manual and never perform
 CI sign-in. The owner operates the system browser's credentials/MFA and reviews
 the new `Cosmos.Sync` permission. The request also includes standard
 `openid profile offline_access`; it includes no Microsoft Graph data permission.
@@ -26,7 +42,7 @@ Token GET requests, unknown routes, phases and fields are rejected. Provider and
 Flutter diagnostics remain in a private local log.
 
 The target performs interactive code/PKCE sign-in, secure-record restoration in
-a new controller, real refresh and local sign-out of an isolated random Keychain
+a new controller, real refresh and local sign-out of an isolated random OS secure
 record. It does not log out another app session or delete reusable registrations
 or cloud resources. Controller recreation proves no OS process restart. The
 token-capture protocol belongs only to this integration target; ordinary `main`

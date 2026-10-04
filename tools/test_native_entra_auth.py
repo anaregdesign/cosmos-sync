@@ -1,3 +1,4 @@
+import argparse
 import contextlib
 import io
 import json
@@ -8,8 +9,11 @@ import tempfile
 import unittest
 import urllib.error
 import urllib.request
+from unittest.mock import Mock, patch
 
-from native_entra_auth import NativeControl, private_input, private_json
+from device_validation import ValidationError
+import native_entra_auth as native
+from native_entra_auth import NativeControl, native_target, private_input, private_json
 
 
 class NativeEntraControlTests(unittest.TestCase):
@@ -121,6 +125,80 @@ class PrivateInputTests(unittest.TestCase):
             link.symlink_to(path)
             with self.assertRaises(ValueError):
                 private_input(link)
+
+
+class NativeTargetTests(unittest.TestCase):
+    def arguments(self, **overrides):
+        values = {"device": "macos", "flutter_bin": "flutter", "device_id_file": None,
+                  "authorize_install": False, "output": None}
+        values.update(overrides)
+        return argparse.Namespace(**values)
+
+    def test_default_target_remains_macos_without_device_discovery(self):
+        with patch.object(native, "android_target") as resolve:
+            self.assertEqual(native_target(self.arguments()), "macos")
+            resolve.assert_not_called()
+
+    def test_android_reuses_exact_physical_target_and_install_boundary(self):
+        args = self.arguments(device="android", device_id_file=".cache/device.txt",
+                              authorize_install=True, output="artifacts/native.json")
+        with patch.object(native, "android_target", return_value=("private-device", {})) as resolve:
+            self.assertEqual(native_target(args), "private-device")
+            resolve.assert_called_once_with(args, "flutter")
+
+    def test_android_install_denial_precedes_receipt_or_cloud_access(self):
+        args = self.arguments(device="android")
+        with patch.object(native, "private_input") as read:
+            with self.assertRaises(ValidationError):
+                native_target(args)
+            read.assert_not_called()
+
+    def test_android_flags_cannot_select_an_unrelated_macos_target(self):
+        for args in (self.arguments(device_id_file=".cache/device.txt"),
+                     self.arguments(authorize_install=True)):
+            with self.subTest(args=args):
+                with patch.object(native, "android_target") as resolve:
+                    with self.assertRaisesRegex(ValueError, "android_options_require_android_target"):
+                        native_target(args)
+                    resolve.assert_not_called()
+
+    def test_cleanup_always_closes_control_and_only_owned_reverse(self):
+        process, control, reverse = Mock(), Mock(), Mock()
+        reverse.close.return_value = True
+        with patch.object(native, "stop_owned_process") as stop:
+            native.cleanup_native_run(process, control, reverse)
+            stop.assert_called_once_with(process)
+        control.close.assert_called_once_with()
+        reverse.close.assert_called_once_with()
+
+    def test_process_cleanup_failure_still_closes_control_and_reverse(self):
+        control, reverse = Mock(), Mock()
+        reverse.close.return_value = True
+        with patch.object(native, "stop_owned_process", side_effect=RuntimeError("process_cleanup_failed")):
+            with self.assertRaisesRegex(RuntimeError, "process_cleanup_failed"):
+                native.cleanup_native_run(Mock(), control, reverse)
+        control.close.assert_called_once_with()
+        reverse.close.assert_called_once_with()
+
+    def test_control_cleanup_failure_still_closes_reverse(self):
+        control, reverse = Mock(), Mock()
+        control.close.side_effect = RuntimeError("control_cleanup_failed")
+        reverse.close.return_value = True
+        with patch.object(native, "stop_owned_process"):
+            with self.assertRaisesRegex(RuntimeError, "control_cleanup_failed"):
+                native.cleanup_native_run(None, control, reverse)
+        reverse.close.assert_called_once_with()
+
+    def test_reverse_cleanup_failure_cannot_report_success(self):
+        control, reverse = Mock(), Mock()
+        reverse.close.return_value = False
+        with patch.object(native, "stop_owned_process"):
+            with self.assertRaisesRegex(RuntimeError, "owned_android_reverse_cleanup_failed"):
+                native.cleanup_native_run(None, control, reverse)
+
+    def test_operator_interrupt_uses_the_finally_cleanup_path(self):
+        with self.assertRaisesRegex(InterruptedError, "native_auth_interrupted"):
+            native.interrupt_native_run(None, None)
 
 
 if __name__ == "__main__":

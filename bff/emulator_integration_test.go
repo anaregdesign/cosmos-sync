@@ -194,6 +194,76 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 		}
 	}
 
+	t.Run("inactive identity core uses atomic durable single-partition storage", func(t *testing.T) {
+		fixture := newDirectoryFixture(t)
+		fixture.d.store = cosmosIdentityDirectoryStore{newStore()}
+		second, err := newIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{fixture.google, fixture.apple})
+		if err != nil {
+			t.Fatal(err)
+		}
+		second.now = fixture.d.now
+		raw, err := fixture.d.begin(ctx, nil, "register", fixture.google, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		firstAccount, err := fixture.d.register(ctx, raw, fixture.proof(t, raw, fixture.google, "first-directory-owner"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err = second.begin(ctx, nil, "register", fixture.google, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		secondAccount, err := second.register(ctx, raw, fixture.proof(t, raw, fixture.google, "second-directory-owner"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		type linkAttempt struct {
+			d       *identityDirectory
+			session directorySession
+			raw     string
+			old     verifiedDirectoryProof
+			next    verifiedDirectoryProof
+		}
+		attempts := make([]linkAttempt, 2)
+		for i, account := range []directoryAccount{firstAccount, secondAccount} {
+			d := []*identityDirectory{fixture.d, second}[i]
+			session := fixture.session(account, 0)
+			raw, err := d.begin(ctx, &session, "link", fixture.apple, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			subject := []string{"first-directory-owner", "second-directory-owner"}[i]
+			attempts[i] = linkAttempt{d, session, raw, fixture.proof(t, raw, fixture.google, subject),
+				fixture.proof(t, raw, fixture.apple, "contested-directory-identity")}
+		}
+		start, results := make(chan struct{}), make(chan error, 2)
+		for _, attempt := range attempts {
+			go func() {
+				<-start
+				_, err := attempt.d.change(ctx, attempt.session, attempt.raw, "link", attempt.old, attempt.next)
+				results <- err
+			}()
+		}
+		close(start)
+		successes := 0
+		for range attempts {
+			if err := <-results; err == nil {
+				successes++
+			} else {
+				assertCode(t, err, "identity_already_assigned")
+			}
+		}
+		fresh := cosmosIdentityDirectoryStore{newStore()}
+		state, version, err := fresh.loadIdentityDirectory(withAuthorizationSessions(ctx))
+		if err != nil || version == "" || !validIdentityDirectory(state) || successes != 1 ||
+			len(state.Accounts) != 2 || len(state.Bindings) != 3 || len(state.Audits) != 3 || len(state.Proofs) != 4 {
+			t.Fatalf("real storage lost atomic identity uniqueness: successes=%d err=%v", successes, err)
+		}
+		// This storage test does not activate an HTTP proof endpoint or verify
+		// upstream providers; production still rejects this emulator's consistency.
+	})
+
 	t.Run("builtin durable account membership replay and revocation fence", func(t *testing.T) {
 		first, second := newStore(), newStore()
 		identity := AccountIdentity{Issuer: "https://builtin-emulator.test", Subject: "owner"}

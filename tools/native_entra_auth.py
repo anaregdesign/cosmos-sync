@@ -10,10 +10,15 @@ import json
 import os
 from pathlib import Path
 import secrets
+import signal
 import stat
 import subprocess
 import threading
 import time
+
+from flutter_app_smoke import (
+    AndroidReverse, android_target, stop_owned_process, write_android_evidence,
+)
 
 STAGES = frozenset({"browser_request_started", "native_callback_received",
                     "secure_restore_complete", "refresh_complete", "local_signout_complete"})
@@ -131,13 +136,45 @@ class NativeControl:
         self.thread.join(timeout=5)
 
 
+def native_target(arguments):
+    if arguments.device == "android":
+        return android_target(arguments, arguments.flutter_bin)[0]
+    if arguments.device_id_file or arguments.authorize_install:
+        raise ValueError("android_options_require_android_target")
+    return "macos"
+
+
+def cleanup_native_run(process, control, reverse):
+    try:
+        stop_owned_process(process)
+    finally:
+        try:
+            control.close()
+        finally:
+            if reverse is not None and not reverse.close():
+                raise RuntimeError("owned_android_reverse_cleanup_failed")
+
+
+def interrupt_native_run(unused_signal, unused_frame):
+    raise InterruptedError("native_auth_interrupted")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--owner-assisted", action="store_true", required=True)
+    parser.add_argument("--device", choices=("macos", "android"), default="macos")
+    parser.add_argument("--device-id-file")
+    parser.add_argument("--authorize-install", action="store_true")
+    parser.add_argument("--output")
     parser.add_argument("--flutter-bin", default=os.environ.get("FLUTTER_BIN", "flutter"))
     parser.add_argument("--go-bin", default=os.environ.get("GO_BIN", "go"))
     parser.add_argument("--timeout", type=int, default=600)
     args = parser.parse_args()
+    if not 60 <= args.timeout <= 900:
+        raise ValueError("bounded_native_auth_timeout_required")
+    if args.device == "macos" and args.output:
+        raise ValueError("android_evidence_output_requires_android_target")
+    target = native_target(args)
     root = Path(__file__).resolve().parents[1]
     input_directory = root / ".cache/entra-azure"
     receipt_path = input_directory / "registration-receipt.local.json"
@@ -160,15 +197,20 @@ def main():
     private_json(latest, {"runDirectory": str(directory), "storeKey": None})
     control = NativeControl(directory, config)
     control.start()
-    private_json(directory / "run.local.json", {"controlUrl": control.url, "storeKey": control.store_key})
-    log_fd = os.open(directory / "flutter-private.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     flutter_process = None
+    reverse = AndroidReverse(target) if args.device == "android" else None
+    report = None
     try:
+        private_json(directory / "run.local.json", {"controlUrl": control.url, "storeKey": control.store_key})
+        if reverse is not None:
+            reverse.add(control.server.server_port)
+        log_fd = os.open(directory / "flutter-private.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         print("NATIVE_ENTRA_OWNER_ASSISTED_RUN_STARTED", flush=True)
         with os.fdopen(log_fd, "w") as output:
-            command = [args.flutter_bin, "test", "integration_test/entra_auth_live_test.dart", "-d", "macos",
+            command = [args.flutter_bin, "test", "integration_test/entra_auth_live_test.dart", "-d", target,
                        "--dart-define=COSMOS_SYNC_ENTRA_CONTROL_URL=" + control.url, "--reporter", "expanded"]
-            flutter_process = subprocess.Popen(command, cwd=root / "examples/flutter_app", stdout=output, stderr=subprocess.STDOUT)
+            flutter_process = subprocess.Popen(command, cwd=root / "examples/flutter_app", stdout=output,
+                                               stderr=subprocess.STDOUT, start_new_session=os.name == "posix")
             deadline = time.monotonic() + args.timeout
             pending_since = None
             owner_notice = False
@@ -207,28 +249,25 @@ def main():
         after = private_input(directory / "refresh-proof/identity.local.json")
         if any(before[key] != after[key] for key in ("tenantId", "ownerObjectId", "subject")):
             raise RuntimeError("refresh_principal_changed")
-        report = {"actualNativeAppAuth": True, "actualSecureRestore": True, "actualRefresh": True,
+        report = {"platform": args.device, "physicalDevice": args.device == "android",
+                  "actualNativeAppAuth": True, "actualSecureRestore": True, "actualRefresh": True,
                   "localSignout": True, "verifiedApiSignatureIssuerAudienceScopeTenantOwner": True,
                   "apiSubjectStableAcrossRefresh": True, "proposedSingleUserGrant": True,
                   "grantsApplied": False, "processRestartVerified": False,
                   "multiPrincipalRealProviderVerified": False, "cosmosConnectionVerified": False}
-        private_json(directory / "proof.json", report)
-        print(json.dumps(report), flush=True)
     finally:
-        if flutter_process is not None and flutter_process.poll() is None:
-            flutter_process.terminate()
-            try:
-                flutter_process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                flutter_process.kill()
-                flutter_process.wait(timeout=5)
-        control.close()
+        cleanup_native_run(flutter_process, control, reverse)
+    private_json(directory / "proof.json", report)
+    if args.output:
+        write_android_evidence(args.output, report)
+    print(json.dumps(report), flush=True)
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, interrupt_native_run)
     try:
         main()
-    except Exception:
+    except (Exception, KeyboardInterrupt):
         # Private logs are for local inspection; no provider/filesystem message
         # can leak tokens, account names, authorization codes or callback URLs.
         print("NATIVE_ENTRA_RUN_FAILED_CHECK_PRIVATE_EVIDENCE", flush=True)

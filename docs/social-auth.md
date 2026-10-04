@@ -89,7 +89,7 @@ reviewable operation. Unlink requires recent authentication, session invalidatio
 and a remaining usable login/recovery method. Do not migrate documents or lose
 the account ID when switching providers.
 
-### Selected linking contract (not implemented)
+### Selected linking contract (production activation not implemented)
 
 The implementation contract for the future dedicated link/unlink boundary is:
 
@@ -113,9 +113,15 @@ Only a dedicated identity-proof endpoint may handle upstream login proof; sync
 APIs continue to require API access JWTs. The broker must provide trustworthy
 binding and authentication-time evidence, and its direct SDK/self-service linking
 must not bypass this transaction. If either cannot be established, linking stays
-disabled. This chosen contract does not add endpoints, Graph write grants,
-session generations, custom refresh families or broker-wide linking controls to
-the published preview. [Cosmos transaction scope](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/transactional-batch).
+disabled. The [staged internal identity-directory core](identity-directory.md) now exercises
+this transactional model with a bounded, single-record Cosmos adapter and
+explicitly labeled internal proof-stamp tests. It is disconnected from production
+factories and routes. Trusted upstream/fresh-auth proof, broker self-service
+enforcement, production session/cursor/cache wiring, capacity reservations and
+recovery remain activation gates. This chosen contract adds no endpoints, Graph
+write grants, active session generations, custom refresh families or broker-wide
+linking controls to the published preview.
+[Cosmos transaction scope](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/transactional-batch).
 
 Broker configuration is part of this guarantee. Firebase documents trusted
 provider behavior, and Identity Platform offers separate accounts per provider
@@ -133,7 +139,7 @@ SDK mutation attacks. A safe BFF button alone does not enforce that boundary.
 The legacy BFF mode derives its personal partition from verified issuer, tenant
 and subject. The opt-in [built-in authorization mode](authorization.md) now
 provides a durable account directory keyed by verified issuer/subject, personal
-self-access and fixed-owner shared membership. Cross-provider linking and
+self-access and fixed-owner shared membership. Production cross-provider linking and
 legacy-data migration remain **unimplemented**. Migration requires an explicit
 mapping of old scope IDs, retained journal and receipt integrity,
 permission-version changes, cursor invalidation/resync and a policy for pending
@@ -160,8 +166,8 @@ consumer token or callback meets this contract.
 | Boundary | Current preview behavior |
 | --- | --- |
 | Signature | Explicit allowlist `RS256`, `RS384`, `RS512`, `ES256`, `ES384`, `ES512`; no HMAC, unsigned or arbitrary token-supplied key endpoint |
-| API identity | Configured issuer, configured API audience present in `aud`, signature and expiry; optional `nbf` must be a valid integer no later than the BFF clock; exact required scope in whitespace-separated `scp`/`scope`; nonempty subject; `token_use` checked only when configured |
-| Missing checks | No `iat`/`auth_time` freshness, approved `azp` client allowlist, local maximum JWT lifetime or per-request upstream session-revocation lookup |
+| API identity | Configured issuer, configured API audience present in `aud`, signature and expiry; optional `nbf` must be a valid integer no later than the BFF clock; exact required scope in whitespace-separated `scp`/`scope`; nonempty subject; `token_use` checked only when configured; optional configured client admission requires exact signed `azp` |
+| Missing checks | No production `iat`/`auth_time` freshness, local maximum JWT lifetime or per-request upstream session-revocation lookup. The staged core does not supply provider verification or activate these checks on sync routes |
 | Discovery | Trusted configured issuer discovery is needed to construct the verifier; the default HTTP timeout is 10 seconds, while an explicitly supplied HTTP client keeps its own timeout |
 | JWKS | Pinned `go-oidc` v3.16.0 retains cached keys without a TTL or proactive refresh. Cache verification failure, including an unknown `kid`, triggers one remote fetch with shared in-flight suppression. There is no cross-request fetch cooldown or automatic retry loop |
 | Native login | Pinned `flutter_appauth` 12.1.0 delegates state, nonce, S256 PKCE and system-browser callback handling to platform AppAuth; the BFF verifies the separate API JWT and receives no login nonce |

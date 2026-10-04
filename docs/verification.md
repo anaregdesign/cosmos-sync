@@ -311,3 +311,69 @@ this BFF from the first image. The Dart SDK library is unchanged, so the existin
 pub.dev archive was preserved. The Azure runtime checkpoint above still refers
 to the first pinned image; publication does not establish new-image cloud
 acceptance, actual provider login or linked-identity behavior.
+
+## Resumed internal and Android verification, 2026-10-04
+
+The owner resumed the remaining Issues and selected Android-only physical
+verification. This checkpoint is work on top of `082f895`, not a new package,
+container publication or Azure deployment. The retained Azure image and public
+preview versions above are unchanged.
+
+| Check | Measured evidence and limits |
+| --- | --- |
+| BFF vet, race suite and build | Passed, including the inactive-directory HTTP boundary with valid server-derived session assertions; raw provider ID tokens remain rejected |
+| Staged identity-directory core | Internal proof-stamp/fake-store and official-SDK wire checks passed; no cryptographic upstream-provider verifier, production factory or route is activated |
+| Actual Cosmos emulator | All eight subtests passed, including independent SDK clients racing for one directory binding in a single partition; only the newly owned test container/database was removed |
+| Native Dart and Chromium SDK suites | 165 native and 146 browser tests passed; Dart analysis was clean; browser storage uses actual IndexedDB/Web Locks |
+| Flutter app and control tools | App analysis/full suite and all 136 Python tool tests passed; package documentation synchronization passed |
+| Native/browser cross-stack and crash checks | Actual signed Go HTTP/TLS fixtures, Dart SQLite, Chromium sync/page reload, authorization fencing and disposable native SIGKILL recovery passed; identities are fixtures, not additional real users |
+| Actual physical Android workforce authentication | Owner-operated Microsoft AppAuth code/PKCE callback, isolated native secure-record controller restore, real refresh and local signout passed; the runner exited successfully |
+| Independent Android API credential proof | Both initial and refreshed access JWTs passed signature, exact issuer/API audience, delegated scope, tenant and approved-owner checks; verified principal was stable; no grant was applied |
+| Ordinary physical Android application | Actual local Go HTTP BFF, app-private SQLite, native secure storage and offline/conflict/delete/purge UI passed; authentication remains a signed test adapter, not the real-provider/cloud journey |
+| Physical Android SDK fixture | Actual app-private SQLite SDK fixture passed with its expected runtime marker and deterministic transport; no live OIDC/BFF/Azure or OS process-death claim |
+| Offline infrastructure reference | Both pinned Terraform validators passed formatting, locked initialization, validation, TFLint and 31 workload / seven prerequisite mock tests; no Azure plan/apply |
+
+The first resumed native run reached the real Microsoft browser but was
+interrupted while the owner was unavailable; it captured no API token. The first
+ordinary application retry timed out. Later read-only device checks observed
+dozing/locked state, which is a missing prerequisite, not a proven sole cause of
+that timeout. Those failed/interrupted receipts were preserved. After the owner
+powered up and unlocked Android, the fresh native and application runs above
+passed. Cleanup closed the private control listener and removed only exact owned
+ADB reverse mappings; credentials, private identities and raw logs are not
+published.
+
+A separate physical SDK retry failed without retained raw tool output. Its
+project analysis then confirmed missing dependency resolution in this isolated
+checkout. After lock-enforced restoration without a version upgrade, analysis
+was clean and the fresh physical SDK retry passed. The earlier failed receipt
+was retained rather than overwritten.
+
+Controller restoration does not prove Android OS process death/relaunch.
+System airplane mode and suspension, integrated ordinary real-provider Flutter
+through hosted BFF/Cosmos, multiple actual principals and Google/Apple consumer
+acceptance remain unverified. The
+[internal directory contract](identity-directory.md) is deliberately separate
+from active account/session/cursor/cache behavior; its tests cannot close the
+production linking and broker-bypass criteria in Issues #27-30.
+
+The resumed ARM readback preserved successful app/environment provisioning,
+executable-only startup, the original pinned image, min0/max1 and the sole
+approved ingress `/32`. One additional system-TLS IPv4 health probe returned
+Envoy 403 `RBAC: access denied`, although two independent IPv4 checks matched
+that rule. The cumulative BFF ledger is **6/40 attempts**, with **34 remaining**;
+reserve four fresh endpoint/auth gates, leaving at most 30 SDK calls before any
+further probe. No hosted SDK run or Azure application mutation occurred. The old
+70-second/33-call SDK manifest must not be replayed or used to reset that ledger.
+
+Bounded historical and fresh delivery queries returned zero rows without a
+partial-query error. Their scope includes the owned resource-specific HTTP
+table and legacy diagnostic route, but they do not establish log delivery or
+the rejection's evaluated source/peer. Diagnostic-setting readback points to
+the exact owned workspace ARM resource, while requested `Dedicated` still
+reads back as null. Explicit-window platform detector calls failed; a successful
+default networking report contradicted ARM's VNet configuration and is not
+authoritative ingress evidence. Subsequent metadata-only hypothesis checks found
+workspace ingestion/query access enabled and app client-certificate mode
+`Ignore`; neither explains the denial. No IP-policy broadening, role, secret,
+resource, image or replica-setting change was made.

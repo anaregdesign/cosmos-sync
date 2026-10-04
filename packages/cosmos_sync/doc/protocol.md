@@ -13,6 +13,8 @@ Mutations, sync, snapshots and events send `X-Cosmos-Sync-Scope`, `X-Cosmos-Sync
 ## Builtin account and membership management
 
 These additional routes are available only with `authorization.mode=builtin`.
+The staged internal identity directory adds no wire endpoints and does not
+replace this account/session contract; see [its activation boundary](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/identity-directory.md).
 `GET /v1/account` registers/returns `{accountId,personalScopeId}`.
 `POST /v1/scopes` accepts `{operationId:UUID}` and returns the immutable creation
 result `{scopeId,ownerAccountId,revision:1,members:[]}`; the verified creator is the

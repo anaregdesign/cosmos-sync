@@ -13,7 +13,7 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'owner-assisted Entra PKCE, Keychain restore, refresh and local signout',
+    'owner-assisted Entra PKCE, secure restore, refresh and local signout',
     (tester) async {
       const endpoint = String.fromEnvironment('COSMOS_SYNC_ENTRA_CONTROL_URL');
       final control = _Control(Uri.parse(endpoint));
@@ -58,7 +58,7 @@ void main() {
           await control.capture('initial', await current.accessToken());
 
           // A new controller has no RAM access token. Restoration reads the real
-          // OS Keychain, and its next token call performs actual provider refresh.
+          // OS secure store, and its next token call performs provider refresh.
           // This is controller recreation, not proof of OS process restart.
           current.dispose();
           current = AuthSessionController(tokenStore: store);
