@@ -66,8 +66,8 @@ def private_android_identity(file):
     return identity
 
 
-def android_target(arguments, flutter):
-    """Resolve an exact authorized physical target without printing its identity."""
+def android_target(arguments, flutter, *, emulator=False):
+    """Resolve the exact authorized target; never fall back between target kinds."""
     if not arguments.authorize_install:
         raise ValidationError("Android installation and launch require explicit owner authorization.")
     if not arguments.device_id_file:
@@ -80,7 +80,19 @@ def android_target(arguments, flutter):
     if result.returncode != 0:
         raise ValidationError("Flutter device discovery failed; no app was installed.")
     try:
-        device = select_physical_device(json.loads(result.stdout), identity, "android")
+        devices = json.loads(result.stdout)
+        if emulator:
+            if not isinstance(devices, list) or any(not isinstance(row, dict) for row in devices):
+                raise ValueError("Invalid emulator inventory")
+            matches = [row for row in devices if row.get("id") == identity]
+            if (len(matches) != 1 or matches[0].get("emulator") is not True
+                    or matches[0].get("isSupported") is not True
+                    or not str(matches[0].get("targetPlatform", "")).startswith("android-")
+                    or re.fullmatch(r"emulator-[0-9]+", identity) is None):
+                raise ValidationError("The exact supported Android emulator is not available; no app was installed.")
+            device = matches[0]
+        else:
+            device = select_physical_device(devices, identity, "android")
     except (ValueError, TypeError) as error:
         raise ValidationError("Flutter device discovery returned invalid data.") from error
     return identity, device
@@ -202,7 +214,7 @@ def cleanup_fixture(process, control, worker, reverse):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", choices=("macos", "android"), default="macos")
+    parser.add_argument("--device", choices=("macos", "android", "android-emulator"), default="macos")
     parser.add_argument("--device-id-file")
     parser.add_argument("--authorize-install", action="store_true")
     parser.add_argument("--output")
@@ -211,7 +223,8 @@ def main():
     flutter = os.environ.get("FLUTTER_BIN", "flutter")
     app = root / "examples/flutter_app"
     target = "integration_test/app_flow_test.dart"
-    identity, device = android_target(args, flutter) if args.device == "android" else ("macos", None)
+    identity, device = (android_target(args, flutter, emulator=args.device == "android-emulator")
+                        if args.device in ("android", "android-emulator") else ("macos", None))
     reverse = AndroidReverse(identity) if device is not None else None
     evidence = None
     failure = None
@@ -229,7 +242,8 @@ def main():
             "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
             "commit": commit if re.fullmatch(r"[0-9a-f]{40}", commit) else "unknown",
             "source_tree_dirty": bool(status_result.stdout.strip()) if status_result.returncode == 0 else None,
-            "platform": "android", "physical_device": True,
+            "platform": "android", "physical_device": args.device == "android",
+            "emulator": args.device == "android-emulator",
             "device_runtime": safe_model(device.get("sdk", "unknown")),
             "flutter_version": safe_model(version.get("frameworkVersion")),
             "dart_version": safe_model(version.get("dartSdkVersion")),

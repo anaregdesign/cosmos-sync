@@ -16,7 +16,7 @@ resources, operator configuration and remaining acceptance work. Container Apps
 Terraform and its runbook are tracked in [#31](https://github.com/anaregdesign/cosmos-sync/issues/31);
 clean-checkout hosted onboarding is tracked in [#32](https://github.com/anaregdesign/cosmos-sync/issues/32).
 
-**Apple and Google are the intended practical end-user login providers.** The
+**Apple and Google remain intended future end-user login providers.** The
 current Flutter adapter implements native OIDC/PKCE with a dedicated Entra API
 access-token validation path; Apple/Google login, account linking and provider
 acceptance are additional work, not delivered support. The [social-login design
@@ -25,6 +25,12 @@ native provider login followed by a backend session exchange. Raw Apple/Google
 ID tokens are not Cosmos Sync API credentials. BFF account and membership policy controls
 document access, and matching email addresses must never automatically merge
 accounts.
+
+On 2026-10-04 the owner removed actual Google/Apple connections, provider
+configuration and live-provider acceptance from this delivery. Development
+continues with simulators; physical Android verification is the final gate.
+External ID OIDC, server authorization, linking safety and hosted Cosmos
+acceptance remain separate unfinished work, not inferred from workforce login.
 
 ## Layout and verification
 
@@ -194,7 +200,8 @@ for the exact settings, narrow IAM, immutable state/bootstrap workflow, saved
 workload plan, recovery and network cost estimate. The current owner authorized
 necessary minimal Azure/tenant setup and retention; resource apply does not
 substitute for runtime acceptance. Separate CIAM API/native registrations and
-API-only consent exist, while consumer flows and Google/Apple login are pending;
+API-only consent exist, while the consumer OIDC flow remains unverified.
+Actual Google/Apple setup and login are outside the current delivery scope;
 see [consumer identity setup](docs/external-id-setup.md).
 [Physical-device acceptance](docs/physical-devices.md)
 records the owner's unsigned iOS build choice: the build and simulator passed,

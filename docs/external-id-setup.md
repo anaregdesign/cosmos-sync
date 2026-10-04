@@ -15,6 +15,21 @@ associated and no real consumer or Apple/Google login has passed. The published
 `0.2.0-dev.1` artifacts remain unchanged. The workforce validation directory,
 registrations and resources are retained separately.
 
+## Current scope, 2026-10-04
+
+The owner cancelled actual Google/Apple connections, configuration, credentials
+and live-provider tests. Issue #30 is not planned; the provider stages and
+operations below are retained future reference, not pending owner inputs or
+current acceptance requirements. Do not create a Google client, Apple key or
+social user flow to satisfy this delivery.
+
+The dedicated External ID common OIDC flow remains unverified and distinct from
+the successful workforce Entra authentication. Preserve server authorization
+and linking/broker-bypass safety. Continue simulator development first; physical
+Android verification is the final gate. Cancellation does not authorize a new
+customer account, a local email/password/OTP substitute, signing, paid resources
+or new consent scopes.
+
 The creation request used `Standard/A0`, following Microsoft's documented API
 example, while the successful actual GET returned **`Base/A0`** and MAU billing.
 The published `2023-05-17-preview` schema still enumerates Standard/Premium
@@ -44,7 +59,7 @@ configured provider and account-isolation policy are reviewed.
 | Native API grant | Verified `AllPrincipals` delegated consent from the new native service principal to the new API service principal, with **only** `Cosmos.Sync` and `principalId=null`; no default Graph `User.Read`, Graph data permissions, application permissions or preauthorized clients |
 | Native return | Exact existing callback `com.anaregdesign.cosmossync://auth/oauthredirect`, registered as Mobile and desktop applications; no wildcard. Defer provider logout registration until its exact callback is reviewed |
 | Discovery/configuration | Actual tenant-ID-host metadata and matching issuer/discovery origin verified anonymously; current Flutter `OidcConfig` accepts those values. This does not verify code exchange or issued API tokens |
-| Consumer login | Google/Apple provider configuration, user-flow association and actual consumer authentication remain pending |
+| Consumer login | Common CIAM OIDC/user-flow authentication remains unverified; actual Google/Apple configuration and login are excluded from this delivery |
 | Retention | Retain the reusable directory and owned resources; no automated teardown |
 
 The tenant's chosen location cannot be changed later. Tenant creation and Azure
@@ -184,9 +199,10 @@ legacy B2C `p=` parameters, `common`/`organizations`, a custom domain or an
 unreviewed logout callback as incidental setup.
 [OIDC discovery](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc#fetch-the-openid-configuration-document).
 
-## Provider registration stages
+## Future provider registration reference
 
-Actual directory IDs now exist in private readback. Substitute those verified
+These Google/Apple stages are not planned for the current delivery. If separately
+restored by the owner, actual directory IDs now exist in private readback; substitute those verified
 values when preparing provider return URLs, show the exact URLs and changes to
 the owner, then obtain the required Google/Apple settings and permissions.
 A placeholder is not a usable callback, and the native app's return is not the
@@ -222,7 +238,8 @@ certificates, provisioning profiles or physical iPhone installation.
 [Apple web configuration](https://developer.apple.com/help/account/capabilities/configure-sign-in-with-apple-for-the-web/),
 [External ID Apple federation](https://learn.microsoft.com/en-us/entra/external-id/customers/how-to-apple-federation-customers).
 
-After the first exact provider is configured, create one reviewed user flow
+For a future restored provider rollout, after the first exact provider is
+configured, create one reviewed user flow
 `CosmosSyncSignUpSignIn` associated only with the new native client. Graph v1.0
 uses `POST /identity/authenticationEventsFlows`, then
 `POST /identity/authenticationEventsFlows/<FLOW_ID>/conditions/applications/includeApplications`
@@ -275,7 +292,7 @@ must not create membership or choose a data partition.
 No reviewed official document establishes that this proposed broker configuration
 never merges identities by email. A BFF which sees the same broker subject cannot
 detect a newly attached provider. Do not certify no-email-linking from our hash
-function alone. Test equal email across provider/local methods, different email,
+function alone. Deterministically test equal email across provider/local methods, different email,
 Apple relay/missing profile, changed email and attempted direct self-service
 link/unlink. Record whether directory objects and API subjects remain separate.
 One real account cannot prove isolation between independent provider principals.
@@ -364,17 +381,24 @@ own reviewed implementation; do not silently relabel the published preview.
 Dedicated registration and discovery are now verified. Next verify one
 actual configured-provider login through the current macOS/Android browser adapter, dedicated API
 JWT checks, subject stability, cancellation/alternate-account entry, refresh,
-offline reopen/reconnect and purge. Record one-account limitations. The owner
+offline reopen/reconnect and purge. Record one-account limitations. This common OIDC login remains a separate gate; actual
+Google/Apple provider connections are not required or claimed. The owner
+deferred physical checks to the final Android gate and
 still chose unsigned iOS validation; no signed physical iPhone acceptance is
 claimed. Web requires a separate client registration, HTTPS callback and new Web
 login adapter before it can be included. Provider federation does not turn the
 native sample into a Web app. Cross-provider linking, independent actual users,
-provider revoke/delete recovery and operational key rotation remain explicit
-gates in [#26–30](https://github.com/anaregdesign/cosmos-sync/issues/26).
+provider revoke/delete recovery and operational key rotation are future
+provider-specific reference, not current #30 requirements. Server-owned linking
+and deterministic lifecycle/security work remain in
+[#27](https://github.com/anaregdesign/cosmos-sync/issues/27),
+[#28](https://github.com/anaregdesign/cosmos-sync/issues/28) and
+[#29](https://github.com/anaregdesign/cosmos-sync/issues/29).
 
-The remaining external owner inputs are the Google owning project/contact/test
-login and the enrolled Apple team/primary App ID or deferral of Apple. Existing
-Azure/tenant authority covers the dedicated next provider/user-flow stage; any needed
-browser login/MFA is requested when actionable. No credential or secret is
-needed in a text response. Directory/application configuration alone does not close provider,
-linking, independent-user or physical-device acceptance.
+Google project/contact/test-login and Apple team/App ID inputs are no longer
+requested. Existing Azure/tenant authority does not remove the current
+no-new-user constraint or provide a verified CIAM login method; settle that
+boundary before any user-flow change. The owner completes any necessary browser
+login/MFA when actionable. No credential or secret belongs in a text response.
+Directory/application configuration alone does not close common OIDC, linking,
+independent-user or final physical-device acceptance.

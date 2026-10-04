@@ -7,6 +7,12 @@ not establish an actual Apple/Google login. The
 [social-login design](social-auth.md) covers their additional trust boundary,
 identity linking, platform requirements and acceptance work.
 
+The owner removed actual Google/Apple provider setup and live connections from
+this delivery on 2026-10-04. Their buttons remain disabled; typed local adapter
+and security tests stay in scope. Development now uses simulators, with physical
+Android verification last. Actual CIAM/common OIDC and linking safety remain
+separate from the successful workforce Entra login.
+
 The runnable sample is `examples/flutter_app`. Its native login adapter uses
 `flutter_appauth` 12.1.0 on Android, iOS and macOS. AppAuth performs Authorization
 Code with PKCE and validates its browser callback/state/nonce; Android uses an
@@ -66,7 +72,7 @@ token exchange, account linking or provider-ID-token admission in this adapter.
 The current consumer deployment has not yet configured or verified either
 provider, so its capability flags must remain disabled.
 
-## Apple and Google deployment and remaining work
+## Future Apple and Google deployment reference
 
 The first integration candidate is a consumer identity broker that federates
 Apple/Google login and issues an access token for the Cosmos Sync API. Microsoft
@@ -79,8 +85,9 @@ proof exchange is the alternative under review. This recommendation is a design
 proposal, not an enabled provider deployment. The selected dedicated CIAM tenant,
 two consumer app registrations and their service principals now exist, with
 API-only administrator consent and compatible public discovery/configuration
-readback. Google/Apple configuration, user-flow association and actual consumer
-login are still pending; see [the reproducible External ID setup](external-id-setup.md).
+readback. Actual Google/Apple configuration is not planned for this delivery.
+User-flow association and actual common CIAM login remain unverified; see
+[the reproducible External ID setup](external-id-setup.md).
 
 An Apple/Google or broker **ID token** proves authentication to its intended
 relying party; it must not replace the API access token expected by existing
@@ -109,20 +116,22 @@ real provider/platform acceptance:
 - Stable accounts, linking, API sessions and cache policy: [#27](https://github.com/anaregdesign/cosmos-sync/issues/27).
 - Flutter provider adapters and platform matrix: [#28](https://github.com/anaregdesign/cosmos-sync/issues/28).
 - Automated attack/lifecycle regressions: [#29](https://github.com/anaregdesign/cosmos-sync/issues/29).
-- Owner-approved provider setup and actual platform acceptance: [#30](https://github.com/anaregdesign/cosmos-sync/issues/30).
+- Actual Google/Apple provider setup and acceptance: [#30](https://github.com/anaregdesign/cosmos-sync/issues/30), cancelled by the owner as not planned and no longer a prerequisite.
+- Final physical Android acceptance: [#20](https://github.com/anaregdesign/cosmos-sync/issues/20), deferred until simulator development is complete.
 
 Apple Developer/Google Cloud/broker registrations, signing or server credentials,
 new consent/scopes and paid resources require concrete owner approval before
 changes. The owner has already authorized the selected dedicated consumer
 tenant's necessary settings, and its native-to-API `AllPrincipals` consent for
 only `Cosmos.Sync` is verified. It adds no Graph data permissions or client
-preauthorization. Workforce consent/configuration remains separate. Google/Apple
-owning accounts and settings are the next external inputs. Current one-account
+preauthorization. Workforce consent/configuration remains separate. No Google/Apple
+owning account or credential input is requested for this delivery. Current one-account
 verification and unsigned iOS choices remain in
 force. The pure Dart SDK has Chromium cache coverage; the current native Flutter
 app has no Web login target. Cancellation/denial, reinstall/relogin, account
-switch/linking, refresh/revocation and offline-cache isolation need both automated
-coverage and explicitly recorded real-provider evidence on each claimed platform.
+switch/linking, refresh/revocation and offline-cache isolation need automated
+coverage. Any claimed actual common-provider/platform result requires separate
+recorded evidence; Google/Apple live evidence is outside current scope.
 
 ## Register a public client and the API
 
@@ -253,8 +262,9 @@ offline unit/security regressions. They additionally cover typed provider
 request parameters, exact capability binding, hidden/default buttons,
 unavailable-provider rejection, cancellation/late callbacks and BFF-established
 cache ownership during a Google/Apple navigation switch. These use simulated
-provider and BFF responses; real provider registration/login and platform
-acceptance remain in #28 and #30. Existing regressions cover
+provider and BFF responses. Actual Google/Apple registration/login is cancelled
+in #30, not proven; native/browser development remains in #28 and final physical
+Android acceptance in #20. Existing regressions cover
 refresh concurrency/rotation and synchronous listener reentry, missing access
 tokens, cancellation during a secure
 write, late authorization/refresh completion after logout, config/account binding,

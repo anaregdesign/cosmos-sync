@@ -31,7 +31,7 @@ These diagnostics use the existing CLI identity and no new IAM, keys or consent.
 
 For the actual hosted single-replica SDK contract, copy the [bounded hosted manifest](../ops/azure/hosted-validation.example.json) and follow the [deployment acceptance sequence](aca-validation-plan.md#portable-deployment-and-acceptance-sequence). The older two-local-BFF harness below remains a separate unverified contract.
 
-Environment/operations are tracked in [#16](https://github.com/anaregdesign/cosmos-sync/issues/16), and the app → OIDC → BFF → Azure → device chain in [#24](https://github.com/anaregdesign/cosmos-sync/issues/24). Dedicated workforce Entra settings are in [identity setup](entra-setup.md); consumer registrations and remaining Google/Apple provider configuration are in [External ID setup](external-id-setup.md).
+Environment/operations are tracked in [#16](https://github.com/anaregdesign/cosmos-sync/issues/16), and the app → OIDC → BFF → Azure → device chain in [#24](https://github.com/anaregdesign/cosmos-sync/issues/24). Dedicated workforce Entra settings are in [identity setup](entra-setup.md); consumer registrations and the unverified common CIAM OIDC flow are in [External ID setup](external-id-setup.md). The owner's 2026-10-04 revision excludes actual Google/Apple configuration/connections and defers physical Android verification until simulator development is complete.
 
 ## The concrete owner request
 

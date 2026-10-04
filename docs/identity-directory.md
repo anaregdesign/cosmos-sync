@@ -6,14 +6,28 @@ explicit link/unlink transactions and corresponding storage/failure tests.
 route.** Existing `/v1/account`, authorization, session, cursor and SDK behavior
 still use the published issuer/subject contract. No existing personal partition
 or data owner is migrated. This work does not enable Google/Apple federation,
-prove broker self-service enforcement, or complete Issues #27-30.
+prove broker self-service enforcement, or complete Issues #27-29. The owner
+cancelled actual Google/Apple connections in #30 as not planned on 2026-10-04;
+trusted linking/authorization requirements remain. Use simulators during
+development and defer physical Android checks until the final gate.
 
 ## Trusted proof boundary
 
-The core accepts internal proof stamps, not JWTs or client JSON. A future
-identity-proof adapter must independently verify the exact upstream issuer,
-subject, provider, client/project namespace, audience, signature, expiry,
-server-issued challenge binding and recent authentication. It must prove broker
+The core accepts internal proof stamps, not JWTs or client JSON. An internal
+OIDC ID-proof verifier now checks an operator-approved exact issuer, sole native
+client audience and HTTPS JWKS URL; asymmetric signatures and bounded key
+rotation; exact server nonce; integer `auth_time`, `iat`, `exp` and optional
+`nbf`; and ID-token purpose. It rejects API scope/access-token headers, ambiguous
+audiences, missing authentication time, refresh-as-reauthentication, key redirects
+and unapproved targets. Profile/email claims are not ownership inputs. The
+directory still checks authentication against stored challenge issuance and
+consumes the proof atomically; the JWT component alone does not consume a nonce.
+
+This verifier is also inactive and is not a browser/code/PKCE adapter. A future
+production identity-proof adapter must bind that verified identity to the actual
+OAuth callback and reviewed upstream provider/client namespace. A broker ID token
+identifies the broker subject, not necessarily an upstream provider subject.
+The adapter must prove broker
 self-service additions/removals cannot bypass BFF approval. An unchanged broker
 subject, signed `azp`, `domain_hint`, email, refresh, `iat` or a client timestamp
 cannot supply that proof. Until those properties are established, activation
@@ -73,18 +87,23 @@ and are not returned by the existing sync APIs.
 
 ## Evidence and remaining activation gates
 
-Core tests use explicitly labeled internal verified-proof stamps, **not actual
-providers or signed provider-token acceptance**. They cover account/namespace
+Core unit tests use explicitly labeled internal verified-proof stamps. Additional
+tests use actual RSA-signed local TLS/JWKS ID-token fixtures, **not actual
+provider connections or a production broker-binding contract**. They cover account/namespace
 isolation, stable ownership, freshness/callback/session/operation binding,
 replay and simultaneous assignment, last-credential denial, retained tombstones,
 corruption, bounded retries, ambiguous outcomes and capacity limits. Official-SDK
 transport tests verify the actual one-partition create/conditional-replace wire,
 operation count, ETag and session propagation. These are offline tests, not
-live Cosmos acceptance.
+live Cosmos acceptance. The actual emulator contention test now verifies signed
+local proofs before racing independent SDK clients; it does not activate HTTP
+linking or establish a CIAM/provider deployment.
 
 Before production use, settle and verify the CIAM upstream-binding/fresh-auth
 adapter and out-of-band mutation policy; review capacity reservations and
 recovery; wire every account lookup, authorization management route, session,
-cursor and client cache surface; and provide actual provider/platform/cloud
-evidence. Do not expose linking UI or accept raw provider ID tokens at sync
+cursor and client cache surface; and provide common External ID OIDC, cloud and
+the final Android evidence required by the active Issues. Deterministic signed
+provider fixtures remain necessary, but actual Google/Apple connection evidence
+is not part of this delivery. Do not expose linking UI or accept raw provider ID tokens at sync
 routes merely because these internal transactions pass.

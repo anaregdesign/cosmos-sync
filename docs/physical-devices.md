@@ -11,6 +11,17 @@ specified SDK scenario on real app-private SQLite. It does not prove a real
 identity provider, deployed BFF, Azure account, app-store release signing or
 background execution.
 
+## Current verification order, 2026-10-04
+
+The owner now defers real-device verification until development is complete.
+Continue with local/native/browser tests and simulators first, then run the
+final Android-only gate. Do not install or launch on a physical device during
+that development phase. Previously recorded Android results remain historical
+evidence; they do not establish unperformed OS process/relaunch, suspension or
+integrated hosted acceptance. Physical iOS remains outside the selected scope.
+Actual Google/Apple provider connections were separately cancelled as not
+planned; common OIDC, authorization and offline safety are not waived.
+
 ## Current inventory and pending owner actions
 
 Initial read-only discovery on 2026-10-03 found no attached Android device. Apple

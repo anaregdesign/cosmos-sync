@@ -10,6 +10,24 @@ prove Apple or Google login. See [native authentication](native-auth.md) and
 
 ## Recommended architecture
 
+### Current owner-directed delivery scope, 2026-10-04
+
+The owner cancelled actual Google/Apple connections, federation configuration,
+credential operations and their manual live-provider acceptance. Issue
+[#30](https://github.com/anaregdesign/cosmos-sync/issues/30) is **not planned**,
+not passed. Google/Apple project/team access, test logins, keys and provider
+rotation are no longer prerequisites for this delivery. The provider-specific
+setup and matrix below are future reference, not instructions to perform them.
+Keep both capability flags disabled; preserve typed local adapters and
+deterministic identity/security regressions.
+
+The owner subsequently moved physical verification to the final Android-only
+gate. Continue native/browser and simulator development first. Actual External
+ID/common OIDC, hosted Cosmos acceptance and the trusted linking/authorization
+contract remain required by their active Issues. The recorded real Entra login
+used a workforce tenant; it does not prove CIAM login, upstream-provider control
+or broker self-service enforcement. Simulation cannot establish those facts.
+
 Use an identity broker for consumer login, then require a credential specifically
 accepted by the Cosmos Sync API. Keep authorization and stable data ownership in
 the BFF. **Do not configure the existing sync endpoints to accept Apple or Google
@@ -30,8 +48,9 @@ private readback confirms the selected domain, United States geography and CIAM
 tenant type. The dedicated consumer API/native registrations, service principals
 and API-only delegated administrator consent are complete. Anonymous discovery
 and native issuer/discovery-origin configuration checks passed. Provider settings,
-the associated user flow and actual consumer login remain unverified. Google/Apple project/team access and credentials
-remain separate external owner inputs. The [External ID setup record](external-id-setup.md)
+the associated user flow and actual consumer login remain unverified. Actual
+Google/Apple project/team setup and credentials are excluded from the current
+delivery. The [External ID setup record](external-id-setup.md)
 records creation status, the selected registration/callback contract, costs and
 remaining settings. This is not an enabled or verified social-login deployment.
 [External ID authentication methods](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-authentication-methods-customers).
@@ -42,7 +61,7 @@ token at the BFF.
 
 | Option | API trust boundary | Work and selection gate |
 | --- | --- | --- |
-| Entra External ID broker, first candidate | Apple/Google login at broker → PKCE public client → API-specific access JWT → BFF identity mapping and current grants | Configure a consumer external tenant and both providers; prove issuer, API scope, subject stability, explicit linking and callback behavior. Keep one exact trusted issuer per initial deployment. |
+| Entra External ID broker, selected | Reviewed login at broker → PKCE public client → API-specific access JWT → BFF identity mapping and current grants | Prove issuer, API scope, subject stability, explicit linking and callback behavior. Keep one exact trusted issuer per deployment. Actual Google/Apple federation is outside current scope. |
 | Firebase Authentication / Google Cloud Identity Platform broker | Native/web provider login → broker ID token → dedicated BFF identity exchange → Cosmos Sync API session/access token | Good candidate for native provider UI and Flutter integration. Implement a separate exchange, session revocation and signing-key lifecycle; do not pretend the broker's project-audience ID token is an existing API access token. Disable email-driven account merging and test the broker configuration. |
 | Direct Apple/Google integration | Server validates provider login/code proof → server-owned account → dedicated Cosmos Sync API session/access token | Requires ownership of provider-specific code exchange, nonce/replay handling, refresh/revocation and signing/session operations. Use only if broker constraints cannot meet the product's requirements. |
 
@@ -243,10 +262,13 @@ These are acceptance requirements for new adapters, not new production endpoints
   [Firebase session management](https://firebase.google.com/docs/auth/admin/manage-sessions),
   [Apple account notifications](https://developer.apple.com/documentation/signinwithapple/processing-changes-for-sign-in-with-apple-accounts).
 
-## Platform and verification matrix
+## Future provider-specific platform reference
 
-All entries below are planned Apple/Google acceptance work. Passing current
-Entra, signed-fixture, simulator or offline SDK tests does not complete them.
+The owner removed the actual Apple/Google acceptance below from this delivery.
+Retain the matrix for any future separately authorized provider rollout, not as
+a current blocker. Passing Entra, signed-fixture, simulator or offline SDK tests
+does not establish these future provider-specific results. Current physical
+verification is Android-only and deferred until development is complete.
 
 | Platform | Registration/adapter work | Real-provider acceptance |
 | --- | --- | --- |
@@ -266,15 +288,17 @@ tokens, algorithm/key confusion, nonce/state mismatch, code/proof replay, key
 rotation, duplicate provider subjects across namespaces, equal-email isolation,
 link races/re-auth failure, late callback after logout, refresh reuse, provider
 outages and cross-account cursor/cache/outbox isolation. Preserve the existing
-Entra path and BFF authorization regressions. Real-provider acceptance must also
-cover relay/name omission, consent revocation, account deletion, reinstall/relogin
-and separate principals. Additional test-account and signing access needs a
+Entra path and BFF authorization regressions. A future real-provider rollout must
+also cover relay/name omission, consent revocation, account deletion,
+reinstall/relogin and separate principals. Additional test-account and signing access needs a
 concrete owner approval; single-account evidence cannot prove isolation between
 two actual provider accounts.
 
-## Owner settings and operations gate
+## Future provider settings and operations gate
 
-Before external setup, present the exact broker/project/tenant, app IDs, redirects,
+No Google/Apple setup or credentials are requested for the current delivery.
+If that cancelled scope is later restored, first present the exact
+broker/project/tenant, app IDs, redirects,
 provider scopes, data handling, cost and secrets storage to the owner. Ask for
 specific approval to create/update Google OAuth clients and consent/test-user
 settings, and Apple App ID/Services ID/Sign in with Apple keys/capabilities.
@@ -306,11 +330,12 @@ the dependent work:
 2. [#27: Implement stable accounts, explicit linking and BFF session/authorization mapping](https://github.com/anaregdesign/cosmos-sync/issues/27), after the design decision.
 3. [#28: Implement and validate Flutter provider/platform adapters](https://github.com/anaregdesign/cosmos-sync/issues/28), against that server contract.
 4. [#29: Add automated security regression evidence](https://github.com/anaregdesign/cosmos-sync/issues/29), alongside server/client implementation.
-5. [#30: Complete owner-approved real-provider, platform and credential operations acceptance](https://github.com/anaregdesign/cosmos-sync/issues/30), after the portable checks and concrete account-setting approvals.
+5. [#30: Actual Google/Apple provider setup and acceptance](https://github.com/anaregdesign/cosmos-sync/issues/30) is cancelled by the owner as not planned; it is no longer a blocking prerequisite. Physical Android acceptance remains the separate final gate in [#20](https://github.com/anaregdesign/cosmos-sync/issues/20).
 
 External ID is selected and its dedicated directory has been created. The
 registration contract, current token behavior and bounded future linking design
-are recorded above. Provider registrations, paid add-ons and live provider
-verification remain dependent on concrete external owner settings and evidence
-in [the setup record](external-id-setup.md). Design completion does not close
-the implementation or live-acceptance Issues.
+are recorded above. Actual Google/Apple provider registrations and live
+verification are outside current scope; no paid add-on is authorized.
+[The setup record](external-id-setup.md) preserves their future reference
+requirements. Design completion and provider cancellation do not close the
+remaining implementation, common OIDC, cloud or final Android Issues.

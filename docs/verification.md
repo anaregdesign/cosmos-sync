@@ -355,7 +355,22 @@ through hosted BFF/Cosmos, multiple actual principals and Google/Apple consumer
 acceptance remain unverified. The
 [internal directory contract](identity-directory.md) is deliberately separate
 from active account/session/cursor/cache behavior; its tests cannot close the
-production linking and broker-bypass criteria in Issues #27-30.
+production linking and broker-bypass criteria in Issues #27-29.
+
+### Subsequent owner-directed scope and verification order
+
+On 2026-10-04 the owner cancelled actual Google/Apple connections, configuration,
+credential operations and live-provider acceptance. Issue #30 is not planned,
+not passed; those operations are no longer prerequisites. Preserve deterministic
+provider/security tests and keep the real-provider capability flags disabled.
+The intended broker architecture remains useful future reference.
+
+The owner then deferred physical checks until the final Android-only gate.
+Continue development and native/browser/simulator checks first; do not spend
+live request budget or relaunch physical fixtures merely to revise this scope.
+Common External ID OIDC, trusted linking/authorization, hosted Cosmos and clean
+onboarding remain unperformed where recorded above. The successful actual
+workforce login does not prove CIAM login or Google/Apple federation.
 
 The resumed ARM readback preserved successful app/environment provisioning,
 executable-only startup, the original pinned image, min0/max1 and the sole
@@ -377,3 +392,46 @@ authoritative ingress evidence. Subsequent metadata-only hypothesis checks found
 workspace ingestion/query access enabled and app client-certificate mode
 `Ignore`; neither explains the denial. No IP-policy broadening, role, secret,
 resource, image or replica-setting change was made.
+
+## Signed proofs and simulator-first checkpoint, 2026-10-04
+
+The additional source remains an inactive internal primitive, not a production
+linking endpoint or a new release. Actual Google/Apple connections stay cancelled
+and physical Android verification stays deferred to the final gate.
+
+| Check | Measured evidence and limits |
+| --- | --- |
+| Internal OIDC ID-proof verifier | Actual RSA-signed local TLS/JWKS proofs passed issuer/client/nonce/purpose/integer authentication-time checks, negative claims/headers, independent wrong signatures, cancellation, bounded key rotation/failure and redirect denial; trusted targets are server configuration, not client input |
+| Directory transactions with signed proofs | Registration, explicit link/unlink, replay, equal-email separation and retained ownership tombstone tests passed; OAuth callback/PKCE, broker upstream binding and production account/session/cache integration remain unimplemented |
+| Actual Cosmos emulator | All eight subtests passed, including cryptographically verified local proofs before independent SDK clients race for one directory binding; only the newly owned container was removed |
+| Go and Python checks | Full BFF vet/race/build and all 139 tool tests passed; emulator selection guards reject connected physical devices without fallback |
+| Native and actual Chromium SDK | Full 165 native / 146 actual browser tests and native analysis passed; this is fixture evidence, not CIAM or hosted Cosmos |
+| Ordinary Flutter app | Analysis and all 61 app tests passed |
+| Android SDK on disposable simulator | Actual Android 14 / API 34 arm64 execution passed the expected SDK runtime marker and test result using real app-private SQLite with deterministic transport |
+| Ordinary app on disposable simulator | Local signed Go HTTP, SQLite, native secure storage and offline/conflict/delete/purge UI passed; receipt reports emulator=true, physical_device=false, live_oidc=false, live_azure=false and successful owned cleanup |
+
+The simulator receipt names the dirty working tree based on `94d8d50`; it must
+not be relabeled as an exact later-commit run. The first AVD creation failed
+before any emulator/app/SDK execution. After restoration of missing official
+command-line tools into the actual SDK root, a fresh disposable AVD passed.
+Both attempts remain distinct private evidence. The successful emulator was
+stopped, its owned AVD registry/data removed and its ports confirmed closed.
+No physical target was selected or launched.
+
+A separate read-only cloud diagnosis preserved `Succeeded` app/environment,
+global public networking enabled, `internal=false`, the same direct local
+network route and no proxy environment. The exact platform-auth read returned
+`AuthConfigNotFound`, not a denied operator read. Resource Health reported an
+unsupported resource type, so it supplies no health conclusion. Historical
+Requests metrics had no nonzero points. One system-TLS differential probe to
+the exact latest revision hostname still returned Envoy 403. This does not
+identify the evaluated source/peer or establish diagnostic delivery.
+
+The cumulative BFF ledger is now **7/40 attempts**, with **33 remaining**.
+Reserve four fresh readiness/auth gates, leaving at most 29 SDK calls before
+any further probe. This supersedes earlier request-allocation checkpoints, not
+their recorded results. No Azure configuration, network, identity, role, image,
+replica, secret or application-data write was performed. Common actual CIAM
+login, production trusted linking/Web lifecycle, hosted Cosmos/onboarding and
+final Android OS/real-cloud acceptance remain open; inactive proof and
+simulator successes cannot close those criteria.

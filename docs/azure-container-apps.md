@@ -33,7 +33,10 @@ The initial preview supports the documented protocol and offline behavior, not
 all Firestore APIs or its query/security-rules model. Provider applications,
 consent, redirects and Apple/Google credentials do not appear automatically when
 the BFF starts; see [native auth](native-auth.md) and the
-[Apple/Google integration plan](social-auth.md).
+[Apple/Google reference and current scope](social-auth.md). The owner cancelled
+actual Google/Apple configuration and connections for this delivery; common
+External ID OIDC and hosted data acceptance remain separate requirements.
+Use simulators during development and physical Android only at the final gate.
 
 ## Provisioned resources and prerequisites
 

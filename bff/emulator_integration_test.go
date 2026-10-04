@@ -195,9 +195,22 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 	}
 
 	t.Run("inactive identity core uses atomic durable single-partition storage", func(t *testing.T) {
+		signed := newDirectoryProofFixture(t)
 		fixture := newDirectoryFixture(t)
-		fixture.d.store = cosmosIdentityDirectoryStore{newStore()}
-		second, err := newIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{fixture.google, fixture.apple})
+		fixture.now, fixture.google, fixture.apple = signed.now, signed.target, signed.target
+		fixture.d, err = newIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{signed.target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture.d.now = func() time.Time { return fixture.now }
+		proof := func(raw, subject string) verifiedDirectoryProof {
+			value, err := signed.verifier.verify(ctx, signed.token(t, raw, map[string]any{"sub": subject}, nil, 0), raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return value
+		}
+		second, err := newIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{signed.target})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -206,7 +219,7 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		firstAccount, err := fixture.d.register(ctx, raw, fixture.proof(t, raw, fixture.google, "first-directory-owner"))
+		firstAccount, err := fixture.d.register(ctx, raw, proof(raw, "first-directory-owner"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -214,7 +227,7 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		secondAccount, err := second.register(ctx, raw, fixture.proof(t, raw, fixture.google, "second-directory-owner"))
+		secondAccount, err := second.register(ctx, raw, proof(raw, "second-directory-owner"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -234,8 +247,8 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			subject := []string{"first-directory-owner", "second-directory-owner"}[i]
-			attempts[i] = linkAttempt{d, session, raw, fixture.proof(t, raw, fixture.google, subject),
-				fixture.proof(t, raw, fixture.apple, "contested-directory-identity")}
+			attempts[i] = linkAttempt{d, session, raw, proof(raw, subject),
+				proof(raw, "contested-directory-identity")}
 		}
 		start, results := make(chan struct{}), make(chan error, 2)
 		for _, attempt := range attempts {
@@ -260,8 +273,8 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 			len(state.Accounts) != 2 || len(state.Bindings) != 3 || len(state.Audits) != 3 || len(state.Proofs) != 4 {
 			t.Fatalf("real storage lost atomic identity uniqueness: successes=%d err=%v", successes, err)
 		}
-		// This storage test does not activate an HTTP proof endpoint or verify
-		// upstream providers; production still rejects this emulator's consistency.
+		// The real TLS/JWKS identity is a signed local fixture, not a provider
+		// deployment; production still rejects this emulator's consistency.
 	})
 
 	t.Run("builtin durable account membership replay and revocation fence", func(t *testing.T) {

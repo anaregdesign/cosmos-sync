@@ -96,6 +96,8 @@ As of the 2026-10-04 resumed readback, app/environment provisioning succeeded, b
 verified-TLS ingress still returns Envoy 403 despite the matching approved `/32`.
 No SDK/cloud data write or ordinary hosted Flutter journey has passed.
 Scale-to-zero does not remove fixed network/storage/logging charges. See the
-[retained ACA record](aca-validation-plan.md). Actual hosted data acceptance and
-consumer Apple/Google configuration remain separate gates; neither a mocked
+[retained ACA record](aca-validation-plan.md). Actual hosted data and common
+External ID OIDC acceptance remain separate gates. The owner removed actual
+Google/Apple connections and configuration from this delivery on 2026-10-04 and
+deferred physical Android checks until simulator development is complete; neither a mocked
 plan nor local test establishes a hosted production SLA.

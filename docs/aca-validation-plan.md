@@ -121,8 +121,10 @@ cloud tokens. Data writes stop at one logical partition's atomic boundary.
 
 The current hosted validation selects the already tested workforce API JWT. A
 separate CIAM directory now has its own API/native registrations, corresponding
-service principals and API-only `Cosmos.Sync` administrator grant. Its user flow,
-Google/Apple providers and actual consumer login remain pending; that configuration
+service principals and API-only `Cosmos.Sync` administrator grant. Its user flow
+and actual common consumer OIDC login remain unverified; actual Google/Apple
+configuration/connections are owner-cancelled for this delivery. Development
+uses simulators before the final physical Android gate. Consumer configuration
 is not silently substituted into the workforce BFF. See
 [consumer identity setup](external-id-setup.md) and [native auth](native-auth.md).
 

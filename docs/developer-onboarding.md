@@ -30,8 +30,11 @@ The first `0.2.0-dev.1` preview has a finite API. It implements durable local
 documents/outbox, explicit synchronization, optimistic conflicts, tombstones,
 resumable cursors, local queries/watches and server-authorized personal/shared
 scopes. It does not implement Firestore's complete API or security-rule language.
-Apple and Google are the intended consumer login providers, with their adapters
-and stable account linking still tracked in [#26–30](social-auth.md). The
+Apple and Google remain intended future consumer login providers. On 2026-10-04
+the owner cancelled their actual setup/live connections (#30, not planned) and
+moved physical Android checks to the final gate. Simulator development,
+common External ID OIDC and stable account/linking safety remain tracked in
+[#27–29](social-auth.md). The
 implemented native path uses OIDC/PKCE and a dedicated API access token, with
 Entra used for actual provider validation. Provider registration, authorization
 policy and compatible Cosmos resources remain operator responsibilities.
@@ -258,8 +261,9 @@ ownership or shared memberships. The chosen architecture keeps those data
 permissions in the BFF. External ID consumer configuration remains separate
 from the validated workforce Entra setup. The dedicated CIAM directory now has
 API/native apps, their service principals and an API-only administrator grant;
-its user flow, social provider configuration and actual consumer login remain
-pending. The current hosted test selects the already tested workforce API JWT.
+its user flow and actual common consumer OIDC login remain unverified. Actual
+Google/Apple provider configuration is outside current delivery scope. The
+current hosted test selects the already tested workforce API JWT.
 Built-in data ownership neither creates a provider registration nor grants shared
 membership by email. The official comparison and
 implementation acceptance are recorded in
@@ -441,5 +445,8 @@ versions, validated Terraform/approved plan, actual ACA readiness and managed
 identity access, provider callback, CRUD/offline/conflict/grant/purge results, and
 measured runtime/request charges. Preserve private configuration outside Git.
 Do not publish tokens, secret values, private owner identities, device IDs or
-document payloads. Mark each evidence boundary: local fixture, actual provider,
-actual Cosmos, hosted ACA and physical platform. Leave unperformed gates open.
+document payloads. Mark each evidence boundary: local fixture, simulator, actual
+common OIDC provider, actual Cosmos, hosted ACA and physical Android. Complete
+simulator development before the final physical gate. Actual Google/Apple
+connections are owner-cancelled, not proven by other OIDC results. Leave other
+unperformed gates open.
