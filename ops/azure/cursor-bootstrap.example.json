@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "vault": {
+    "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/owner-selected-validation-group/providers/Microsoft.KeyVault/vaults/owner-selected-vault",
+    "tenantId": "00000000-0000-0000-0000-000000000000",
+    "location": "westus2"
+  },
+  "terraformState": {
+    "resourceAddress": "azurerm_key_vault.cursor",
+    "sha256": "REPLACE_WITH_IMMUTABLE_REVIEWED_RAW_STATE_SHA256",
+    "provenance": "immutable-copy-after-reviewed-prerequisite-apply"
+  }
+}

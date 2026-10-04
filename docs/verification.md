@@ -2,7 +2,7 @@
 
 Foundation v0.2 checks on 2026-10-03, macOS 26.7 arm64. Production BFF and SDK source
 commits are `9c2bdb8` and `a7998fe`. Go 1.26.5, Dart 3.12.2, Flutter 3.44.6,
-SQLite package 3.5.2 and Docker 29.5.3 were used. No paid Azure resource,
+SQLite package 3.5.2 and Docker 29.5.3 were used. At that foundation stage, no paid Azure resource,
 publication or deployment was performed. The foundation was subsequently merged
 by explicit owner instruction in [PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1),
 with all seven [main CI jobs](https://github.com/anaregdesign/cosmos-sync/actions/runs/37122828485)
@@ -66,14 +66,10 @@ unverified. See [platforms](platforms.md) and [performance](performance.md).
 GitHub verification runs Go, native Dart, Chromium, official emulator, macOS
 Flutter, container build and native/browser cross-stack/crash smoke checks.
 Foundation remote outcomes are attached to [merged PR #1](https://github.com/anaregdesign/cosmos-sync/pull/1).
-Publication workflows remain disabled/gated and are not exercised by verification.
-Owner gates [#14](https://github.com/anaregdesign/cosmos-sync/issues/14),
-[#15](https://github.com/anaregdesign/cosmos-sync/issues/15) and
-[#16](https://github.com/anaregdesign/cosmos-sync/issues/16) remain open. A successful
-pub dry-run does not establish actual publication. The owner has now approved MIT,
-public GitHub/GHCR visibility, the selected pub.dev account and the proposed
-0.2.0-dev.1 preview. Actual artifact publication/access, provider/cloud operations
-and physical device results remain separate evidence.
+Publication workflows are deliberately gated; subsequent actual distribution is
+recorded below. The owner approved MIT, public GitHub/GHCR visibility and the
+0.2.0-dev.1 pub.dev preview. Foundation dry-run results alone did not establish
+publication or provider/cloud/device evidence.
 
 ## Publication readiness checks
 
@@ -85,7 +81,7 @@ deterministic SDK fixture. Working-tree checks on 2026-10-03 passed:
 | Flutter analysis and full app suite | No issues; latest 50 tests, including shared-scope selection plus auth lifecycle/native-adapter/secure-store tests |
 | Latest native SDK suite | No analysis issues; all 165 tests passed, including typed account/membership management and shared-cache selection |
 | Latest Chromium SDK suite | All 146 tests passed with actual IndexedDB/Web Locks and shared authorization/cache selection coverage |
-| Release/environment control tools | All 81 tests passed; no actual cloud resource or registry write is performed by these unit tests |
+| Release/environment control tools | Latest 127 tests passed, including bounded hosted acceptance and cursor-bootstrap guards; these unit tests perform no cloud resource or registry write |
 | macOS app integration | Actual Go HTTP BFF, disposable signed JWT/JWKS issuer, SQLite, document/conflict/pending UI and an isolated native Keychain key; provider is a test adapter |
 | Android physical SDK fixture | Pixel 9a / Android 17 API 37; actual SQLite and deterministic transport; cache close/reopen within the test process |
 | Android physical application | Pixel 9a / Android 17 API 37; actual Go HTTP BFF, SQLite, offline reconnect/conflict/delete/purge UI and isolated native secure storage; signed-fixture auth adapter |
@@ -104,8 +100,9 @@ test-only small-screen interaction changes, subsequently committed in `8500ad2`;
 the production app core was unchanged. Both physical Android fixtures use
 test authentication, independently of the actual macOS provider check.
 
-These checks do not establish live Cosmos data operations, physical iPhone
-runtime, actual Android provider sign-in or registry distribution. The owner chose
+These client checks do not establish physical iPhone runtime or actual Android
+provider sign-in. Actual artifact distribution and cloud data evidence are recorded
+separately below. The owner chose
 unsigned iOS verification and one-account live tests. Different-user isolation
 remains an important live-provider gap even though independent signed-fixture
 and emulator principal/partition tests pass. Keep actual release/CI links and
@@ -131,23 +128,100 @@ causally observed revocation, failed batches cannot release a revoked receipt,
 and each physical query page/error retains its observed minimum. The final full
 CI must pass for the release source; older green runs do not validate new changes.
 
-The Container Apps preparation adds trusted HTTPS-ingress runtime mode,
-non-secret bounded JSON configuration, graceful process drain and a pinned
-Terraform reference. Format/init/validate, 15 mock-only plan tests and TFLint
-passed. No ACA environment/application, managed identity, Key Vault or hosted
-role assignment was created. The reference uses container-scoped Cosmos native
-RBAC and versioned Key Vault secret references; a reviewed real plan and the
-owner's exact resource/network authorization are still required for deployment.
+The Container Apps reference adds trusted HTTPS-ingress runtime mode,
+non-secret bounded JSON configuration, graceful process drain and pinned
+Terraform providers. The latest workload format/init/validate, 22 mock-only plan
+tests and TFLint passed; the new private-network prerequisites passed seven mock
+tests and the same static checks. These checks do not contact Azure.
 
-The reusable Azure validation target retains its owned tagged resource group
-and intended serverless account in ARM `Failed` state with no data endpoint.
-Direct account readback on 2026-10-03 corrected the earlier empty-group inventory;
-the Cosmos list command still returned zero. No usable account, database,
-container, data-role assignment or cloud data result exists. Free-tier creation
-was rejected by the subscription offer and the approved East US serverless
-attempt failed for capacity. An alternative region and target require updated
-owner approval; retain the failed record and reject empty-group retargeting.
-No hosted clean-checkout onboarding is inferred from local/emulator evidence.
+## Retained Azure and identity setup, 2026-10-04
+
+The old East US group/account remains in ARM `Failed` state without a data
+endpoint. The separately approved West US2 account reached `Succeeded`, with
+NoSQL/serverless, Session consistency, one write region, disabled local
+authentication, TLS 1.2 and continuous seven-day backup. Its database and
+`/scopeId` v2 container have been created without TTL. A six-action Cosmos data
+role is assigned to the selected operator and the hosted identity at the exact
+container. Inherited governance disables public network access; no policy
+exception, public-access restoration or network bypass was attempted.
+
+Ten private-network/Key Vault prerequisites were applied from a reviewed saved
+plan: VNet, delegated and endpoint subnets, private RBAC vault, two endpoints,
+two private DNS zones and two links. A 32-byte random cursor key was created
+once directly in memory through the existing authorized ARM identity. The public
+bootstrap tool then successfully reused its exact existing version using metadata
+only; it generated no new key and performed no rotation. Raw Terraform state,
+reviewed configuration, secret URI and execution receipts remain private. The
+vault has soft delete and purge protection; these resources are retained.
+
+The first ACA workload attempt failed because ARM rejected the logging
+`destination: "none"`. The reference now uses the official Azure CLI 2.88.0's
+JSON-null representation, with a regression test. The next environment attempt
+failed because this subscription lacked the required
+`Microsoft.Network/AllowBringYourOwnPublicIpAddress` feature. It was registered
+and the Network provider registration propagated within the authorized
+subscription. The same owned failed environment was read back, imported into a
+separate local state and updated from a reviewed plan with no deletion,
+replacement or new IAM. That V3 ARM update returned `Succeeded`, but actual
+readback found no `staticIp` and zero resources in the exactly owned managed
+group. The app failed after about 21 minutes with `ContainerAppOperationError`
+and zero revisions. Scoped Activity Logs contain the original six missing-feature
+IP failures and no later IP/LB retry, supporting the inference that the update
+did not rebuild the execution infrastructure.
+
+The reviewed V4 saved plan successfully recreated only that unused empty
+environment and failed app at 2026-10-04 02:49:28 UTC, with the same names;
+four UAMI/IAM resources were no-op. Independent plan/source checks passed
+26, 24 and 28 checks. The two destroy-guard exceptions exist only in the private
+recovery copy; published module guards remain enabled. Cosmos, Key Vault/key,
+private endpoints/DNS/VNet, identity/permissions and the old East US record are
+retained. Actual readback verified a static IP, the owned platform load balancer
+and IP, pinned image, managed identity, versioned secret reference, scoped roles
+and private-endpoint/DNS configuration. A zero-replica revision reported
+`ActivationFailed`; system logs contained only normal KEDA deactivation and
+console logs had no running replica. The initial HTTPS check failed because
+this Mac's Python/OpenSSL has no default CA file or directory; macOS
+SecureTransport then verified TLS and returned Envoy `RBAC: access denied`.
+The current Mac IPv4 was independently confirmed and matches the sole ingress
+allow rule; one DNS A record matches the current static IP, there is no AAAA
+record or local proxy/tunnel, and environment public access is enabled. Three
+failed probe attempts are retained in the aggregate request budget.
+A reviewed app-only update temporarily raised the minimum to one replica without
+changing its image, ingress or permissions. This exposed the actual startup
+fatal: the published image's explicit `-config /run/config/config.json` default
+conflicts with `COSMOS_SYNC_CONFIG_JSON`. The environment configuration must
+explicitly invoke `/cosmos-sync-bff` without that file flag. No Cosmos permission
+denial is inferred from this configuration failure. The command repair and return
+to minimum zero are pending actual runtime verification. No application document
+write or successful BFF readiness result is claimed.
+The [retained deployment runbook](aca-validation-plan.md) documents topology,
+costs, bootstrap, deployment and reuse.
+
+A fresh macOS native AppAuth check passed after reopening the correct account's
+system-browser login: PKCE callback, Keychain controller restore, refresh and
+local sign-out. Initial and refreshed API JWTs passed independent signature,
+issuer, audience, delegated scope, tenant and approved-owner checks, with a stable
+subject. This is workforce identity proof, not consumer-provider or Cosmos proof.
+
+The separate External ID directory reached `Succeeded` and was verified as CIAM.
+Its API and native apps, service principals, API identifier and API-only delegated
+admin consent were created. Exact discovery/issuer origins and the native config
+constructor were checked. Google/Apple providers, linked sign-up/sign-in flow and
+actual consumer login remain pending. See [External ID setup](external-id-setup.md).
+
+## Hosted Azure SDK acceptance
+
+The new `tools/hosted_azure_live.py` is offline by default. Its 13 loopback/offline
+tests passed, as did Dart formatting/analysis. Approved execution uses one actual
+ACA replica and the fresh workforce API JWT with system TLS, private SQLite and
+a bounded window: 120 seconds, at most 36 SDK protocol calls plus four root health/readiness/denial
+probes, and three accepted create/update/tombstone mutations. The prepared execution
+uses a 90-second SDK bound, leaving 20 seconds for the four probes and 10 for
+setup within the total 120-second acceptance window. Protocol limits do
+not bound physical Cosmos SDK requests, retries, RU or billing. Actual execution
+results will be recorded here after the hosted endpoint is ready. It does not
+prove two replicas, another real user, ordinary Flutter UI, Android provider login,
+OS process death, consumer login or regional recovery.
 
 ## Actual first distribution
 
@@ -172,5 +246,6 @@ configuration and SHA/subject-bound BuildKit provenance/SPDX SBOM passed. The
 initial verifier encountered a same-index platform collision in the classic
 Docker image store; [#34](https://github.com/anaregdesign/cosmos-sync/issues/34)
 corrects verification to pull child manifests without changing the original
-runtime/SDK artifacts. Final repository-authenticated registry workflow evidence
-belongs in [#15](https://github.com/anaregdesign/cosmos-sync/issues/15).
+runtime/SDK artifacts. Final repository-authenticated verification passed in the
+[registry workflow](https://github.com/anaregdesign/cosmos-sync/actions/runs/37143709428);
+[#15](https://github.com/anaregdesign/cosmos-sync/issues/15) is complete.

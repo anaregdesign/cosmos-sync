@@ -1,5 +1,84 @@
 import 'dart:convert';
 
+/// A browser navigation preference, never proof of a provider identity.
+enum BrokerProvider { google, apple }
+
+/// Build-selected, public External ID provider configuration. The operator must
+/// first enable these providers on the native client's associated user flow.
+class EntraBrokerCapabilities {
+  factory EntraBrokerCapabilities.fromJsonString(String encoded) {
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map<String, dynamic>) throw const FormatException();
+      return EntraBrokerCapabilities.fromJson(decoded);
+    } catch (_) {
+      throw const AuthException(
+        'invalid_broker_config',
+        'Check the public External ID provider configuration.',
+      );
+    }
+  }
+
+  factory EntraBrokerCapabilities({
+    required String issuer,
+    required String clientId,
+    required List<BrokerProvider> providers,
+  }) {
+    final uri = OidcConfig._httpsUri(issuer);
+    if (!uri.host.endsWith('.ciamlogin.com') ||
+        uri.path.isEmpty ||
+        uri.path == '/' ||
+        clientId.isEmpty ||
+        clientId != clientId.trim() ||
+        providers.isEmpty ||
+        providers.toSet().length != providers.length) {
+      throw const AuthException(
+        'invalid_broker_config',
+        'Check the External ID issuer, native client and enabled providers.',
+      );
+    }
+    return EntraBrokerCapabilities._(
+      issuer,
+      clientId,
+      List<BrokerProvider>.unmodifiable(providers),
+    );
+  }
+
+  factory EntraBrokerCapabilities.fromJson(Map<String, Object?> json) {
+    try {
+      if (json['version'] != 1 ||
+          json.keys.toSet().difference({
+            'version',
+            'issuer',
+            'clientId',
+            'providers',
+          }).isNotEmpty) {
+        throw const FormatException();
+      }
+      return EntraBrokerCapabilities(
+        issuer: json['issuer'] as String,
+        clientId: json['clientId'] as String,
+        providers: (json['providers'] as List)
+            .map((value) => BrokerProvider.values.byName(value as String))
+            .toList(growable: false),
+      );
+    } catch (_) {
+      throw const AuthException(
+        'invalid_broker_config',
+        'Check the public External ID provider configuration.',
+      );
+    }
+  }
+
+  const EntraBrokerCapabilities._(this.issuer, this.clientId, this.providers);
+  final String issuer;
+  final String clientId;
+  final List<BrokerProvider> providers;
+
+  bool matches({required String issuer, required String clientId}) =>
+      this.issuer == issuer && this.clientId == clientId;
+}
+
 /// Public native-client configuration. There is deliberately no client secret.
 class OidcConfig {
   factory OidcConfig({
@@ -9,6 +88,7 @@ class OidcConfig {
     required List<String> scopes,
     String? discoveryUrl,
     String? postLogoutRedirectUrl,
+    EntraBrokerCapabilities? brokerCapabilities,
   }) {
     final issuerUri = _httpsUri(issuer);
     final discovery =
@@ -17,7 +97,9 @@ class OidcConfig {
     final discoveryUri = _httpsUri(discovery);
     if (issuerUri.origin != discoveryUri.origin ||
         clientId.trim().isEmpty ||
-        clientId != clientId.trim()) {
+        clientId != clientId.trim() ||
+        (brokerCapabilities != null &&
+            !brokerCapabilities.matches(issuer: issuer, clientId: clientId))) {
       throw const AuthException(
         'invalid_config',
         'Check the provider and client configuration.',
@@ -46,6 +128,8 @@ class OidcConfig {
       copiedScopes,
       discovery,
       postLogoutRedirectUrl,
+      brokerCapabilities,
+      null,
     );
   }
 
@@ -56,6 +140,8 @@ class OidcConfig {
     this.scopes,
     this.discoveryUrl,
     this.postLogoutRedirectUrl,
+    this.brokerCapabilities,
+    this.brokerProvider,
   );
 
   final String issuer;
@@ -64,6 +150,41 @@ class OidcConfig {
   final List<String> scopes;
   final String discoveryUrl;
   final String? postLogoutRedirectUrl;
+  final EntraBrokerCapabilities? brokerCapabilities;
+
+  /// Ephemeral authorization-request intent. Excluded from credential/cache
+  /// bindings and never forwarded to refresh, logout or BFF requests.
+  final BrokerProvider? brokerProvider;
+
+  OidcConfig withBrokerCapabilities(EntraBrokerCapabilities? capabilities) =>
+      OidcConfig(
+        issuer: issuer,
+        clientId: clientId,
+        redirectUrl: redirectUrl,
+        scopes: scopes,
+        discoveryUrl: discoveryUrl,
+        postLogoutRedirectUrl: postLogoutRedirectUrl,
+        brokerCapabilities: capabilities,
+      );
+
+  OidcConfig forBrokerProvider(BrokerProvider provider) {
+    if (!(brokerCapabilities?.providers.contains(provider) ?? false)) {
+      throw const AuthException(
+        'provider_unavailable',
+        'This sign-in provider is not enabled for this application.',
+      );
+    }
+    return OidcConfig._(
+      issuer,
+      clientId,
+      redirectUrl,
+      scopes,
+      discoveryUrl,
+      postLogoutRedirectUrl,
+      brokerCapabilities,
+      provider,
+    );
+  }
 
   List<String> get apiScopes => scopes
       .where((scope) => !_identityScopes.contains(scope))

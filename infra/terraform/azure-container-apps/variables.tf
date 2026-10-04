@@ -19,6 +19,19 @@ variable "deployment" {
   }
 }
 
+variable "infrastructure_resource_group_name" {
+  description = "Optional new, unused name for ACA's platform-managed infrastructure resource group in the environment/subnet subscription. Null preserves Azure's generated naming. This is an unqualified name, never an ARM ID or an existing application/data resource group."
+  type        = string
+  default     = null
+  validation {
+    condition = var.infrastructure_resource_group_name == null ? true : (
+      can(regex("^[A-Za-z0-9_.()-]{1,90}$", var.infrastructure_resource_group_name)) &&
+      !endswith(var.infrastructure_resource_group_name, ".")
+    )
+    error_message = "Use an unqualified 1–90 character resource group name with ASCII letters, digits, underscores, hyphens, periods or parentheses; it cannot end in a period. ARM IDs, spaces and empty names are invalid."
+  }
+}
+
 variable "cosmos" {
   description = "Existing NoSQL account/database/container. No account keys are read. Operator must verify Session consistency, one write region, /scopeId partition key and no expiring TTL."
   type = object({
@@ -42,11 +55,12 @@ variable "cosmos" {
 variable "oidc" {
   description = "Dedicated API access JWT verification. Provider registration, consent and end-user grants remain operator prerequisites."
   type = object({
-    issuer         = string
-    audience       = string
-    required_scope = string
-    tenant_claim   = optional(string, "tid")
-    token_use      = optional(string, "")
+    issuer             = string
+    audience           = string
+    required_scope     = string
+    tenant_claim       = optional(string, "tid")
+    token_use          = optional(string, "")
+    allowed_client_ids = optional(list(string), [])
   })
   validation {
     condition = (
@@ -56,6 +70,14 @@ variable "oidc" {
       length(var.oidc.tenant_claim) > 0
     )
     error_message = "Set an HTTPS issuer, API audience, one delegated scope and tenant claim; never configure an ID-token audience."
+  }
+  validation {
+    condition = (
+      length(var.oidc.allowed_client_ids) <= 32 &&
+      length(distinct(var.oidc.allowed_client_ids)) == length(var.oidc.allowed_client_ids) &&
+      alltrue([for id in var.oidc.allowed_client_ids : can(regex("^[!-~]{1,256}$", id))])
+    )
+    error_message = "Optional allowed_client_ids must contain at most 32 distinct nonempty visible ASCII client IDs of at most 256 bytes; matching signed azp is exact."
   }
 }
 

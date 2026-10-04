@@ -24,11 +24,12 @@ const PrincipalHeader = "X-Cosmos-Sync-Principal"
 const ScopeModeHeader = "X-Cosmos-Sync-Scope-Mode"
 
 type OIDCConfig struct {
-	Issuer        string `json:"issuer"`
-	Audience      string `json:"audience"`
-	TenantClaim   string `json:"tenantClaim"`
-	RequiredScope string `json:"requiredScope"`
-	TokenUse      string `json:"tokenUse"`
+	Issuer           string   `json:"issuer"`
+	Audience         string   `json:"audience"`
+	TenantClaim      string   `json:"tenantClaim"`
+	RequiredScope    string   `json:"requiredScope"`
+	TokenUse         string   `json:"tokenUse"`
+	AllowedClientIDs []string `json:"allowedClientIds,omitempty"`
 }
 type Grant struct {
 	Tenant            string `json:"tenant"`
@@ -77,6 +78,9 @@ func validateGrantRoles(grants []Grant) error {
 }
 
 func NewOIDCVerifier(ctx context.Context, c OIDCConfig) (*oidc.IDTokenVerifier, error) {
+	if err := validateAllowedClientIDs(c.AllowedClientIDs); err != nil {
+		return nil, err
+	}
 	if !strings.HasPrefix(c.Issuer, "https://") || c.Audience == "" {
 		return nil, fmt.Errorf("OIDC issuer must use HTTPS and audience is required")
 	}
@@ -90,6 +94,28 @@ func NewOIDCVerifier(ctx context.Context, c OIDCConfig) (*oidc.IDTokenVerifier, 
 		return nil, err
 	}
 	return provider.VerifierContext(ctx, &oidc.Config{ClientID: c.Audience, SupportedSigningAlgs: []string{oidc.RS256, oidc.RS384, oidc.RS512, oidc.ES256, oidc.ES384, oidc.ES512}}), nil
+}
+
+func validateAllowedClientIDs(ids []string) error {
+	invalid := func() error {
+		return fmt.Errorf("OIDC allowedClientIds requires at most 32 distinct nonempty visible ASCII identifiers of at most 256 bytes")
+	}
+	if len(ids) > 32 {
+		return invalid()
+	}
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if len(id) == 0 || len(id) > 256 || seen[id] {
+			return invalid()
+		}
+		for i := 0; i < len(id); i++ {
+			if id[i] < '!' || id[i] > '~' {
+				return invalid()
+			}
+		}
+		seen[id] = true
+	}
+	return nil
 }
 
 func (s *Server) authorize(ctx context.Context, token, mode string) (Scope, error) {
@@ -172,6 +198,25 @@ func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (Accoun
 		return AccountIdentity{}, "", protocolError(401, "unauthorized")
 	}
 	claim := func(name string) string { var value string; _ = json.Unmarshal(claims[name], &value); return value }
+	// Client admission is an additional restriction on an already verified API
+	// JWT. A public client's azp does not attest the app or its upstream provider.
+	// No appid fallback or normalization can weaken an explicitly configured list.
+	if len(s.config.OIDC.AllowedClientIDs) != 0 {
+		var clientID string
+		if json.Unmarshal(claims["azp"], &clientID) != nil {
+			return AccountIdentity{}, "", protocolError(403, "forbidden")
+		}
+		allowed := false
+		for _, configuredID := range s.config.OIDC.AllowedClientIDs {
+			if clientID == configuredID {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return AccountIdentity{}, "", protocolError(403, "forbidden")
+		}
+	}
 	var nbf json.Number
 	if value, ok := claims["nbf"]; ok {
 		if json.Unmarshal(value, &nbf) != nil {

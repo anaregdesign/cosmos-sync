@@ -51,6 +51,7 @@ class AppController extends ChangeNotifier {
     required this.workspace,
     required this.settingsFile,
     this.sharedScopeId,
+    this.brokerCapabilities,
   }) {
     auth.addListener(_authChanged);
     workspace.addListener(_changed);
@@ -63,6 +64,10 @@ class AppController extends ChangeNotifier {
   /// Optional build-selected, server-created shared scope. The BFF still checks
   /// current membership; this identifier grants no permission.
   final String? sharedScopeId;
+
+  /// Explicit operator build configuration, never inferred from saved settings
+  /// or a provider/token claim. It advertises navigation, not data permission.
+  final EntraBrokerCapabilities? brokerCapabilities;
   AppSettings? settings;
   bool _actionBusy = false;
   bool _disposed = false;
@@ -88,43 +93,56 @@ class AppController extends ChangeNotifier {
     }
   });
 
-  Future<void> signIn(AppSettings value) => _run(() async {
-    if (workspace.connected) {
-      throw StateError('Sign out before changing the connection.');
-    }
-    final selected = _selectedSettings(value);
-    // Validate the transport URL without requesting credentials or data.
-    final check = HttpSyncTransport(
-      baseUri: selected.connection.bffUri,
-      scopeMode: selected.connection.scopeMode,
-      sharedScopeId: selected.connection.sharedScopeId,
-      allowInsecureLocalhost: selected.connection.allowInsecureLocalhost,
-      tokenProvider: () async => throw StateError('Validation only.'),
-    );
-    check.close();
-    auth.configure(selected.oidc);
-    settings = selected;
-    await settingsFile.parent.create(recursive: true);
-    final temporary = File('${settingsFile.path}.tmp');
-    await temporary.writeAsString(jsonEncode(selected.toJson()), flush: true);
-    await temporary.rename(settingsFile.path);
-    await auth.signIn();
-    if (auth.credentialSessionId != null) await _connect(offline: false);
-  });
+  Future<void> signIn(AppSettings value, {BrokerProvider? provider}) => _run(
+    () async {
+      if (workspace.connected) {
+        throw StateError('Sign out before changing the connection.');
+      }
+      final selected = _selectedSettings(value);
+      if (provider != null) selected.oidc.forBrokerProvider(provider);
+      // Validate the transport URL without requesting credentials or data.
+      final check = HttpSyncTransport(
+        baseUri: selected.connection.bffUri,
+        scopeMode: selected.connection.scopeMode,
+        sharedScopeId: selected.connection.sharedScopeId,
+        allowInsecureLocalhost: selected.connection.allowInsecureLocalhost,
+        tokenProvider: () async => throw StateError('Validation only.'),
+      );
+      check.close();
+      auth.configure(selected.oidc);
+      settings = selected;
+      await settingsFile.parent.create(recursive: true);
+      final temporary = File('${settingsFile.path}.tmp');
+      await temporary.writeAsString(jsonEncode(selected.toJson()), flush: true);
+      await temporary.rename(settingsFile.path);
+      await auth.signIn(provider: provider);
+      if (auth.credentialSessionId != null) await _connect(offline: false);
+    },
+  );
 
   AppSettings _selectedSettings(AppSettings value) {
     value.connection.validateScopeSelection();
-    final selected = sharedScopeId == null
-        ? value
-        : AppSettings(
-            connection: ConnectionConfig(
+    final capabilities = brokerCapabilities;
+    final oidc = value.oidc.withBrokerCapabilities(
+      capabilities != null &&
+              capabilities.matches(
+                issuer: value.oidc.issuer,
+                clientId: value.oidc.clientId,
+              )
+          ? capabilities
+          : null,
+    );
+    final selected = AppSettings(
+      connection: sharedScopeId == null
+          ? value.connection
+          : ConnectionConfig(
               bffUri: value.connection.bffUri,
               scopeMode: SyncScopeMode.shared,
               sharedScopeId: sharedScopeId,
               allowInsecureLocalhost: value.connection.allowInsecureLocalhost,
             ),
-            oidc: value.oidc,
-          );
+      oidc: oidc,
+    );
     selected.connection.validateScopeSelection();
     return selected;
   }

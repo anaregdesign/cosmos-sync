@@ -123,6 +123,65 @@ void main() {
       expect(app.workspace.pending, isEmpty);
     },
   );
+
+  test(
+    'Google to Apple navigation switch requires a fresh BFF cache owner',
+    () async {
+      await app.signOut();
+      await app.close();
+      const issuer = 'https://consumer.ciamlogin.com/tenant/v2.0';
+      app = AppController(
+        auth: AuthSessionController(
+          oidc: oidc,
+          tokenStore: store,
+          clock: () => now,
+        ),
+        workspace: WorkspaceController(
+          repository: WorkspaceRepository(
+            directory: Directory('${directory.path}/workspaces'),
+            transportFactory: (_, token) => _TokenTransport(server, token),
+          ),
+        ),
+        settingsFile: File('${directory.path}/connection.json'),
+        brokerCapabilities: EntraBrokerCapabilities(
+          issuer: issuer,
+          clientId: 'native-public',
+          providers: [BrokerProvider.google, BrokerProvider.apple],
+        ),
+      );
+      final brokerSettings = AppSettings(
+        connection: settings.connection,
+        oidc: OidcConfig(
+          issuer: issuer,
+          clientId: 'native-public',
+          redirectUrl: settings.oidc.redirectUrl,
+          scopes: settings.oidc.scopes,
+        ),
+      );
+      await app.signIn(brokerSettings, provider: BrokerProvider.google);
+      expect(oidc.lastSignIn!.brokerProvider, BrokerProvider.google);
+      await app.workspace.setOffline(true);
+      await app.workspace.put('alice-private', {'title': 'private'});
+      final previousBinding = app.auth.credentialSessionId;
+      await app.signOut();
+      server.principal = 'bob';
+      await app.signIn(brokerSettings, provider: BrokerProvider.apple);
+      expect(oidc.lastSignIn!.brokerProvider, BrokerProvider.apple);
+      expect(app.auth.config!.brokerProvider, null);
+      expect(app.workspace.session!.principalId, 'bob');
+      expect(app.auth.credentialSessionId, isNot(previousBinding));
+      expect(app.workspace.documents, isEmpty);
+      expect(app.workspace.pending, isEmpty);
+      expect(
+        await app.settingsFile.readAsString(),
+        isNot(contains('domain_hint')),
+      );
+      expect(
+        await app.settingsFile.readAsString(),
+        isNot(contains('providers')),
+      );
+    },
+  );
 }
 
 class _TokenTransport extends TestTransport {
@@ -149,6 +208,7 @@ class _Oidc implements OidcClient {
   _Oidc(this.clock);
   final DateTime Function() clock;
   bool terminal = false;
+  OidcConfig? lastSignIn;
   OidcTokens tokens() => OidcTokens(
     accessToken: 'test-access',
     refreshToken: 'test-refresh',
@@ -156,7 +216,11 @@ class _Oidc implements OidcClient {
     expiresAt: clock().add(const Duration(hours: 1)),
   );
   @override
-  Future<OidcTokens> signIn(OidcConfig config) async => tokens();
+  Future<OidcTokens> signIn(OidcConfig config) async {
+    lastSignIn = config;
+    return tokens();
+  }
+
   @override
   Future<OidcTokens> refresh(OidcConfig config, String refreshToken) async {
     if (terminal) throw const OidcFailure(OidcFailureKind.interactionRequired);

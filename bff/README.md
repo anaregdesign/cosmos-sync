@@ -24,6 +24,32 @@ Configure startup/readiness probes as `GET /readyz` and liveness as `GET /health
 
 The OIDC issuer must use HTTPS and expose discovery/JWKS. Use a dedicated API audience and an access-token scope (`cosmos_sync` by default). Tokens need `sub`, valid issuer/audience/signature/expiry, and a complete space-delimited required scope. Only legacy grants require the configured tenant claim (`tid` by default). `nbf` is enforced. Provider roles, groups and email never assign application data access. For issuers such as Cognito, configure `tokenUse: "access"` when that claim is available. The BFF never exchanges credentials or accepts ID tokens lacking the API scope.
 
+Optionally set `oidc.allowedClientIds` to the registered native public client IDs
+when API access must be restricted to those clients. The BFF first verifies the
+JWT signature, issuer, API audience and lifetime, then requires the signed `azp`
+string to match one configured ID exactly. Missing, empty, malformed or
+unlisted values return the same `403 forbidden` before account registration or
+data access. Matching does not trim, change case, use substrings or fall back to
+`appid`. Existing API scope, optional `tokenUse`, account and membership checks
+still apply. Omission or `[]` retains the issuer's existing admission policy.
+Lists accept at most 32 distinct visible ASCII identifiers, each 1–256 bytes;
+invalid settings fail startup. Deploy the same list to every replica and restart
+them when changing it.
+
+This field requires a BFF binary/image built with client admission support. The
+original public `0.2.0-dev.1` BFF image from commit `82e937c` predates it and
+rejects this unknown field at startup. Leave the field omitted with that image;
+enable it only after pinning an updated, verified image.
+
+For Entra v2 access tokens, [`azp` identifies the calling client and `azpacr=0`
+indicates a public client](https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference).
+This setting adds an issuer-attested client ID restriction. It does not attest a
+native app binary, prevent another app from using a public client ID, prove
+Google/Apple authentication or enforce that a consumer used a particular
+upstream provider. Those requirements belong to the configured External ID user
+flow and provider controls. Accounts remain bound to verified issuer/subject;
+client IDs and provider hints never grant data permissions or link identities.
+
 In legacy mode the external grants JSON is read into fresh local storage on every request and before each SSE hint or heartbeat. Replace the file atomically and update all replicas together. An unreadable or invalid grants source fails closed. Bump `permissionVersion` whenever access policy changes. Removing a grant or setting `active: false` returns 403 at the next observed authorization check; legacy writes already authorized can still commit. Previously issued cursors cannot survive a version change. Revocation cannot be discovered by an offline client until reconnection.
 
 ## Builtin personal and shared authorization
@@ -89,7 +115,7 @@ Set a separate `COSMOS_SYNC_METRICS_TOKEN` to enable protected `/metrics`; omiss
 
 ## Verification status
 
-Tests use real RSA-signed JWTs and TLS OIDC discovery/JWKS, plus deterministic memory storage. Coverage includes shared membership, actor collisions, account switching, JWT/grant revocation during SSE, snapshot restart/cutover/tombstones, cursor purposes/epochs, nonlossy capacity bounds, numeric validation, concurrency, CORS and redacted metrics. Cosmos adapter tests drive the official SDK through a fake transport to verify the overlapping-receipt race, scoped requests, session headers, actual batch bytes, causal failures and account consistency checks. Opt-in local emulator tests are documented in [the emulator guide](../docs/emulator.md); the tested emulator advertises Eventual consistency and is correctly rejected by the production account guard. Its isolated test factory bypasses that guard solely to exercise storage behavior. Cloud Session semantics and Azure identity/RBAC require deployment validation.
+Tests use real RSA-signed JWTs and TLS OIDC discovery/JWKS, plus deterministic memory storage. Coverage includes exact optional signed-`azp` client admission before builtin registration, shared membership, actor collisions, account switching, JWT/grant revocation during SSE, snapshot restart/cutover/tombstones, cursor purposes/epochs, nonlossy capacity bounds, numeric validation, concurrency, CORS and redacted metrics. Cosmos adapter tests drive the official SDK through a fake transport to verify the overlapping-receipt race, scoped requests, session headers, actual batch bytes, causal failures and account consistency checks. Opt-in local emulator tests are documented in [the emulator guide](../docs/emulator.md); the tested emulator advertises Eventual consistency and is correctly rejected by the production account guard. Its isolated test factory bypasses that guard solely to exercise storage behavior. Cloud Session semantics and Azure identity/RBAC require deployment validation.
 
 Builtin tests additionally cover provider-independent personal registration,
 owner-only membership administration, known-account/default-deny boundaries,

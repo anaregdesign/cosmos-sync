@@ -52,6 +52,25 @@ def https_url(value, field):
     return parsed
 
 
+def account_https_origin(value):
+    """Compare one trusted account origin without changing the approved URL."""
+    message = "account endpoint must be a HTTPS origin without credentials, query, or fragment"
+    require(isinstance(value, str) and not any(ord(char) <= 32 or ord(char) == 127
+                                             for char in value)
+            and "?" not in value and "#" not in value and "\\" not in value,
+            message)
+    try:
+        parsed = urlsplit(value)
+        require(parsed.scheme == "https" and parsed.hostname
+                and parsed.username is None and parsed.password is None
+                and parsed.path in ("", "/") and not parsed.query and not parsed.fragment
+                and not parsed.netloc.endswith(":"), message)
+        require(parsed.port in (None, 443), message)
+        return parsed.hostname.casefold(), 443
+    except ValueError:
+        raise GateError(message) from None
+
+
 def load_manifest(path):
     try:
         value = json.loads(Path(path).read_text())
@@ -63,9 +82,7 @@ def load_manifest(path):
         for key in ("resourceGroup", "account", "database", "container"):
             require(nonempty(azure[key]) and "/" not in azure[key]
                     and len(azure[key]) <= 255, f"invalid azure.{key}")
-        endpoint = https_url(azure["endpoint"], "azure.endpoint")
-        require(endpoint.path in ("", "/") and endpoint.port in (None, 443),
-                "azure.endpoint must be an account HTTPS origin")
+        account_https_origin(azure["endpoint"])
         oidc = value["oidc"]
         https_url(oidc["issuer"], "oidc.issuer")
         for key in ("audience", "tenantClaim", "requiredScope"):
@@ -147,8 +164,8 @@ def assess_metadata(manifest, account, container, subscription):
             and subscription.get("state") == "Enabled",
             "subscription/tenant metadata differs from the owner-selected target")
     require(account.get("kind") == "GlobalDocumentDB", "account must use Cosmos DB for NoSQL")
-    require(account.get("endpoint", "").rstrip("/").lower()
-            == azure["endpoint"].rstrip("/").lower(),
+    require(account_https_origin(account.get("endpoint"))
+            == account_https_origin(azure["endpoint"]),
             "account endpoint differs from the selected target")
     require(account.get("multiWrite") is False,
             "production guard requires explicit single-write-region mode")

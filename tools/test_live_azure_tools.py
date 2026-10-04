@@ -140,6 +140,60 @@ class ToolsTest(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(preflight.GateError):
                 preflight.assess_metadata(manifest, account, {**container, **change}, subscription)
 
+    def test_metadata_accepts_exact_account_origin_with_default_https_port(self):
+        manifest = self.approved_manifest()
+        unchanged = copy.deepcopy(manifest)
+        subscription = {"id": manifest["azure"]["subscriptionId"],
+                        "tenantId": manifest["azure"]["tenantId"], "state": "Enabled"}
+        account = {"kind": "GlobalDocumentDB", "multiWrite": False,
+                   "consistency": "Session", "writeLocations": [{}],
+                   "disableLocalAuth": True}
+        container = {"partitionPaths": ["/scopeId"], "ttl": None}
+        for endpoint in ("https://isolated-fixture.documents.azure.com:443/",
+                         "https://isolated-fixture.documents.azure.com:443",
+                         "https://ISOLATED-FIXTURE.documents.azure.com/"):
+            with self.subTest(endpoint=endpoint):
+                result = preflight.assess_metadata(manifest, {**account, "endpoint": endpoint},
+                                                 container, subscription)
+                self.assertTrue(result["productionGuardCompatible"])
+        self.assertEqual(manifest, unchanged)
+        manifest["azure"]["endpoint"] = "https://isolated-fixture.documents.azure.com:443/"
+        self.assertTrue(preflight.assess_metadata(
+            manifest, {**account, "endpoint": unchanged["azure"]["endpoint"]},
+            container, subscription)["productionGuardCompatible"])
+
+    def test_metadata_never_equates_unsafe_account_urls(self):
+        manifest = self.approved_manifest()
+        subscription = {"id": manifest["azure"]["subscriptionId"],
+                        "tenantId": manifest["azure"]["tenantId"], "state": "Enabled"}
+        account = {"kind": "GlobalDocumentDB", "multiWrite": False,
+                   "consistency": "Session", "writeLocations": [{}]}
+        container = {"partitionPaths": ["/scopeId"], "ttl": None}
+        host = "isolated-fixture.documents.azure.com"
+        different_origins = ("https://other.documents.azure.com:443/",
+                             f"https://{host}.attacker.example/", f"https://{host}./")
+        invalid_urls = (f"http://{host}/", f"https://{host}:80/", f"https://{host}:444/",
+                   f"https://{host}:bad/", f"https://{host}:65536/", f"https://{host}:/",
+                   f"https://{host}/database", f"https://{host}//",
+                   f"https://{host}/?query=value", f"https://{host}/?",
+                   f"https://{host}/#fragment", f"https://{host}/#",
+                   f"https://user@{host}/", f"https://user:password@{host}/",
+                   f"https://@{host}/", f"https://:{host}@{host}/",
+                   f"https://{host}/\n", f" https://{host}/", f"https://{host}\\/",
+                   "https://[malformed/", "", None, 443)
+        for endpoint in invalid_urls + different_origins:
+            with self.subTest(endpoint=endpoint), self.assertRaises(preflight.GateError):
+                preflight.assess_metadata(manifest, {**account, "endpoint": endpoint},
+                                         container, subscription)
+        # An invalid approved URL cannot become trusted merely because ARM
+        # returns the same spelling; validation applies to both inputs.
+        for endpoint in invalid_urls:
+            selected = copy.deepcopy(manifest)
+            selected["azure"]["endpoint"] = endpoint
+            with self.subTest(selected=endpoint), self.assertRaises(preflight.GateError):
+                preflight.assess_metadata(selected, {**account, "endpoint": endpoint},
+                                         container, subscription)
+
     def test_cli_context_mismatch_never_switches_global_account(self):
         with patch.object(preflight, "az_json", return_value={"id": "different", "tenantId": "different"}) as cli:
             with self.assertRaises(preflight.GateError):

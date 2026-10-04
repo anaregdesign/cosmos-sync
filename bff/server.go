@@ -40,6 +40,10 @@ func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Ser
 	if config.HistoryEpoch == "" {
 		config.HistoryEpoch = "1"
 	}
+	if err := validateAllowedClientIDs(config.OIDC.AllowedClientIDs); err != nil {
+		return nil, err
+	}
+	config.OIDC.AllowedClientIDs = append([]string(nil), config.OIDC.AllowedClientIDs...)
 	config.Grants = append([]Grant(nil), config.Grants...)
 	config.AllowedOrigins = append([]string(nil), config.AllowedOrigins...)
 	if err := validateGrantRoles(config.Grants); err != nil {

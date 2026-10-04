@@ -40,7 +40,9 @@ run "standard_security_boundary" {
   assert {
     condition = (
       azapi_resource.environment.body.properties.peerTrafficConfiguration.encryption.enabled &&
-      azapi_resource.environment.body.properties.appLogsConfiguration.destination == "none" &&
+      jsondecode(jsonencode(azapi_resource.environment.body)).properties.appLogsConfiguration.destination == null &&
+      jsondecode(jsonencode(azapi_resource.environment.body)).properties.appLogsConfiguration.logAnalyticsConfiguration == null &&
+      !can(azapi_resource.environment.body.properties.infrastructureResourceGroup) &&
       azapi_resource.app.body.properties.configuration.ingress.allowInsecure == false &&
       azapi_resource.app.body.properties.configuration.activeRevisionsMode == "Single"
     )
@@ -58,6 +60,7 @@ run "standard_security_boundary" {
   assert {
     condition = (
       local.runtime_config.development == false && local.runtime_config.storage == "cosmos" &&
+      !can(local.runtime_config.oidc.allowedClientIds) &&
       local.runtime_config.authorization.mode == "builtin" && length(local.runtime_config.grants) == 0 &&
       length(azapi_resource.app.body.properties.configuration.secrets) == 1 &&
       alltrue([for secret in azapi_resource.app.body.properties.configuration.secrets : !can(secret.value)]) &&
@@ -66,6 +69,149 @@ run "standard_security_boundary" {
     )
     error_message = "Use fail-closed authorization and shared key references, no raw Terraform secrets/private pulls by default, and bound SSE below BFF write timeout."
   }
+}
+
+run "environment_json_replaces_image_file_config_command" {
+  command = plan
+  assert {
+    condition = (
+      one(azapi_resource.app.body.properties.template.containers[0].command) == "/cosmos-sync-bff" &&
+      !can(azapi_resource.app.body.properties.template.containers[0].args) &&
+      one([
+        for entry in azapi_resource.app.body.properties.template.containers[0].env : entry.value
+        if entry.name == "COSMOS_SYNC_CONFIG_JSON"
+      ]) == jsonencode(local.runtime_config)
+    )
+    error_message = "ACA must launch the BFF directly with environment JSON, overriding the image's default -config CMD rather than combining configuration sources."
+  }
+}
+
+run "explicit_authorized_clients_render_exactly" {
+  command = plan
+  variables {
+    oidc = {
+      issuer             = "https://login.example.test/"
+      audience           = "sync-api"
+      required_scope     = "Cosmos.Sync"
+      allowed_client_ids = ["abcdef01-0000-0000-0000-000000000001", "abcdef01-0000-0000-0000-000000000002"]
+    }
+  }
+  assert {
+    condition = (
+      local.runtime_config.oidc.allowedClientIds == var.oidc.allowed_client_ids &&
+      local.runtime_config.oidc.issuer == var.oidc.issuer &&
+      local.runtime_config.oidc.audience == var.oidc.audience &&
+      local.runtime_config.oidc.requiredScope == var.oidc.required_scope
+    )
+    error_message = "Explicit client IDs must render exactly as an additional signed-azp admission requirement, preserving issuer/audience/scope."
+  }
+}
+
+run "empty_authorized_clients_preserve_old_image_configuration" {
+  command = plan
+  variables { oidc = { issuer = "https://login.example.test/", audience = "sync-api", required_scope = "Cosmos.Sync", allowed_client_ids = [] } }
+  assert {
+    condition     = !can(local.runtime_config.oidc.allowedClientIds)
+    error_message = "An empty client list must omit the new JSON key for already published strict-decoder images."
+  }
+}
+
+run "reject_empty_authorized_client_identifier" {
+  command = plan
+  variables { oidc = { issuer = "https://login.example.test/", audience = "sync-api", required_scope = "Cosmos.Sync", allowed_client_ids = [""] } }
+  expect_failures = [var.oidc]
+}
+
+run "reject_duplicate_authorized_clients" {
+  command = plan
+  variables { oidc = { issuer = "https://login.example.test/", audience = "sync-api", required_scope = "Cosmos.Sync", allowed_client_ids = ["client-one", "client-one"] } }
+  expect_failures = [var.oidc]
+}
+
+run "reject_authorized_client_whitespace" {
+  command = plan
+  variables { oidc = { issuer = "https://login.example.test/", audience = "sync-api", required_scope = "Cosmos.Sync", allowed_client_ids = ["client one"] } }
+  expect_failures = [var.oidc]
+}
+
+run "reject_authorized_client_non_ascii" {
+  command = plan
+  variables { oidc = { issuer = "https://login.example.test/", audience = "sync-api", required_scope = "Cosmos.Sync", allowed_client_ids = ["client-\u00e9"] } }
+  expect_failures = [var.oidc]
+}
+
+run "reject_authorized_client_overlength" {
+  command = plan
+  variables { oidc = { issuer = "https://login.example.test/", audience = "sync-api", required_scope = "Cosmos.Sync", allowed_client_ids = [join("", [for index in range(257) : "a"])] } }
+  expect_failures = [var.oidc]
+}
+
+run "reject_too_many_authorized_clients" {
+  command = plan
+  variables { oidc = { issuer = "https://login.example.test/", audience = "sync-api", required_scope = "Cosmos.Sync", allowed_client_ids = [for index in range(33) : "client-${index}"] } }
+  expect_failures = [var.oidc]
+}
+
+run "azure_monitor_keeps_explicit_destination_without_workspace" {
+  command = plan
+  variables { log_destination = "azure-monitor" }
+  assert {
+    condition = (
+      jsondecode(jsonencode(azapi_resource.environment.body)).properties.appLogsConfiguration.destination == "azure-monitor" &&
+      jsondecode(jsonencode(azapi_resource.environment.body)).properties.appLogsConfiguration.logAnalyticsConfiguration == null
+    )
+    error_message = "Azure Monitor must retain its explicit wire destination without a Log Analytics workspace or shared key; disabled logging renders JSON null."
+  }
+}
+
+run "named_platform_infrastructure_group" {
+  command = plan
+  variables {
+    infrastructure_resource_group_name = "ME_sync-validation_1(aca)"
+    network = {
+      infrastructure_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/network/providers/Microsoft.Network/virtualNetworks/approved/subnets/apps"
+    }
+  }
+  assert {
+    condition = (
+      azapi_resource.environment.body.properties.infrastructureResourceGroup == "ME_sync-validation_1(aca)" &&
+      azapi_resource.environment.parent_id == "/subscriptions/${var.deployment.subscription_id}/resourceGroups/${var.deployment.resource_group_name}" &&
+      azapi_resource.environment.body.properties.vnetConfiguration.infrastructureSubnetId == var.network.infrastructure_subnet_id
+    )
+    error_message = "The supplied unqualified infrastructure group name must render exactly without changing the selected environment/subnet subscription."
+  }
+}
+
+run "reject_platform_infrastructure_group_arm_id" {
+  command = plan
+  variables {
+    infrastructure_resource_group_name = "/subscriptions/00000000-0000-0000-0000-000000000099/resourceGroups/other"
+  }
+  expect_failures = [var.infrastructure_resource_group_name]
+}
+
+run "reject_platform_infrastructure_group_trailing_period" {
+  command = plan
+  variables { infrastructure_resource_group_name = "invalid." }
+  expect_failures = [var.infrastructure_resource_group_name]
+}
+
+run "reject_platform_infrastructure_group_empty_name" {
+  command = plan
+  variables { infrastructure_resource_group_name = "" }
+  expect_failures = [var.infrastructure_resource_group_name]
+}
+
+run "reject_platform_infrastructure_group_whitespace" {
+  command = plan
+  variables { infrastructure_resource_group_name = "invalid group" }
+  expect_failures = [var.infrastructure_resource_group_name]
+}
+
+run "reject_platform_infrastructure_group_overlength" {
+  command = plan
+  variables { infrastructure_resource_group_name = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  expect_failures = [var.infrastructure_resource_group_name]
 }
 
 run "explicit_legacy_deny_all" {

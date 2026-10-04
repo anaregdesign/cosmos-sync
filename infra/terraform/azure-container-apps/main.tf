@@ -22,13 +22,13 @@ locals {
     storage        = "cosmos"
     historyEpoch   = var.history_epoch
     allowedOrigins = var.allowed_origins
-    oidc = {
+    oidc = merge({
       issuer        = var.oidc.issuer
       audience      = var.oidc.audience
       requiredScope = var.oidc.required_scope
       tenantClaim   = var.oidc.tenant_claim
       tokenUse      = var.oidc.token_use
-    }
+    }, length(var.oidc.allowed_client_ids) == 0 ? {} : { allowedClientIds = var.oidc.allowed_client_ids })
     cosmos = {
       endpoint          = var.cosmos.endpoint
       database          = var.cosmos.database
@@ -115,7 +115,12 @@ resource "azapi_resource" "environment" {
   tags      = local.tags
   body = {
     properties = merge({
-      appLogsConfiguration     = { destination = var.log_destination }
+      # Azure CLI maps its "none" option to JSON null; the RP rejects "none".
+      # No Log Analytics workspace configuration is created in either mode.
+      appLogsConfiguration = {
+        destination               = var.log_destination == "none" ? null : var.log_destination
+        logAnalyticsConfiguration = null
+      }
       peerTrafficConfiguration = { encryption = { enabled = true } }
       publicNetworkAccess      = var.network.internal_environment ? "Disabled" : "Enabled"
       zoneRedundant            = false
@@ -125,6 +130,8 @@ resource "azapi_resource" "environment" {
         infrastructureSubnetId = var.network.infrastructure_subnet_id
         internal               = var.network.internal_environment
       }
+      }, var.infrastructure_resource_group_name == null ? {} : {
+      infrastructureResourceGroup = var.infrastructure_resource_group_name
     })
   }
   response_export_values = ["properties.defaultDomain", "properties.staticIp", "properties.peerTrafficConfiguration"]
@@ -165,8 +172,10 @@ resource "azapi_resource" "app" {
       template = {
         terminationGracePeriodSeconds = 15
         containers = [{
-          name      = "bff"
-          image     = var.image
+          name  = "bff"
+          image = var.image
+          # Use env JSON alone; the image defaults to a file-config CMD.
+          command   = ["/cosmos-sync-bff"]
           resources = { cpu = var.scale.cpu, memory = var.scale.memory }
           env = concat([
             { name = "COSMOS_SYNC_CONFIG_JSON", value = jsonencode(local.runtime_config) },
