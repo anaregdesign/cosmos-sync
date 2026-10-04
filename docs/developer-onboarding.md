@@ -7,7 +7,14 @@ This guide joins deployment, authentication, account/membership policy, the runn
 operations into one journey. **The hosted clean-checkout acceptance is still
 open in [#32](https://github.com/anaregdesign/cosmos-sync/issues/32).** Existing
 local, emulator, native-provider and device results are separate evidence in
-[verification](verification.md); they do not establish an ACA deployment.
+[verification](verification.md). Actual private-network/Vault prerequisites,
+cursor initialization/reuse and exact runtime roles are now created. The retained
+ACA recovery returned ARM `Succeeded` without a static IP or platform resources;
+the app failed with zero revisions. A reviewed saved plan is replacing only these
+empty app/environment stubs. No BFF protocol calls or application-data writes have
+occurred; hosted SDK acceptance remains pending.
+Use the [retained topology and deploy sequence](aca-validation-plan.md) to reproduce
+those stages without interpreting resource creation as hosted acceptance.
 
 The first `0.2.0-dev.1` preview has a finite API. It implements durable local
 documents/outbox, explicit synchronization, optimistic conflicts, tombstones,
@@ -45,7 +52,9 @@ baseline. Docker is needed only for the emulator/container checks. Install the
 Terraform version required by `infra/terraform/azure-container-apps`; its provider
 constraints and lock file are part of the deployment source. An approved Azure
 subscription and permission to create the planned resources are required for
-an actual apply, not for local validation.
+an actual apply, not for local validation. Deployment tools require a POSIX host,
+Bash, curl and Python 3.10+; the cursor bootstrap uses `fcntl`. Keep local private
+inputs at 0600 in 0700 directories with `umask 077`.
 
 ```sh
 cd examples/flutter_app
@@ -79,6 +88,15 @@ The Terraform task is tracked in [#31](https://github.com/anaregdesign/cosmos-sy
 | Reviewed public GHCR image pinned by digest | Actual published digest and validated configuration; private pulls need separately approved credentials |
 | BFF OIDC/CORS/configuration inputs | Trusted issuer, dedicated API audience/scope, registered native public client/redirect and tested provider consent |
 
+The separate private-prerequisite module supplies the selected VNet, two backend
+Private Endpoints/DNS and private RBAC Vault. The public
+[cursor bootstrap tool](../tools/bootstrap_cursor_key.py) supplies an offline local
+plan, authorized one-shot initialization and metadata-only existing-key reuse;
+follow its immutable raw-state SHA and sole-writer requirements in the
+[portable sequence](aca-validation-plan.md#portable-deployment-and-acceptance-sequence).
+No secret value enters Terraform state or CLI arguments. Use the actual version URI
+in workload inputs, never a placeholder or unversioned reference.
+
 No Cosmos account/database/container, identity-provider registration, test user,
 provider consent or membership in another user's shared scope is implied by
 starting the BFF. Built-in personal access starts only after a correctly verified
@@ -88,7 +106,11 @@ single-write configuration and Session-or-stronger consistency. All managed
 writes must pass through this BFF; external hard deletes, per-item TTL and
 out-of-band edits break the supported journal/receipt contract.
 
-Use the runbook's cheap single-replica example for an approved bounded validation.
+Use the runbook's minimal single-replica configuration for a bounded validation:
+0.25 vCPU/0.5 GiB, replicas 0–1, operator `/32` HTTPS ingress, public GHCR digest,
+private backend endpoints, and no NAT or new log workspace. Scale-to-zero retains
+fixed network charges; the selected network estimate is about $41.15/730-hour
+month before traffic, compute, storage and contract adjustments.
 Scaling beyond one replica requires a shared signing key and a selected
 authorization source with a documented revocation delay; a stale per-replica
 grants file must not become the deployment's permission authority. The selected
@@ -114,8 +136,9 @@ boundary and the runtime source's validation results.
 Never place secret values in `terraform.tfvars`, committed JSON, plan output or
 chat. Secret-reference names/URIs are configuration; the cursor key, credentials
 and access tokens remain secret. Terraform state and saved plans can still expose
-sensitive deployment information. Use the runbook's protected remote-state and
-secret-rotation procedure before a real deployment.
+sensitive deployment information. The current validation keeps private local
+state; select the runbook's protected remote-state and coordinated key-rotation
+procedure before production.
 
 Run the template's format, initialization, validation and mocked-plan checks from
 a clean checkout. For example, the checks that do not create Azure resources are:
@@ -134,10 +157,12 @@ The tests use mocked providers and plan commands; keep that boundary when runnin
 them. Review the real plan before an authorized apply. Local mocked
 plans do not prove Azure permissions, image availability, firewall connectivity
 or managed-identity data access. Record actual apply/readiness separately in #32.
-For this repository's current work, the owner authorized IaC/docs preparation;
-new ACA resources, identity/RBAC/Key Vault/network changes and deployment still
-need their exact approval. Retain the already approved reusable Cosmos/Entra
-validation environment.
+For this repository's current work, the owner authorized necessary minimal Azure
+resources/settings in the selected subscription and the needed tenant setup.
+Prerequisites and runtime role resources are created; the app/runtime gates remain
+pending. Keep using that exact reviewed target and saved plans. Retain reusable
+Cosmos, Entra, Vault, network and hosting resources; no automatic retirement is
+included. A future deployment must be within its own operator authority.
 
 ## 3. Configure authentication and the supplied authorization service
 
@@ -191,8 +216,12 @@ security-rule DSL, document ACL or Entra group dependency is introduced.
 OIDC/Broker app roles may gate application entry; they do not replace document
 ownership or shared memberships. The chosen architecture keeps those data
 permissions in the BFF. External ID consumer configuration remains separate
-from the validated workforce Entra setup; no new consumer tenant or social
-provider registration is created by this choice. The official comparison and
+from the validated workforce Entra setup. The dedicated CIAM directory now has
+API/native apps, their service principals and an API-only administrator grant;
+its user flow, social provider configuration and actual consumer login remain
+pending. The current hosted test selects the already tested workforce API JWT.
+Built-in data ownership neither creates a provider registration nor grants shared
+membership by email. The official comparison and
 implementation acceptance are recorded in
 [#33](https://github.com/anaregdesign/cosmos-sync/issues/33).
 

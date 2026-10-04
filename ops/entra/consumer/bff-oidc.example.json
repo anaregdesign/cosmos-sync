@@ -1,0 +1,7 @@
+{
+  "issuer": "https://<CONSUMER_TENANT_ID>.ciamlogin.com/<CONSUMER_TENANT_ID>/v2.0",
+  "audience": "<CONSUMER_API_APP_ID>",
+  "tenantClaim": "tid",
+  "requiredScope": "Cosmos.Sync",
+  "tokenUse": ""
+}

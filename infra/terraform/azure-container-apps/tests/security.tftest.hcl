@@ -40,7 +40,9 @@ run "standard_security_boundary" {
   assert {
     condition = (
       azapi_resource.environment.body.properties.peerTrafficConfiguration.encryption.enabled &&
-      azapi_resource.environment.body.properties.appLogsConfiguration.destination == "none" &&
+      jsondecode(jsonencode(azapi_resource.environment.body)).properties.appLogsConfiguration.destination == null &&
+      jsondecode(jsonencode(azapi_resource.environment.body)).properties.appLogsConfiguration.logAnalyticsConfiguration == null &&
+      !can(azapi_resource.environment.body.properties.infrastructureResourceGroup) &&
       azapi_resource.app.body.properties.configuration.ingress.allowInsecure == false &&
       azapi_resource.app.body.properties.configuration.activeRevisionsMode == "Single"
     )
@@ -66,6 +68,68 @@ run "standard_security_boundary" {
     )
     error_message = "Use fail-closed authorization and shared key references, no raw Terraform secrets/private pulls by default, and bound SSE below BFF write timeout."
   }
+}
+
+run "azure_monitor_keeps_explicit_destination_without_workspace" {
+  command = plan
+  variables { log_destination = "azure-monitor" }
+  assert {
+    condition = (
+      jsondecode(jsonencode(azapi_resource.environment.body)).properties.appLogsConfiguration.destination == "azure-monitor" &&
+      jsondecode(jsonencode(azapi_resource.environment.body)).properties.appLogsConfiguration.logAnalyticsConfiguration == null
+    )
+    error_message = "Azure Monitor must retain its explicit wire destination without a Log Analytics workspace or shared key; disabled logging renders JSON null."
+  }
+}
+
+run "named_platform_infrastructure_group" {
+  command = plan
+  variables {
+    infrastructure_resource_group_name = "ME_sync-validation_1(aca)"
+    network = {
+      infrastructure_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/network/providers/Microsoft.Network/virtualNetworks/approved/subnets/apps"
+    }
+  }
+  assert {
+    condition = (
+      azapi_resource.environment.body.properties.infrastructureResourceGroup == "ME_sync-validation_1(aca)" &&
+      azapi_resource.environment.parent_id == "/subscriptions/${var.deployment.subscription_id}/resourceGroups/${var.deployment.resource_group_name}" &&
+      azapi_resource.environment.body.properties.vnetConfiguration.infrastructureSubnetId == var.network.infrastructure_subnet_id
+    )
+    error_message = "The supplied unqualified infrastructure group name must render exactly without changing the selected environment/subnet subscription."
+  }
+}
+
+run "reject_platform_infrastructure_group_arm_id" {
+  command = plan
+  variables {
+    infrastructure_resource_group_name = "/subscriptions/00000000-0000-0000-0000-000000000099/resourceGroups/other"
+  }
+  expect_failures = [var.infrastructure_resource_group_name]
+}
+
+run "reject_platform_infrastructure_group_trailing_period" {
+  command = plan
+  variables { infrastructure_resource_group_name = "invalid." }
+  expect_failures = [var.infrastructure_resource_group_name]
+}
+
+run "reject_platform_infrastructure_group_empty_name" {
+  command = plan
+  variables { infrastructure_resource_group_name = "" }
+  expect_failures = [var.infrastructure_resource_group_name]
+}
+
+run "reject_platform_infrastructure_group_whitespace" {
+  command = plan
+  variables { infrastructure_resource_group_name = "invalid group" }
+  expect_failures = [var.infrastructure_resource_group_name]
+}
+
+run "reject_platform_infrastructure_group_overlength" {
+  command = plan
+  variables { infrastructure_resource_group_name = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  expect_failures = [var.infrastructure_resource_group_name]
 }
 
 run "explicit_legacy_deny_all" {

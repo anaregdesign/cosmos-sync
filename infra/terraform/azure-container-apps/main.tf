@@ -115,7 +115,12 @@ resource "azapi_resource" "environment" {
   tags      = local.tags
   body = {
     properties = merge({
-      appLogsConfiguration     = { destination = var.log_destination }
+      # Azure CLI maps its "none" option to JSON null; the RP rejects "none".
+      # No Log Analytics workspace configuration is created in either mode.
+      appLogsConfiguration = {
+        destination               = var.log_destination == "none" ? null : var.log_destination
+        logAnalyticsConfiguration = null
+      }
       peerTrafficConfiguration = { encryption = { enabled = true } }
       publicNetworkAccess      = var.network.internal_environment ? "Disabled" : "Enabled"
       zoneRedundant            = false
@@ -125,6 +130,8 @@ resource "azapi_resource" "environment" {
         infrastructureSubnetId = var.network.infrastructure_subnet_id
         internal               = var.network.internal_environment
       }
+      }, var.infrastructure_resource_group_name == null ? {} : {
+      infrastructureResourceGroup = var.infrastructure_resource_group_name
     })
   }
   response_export_values = ["properties.defaultDomain", "properties.staticIp", "properties.peerTrafficConfiguration"]

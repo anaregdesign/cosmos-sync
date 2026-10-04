@@ -17,15 +17,23 @@ ID tokens by removing the API audience/scope checks.** A Google API access token
 an Apple provider access token, or a client-decoded identity claim is also not a
 Cosmos Sync credential.
 
-The first integration candidate is **Microsoft Entra External ID in a separate
-external tenant**, federating Apple and Google through browser-delegated login.
+The owner selected **Microsoft Entra External ID in a separate external tenant**,
+federating Apple and Google through browser-delegated login.
 This preserves the current Authorization Code/PKCE public-client model and a
 dedicated BFF access-token audience/scope. Microsoft documents both social
 providers, and explicitly limits their use to browser-delegated authentication;
 its native authentication feature currently supports local accounts. The
 existing workforce validation tenant must not be silently repurposed as the
-consumer directory. This is a recommendation based on the current architecture,
-not an approved tenant creation or a completed integration.
+consumer directory. With the owner's subsequent Azure/tenant authorization, the
+new CIAM directory and linked billing resource were created successfully; its
+private readback confirms the selected domain, United States geography and CIAM
+tenant type. The dedicated consumer API/native registrations, service principals
+and API-only delegated administrator consent are complete. Anonymous discovery
+and native issuer/discovery-origin configuration checks passed. Provider settings,
+the associated user flow and actual consumer login remain unverified. Google/Apple project/team access and credentials
+remain separate external owner inputs. The [External ID setup record](external-id-setup.md)
+records creation status, the selected registration/callback contract, costs and
+remaining settings. This is not an enabled or verified social-login deployment.
 [External ID authentication methods](https://learn.microsoft.com/en-us/entra/external-id/customers/concept-authentication-methods-customers).
 API registration must expose the intended scope and preserve the resource-server
 token checks; an external tenant is not a reason to accept a native client ID
@@ -45,11 +53,12 @@ configured projects accepted. Firebase authentication does not require storing
 application data in Firestore; Cosmos remains behind the BFF.
 [Firebase token verification](https://firebase.google.com/docs/auth/admin/verify-id-tokens).
 
-Choose the final broker after the design Issue proves the account-linking policy,
-desired native versus browser UI, macOS support, operating cost and owner-approved
-data handling. An exchange is required for the Firebase/direct options; an
-additional custom token issuer is unnecessary for the External ID API-token
-option. None of these options grants direct Cosmos access to an app.
+Proceed with External ID preparation while proving the account-linking policy,
+browser UI, macOS support, operating cost and owner-approved data handling. The
+other options remain fallbacks if those gates fail. An exchange is required for
+the Firebase/direct options; an additional custom token issuer is unnecessary
+for the External ID API-token option. None of these options grants direct Cosmos
+access to an app.
 
 ## Identity, linking and data ownership
 
@@ -80,6 +89,34 @@ reviewable operation. Unlink requires recent authentication, session invalidatio
 and a remaining usable login/recovery method. Do not migrate documents or lose
 the account ID when switching providers.
 
+### Selected linking contract (not implemented)
+
+The implementation contract for the future dedicated link/unlink boundary is:
+
+| Rule | Selected bound and behavior |
+| --- | --- |
+| Challenge | Server-generated 256-bit random value; persist its SHA-256 digest with a 300-second lifetime, never a reusable plaintext credential |
+| Binding | Bind account, current BFF session generation, operation, approved issuer/provider/client namespace and exact callback to the transaction; independently bind the new identity proof to that challenge |
+| Freshness | At commit, require verified reauthentication within 300 seconds for the existing account and independent fresh control of the new identity; refresh, `iat` and a client-supplied timestamp do not prove reauthentication |
+| Commit and replay | Atomically consume the unexpired challenge, enforce unique verified `(issuer, subject, namespace)` ownership, preserve the application account/data owner and append audit metadata; retries cannot assign twice |
+| Existing owner | Reject an identity already assigned to another account; email matches never merge accounts or transfer ownership |
+| Unlink | Require the same recent authentication, preserve a verified remaining login/recovery method, atomically remove the binding and advance the BFF session generation; invalidate any future BFF refresh family and separately verify broker revocation behavior |
+
+Challenge consumption, identity uniqueness and account mapping need one reviewed
+transactional boundary. Cosmos transactional batches cover one logical partition;
+they do not make identity rows in different partitions globally atomic. Use one
+intentional identity-directory partition or a separately reviewed transactional
+store before implementation. Keep its capacity/cost and contention limits
+explicit. Never move documents as an incidental part of linking.
+
+Only a dedicated identity-proof endpoint may handle upstream login proof; sync
+APIs continue to require API access JWTs. The broker must provide trustworthy
+binding and authentication-time evidence, and its direct SDK/self-service linking
+must not bypass this transaction. If either cannot be established, linking stays
+disabled. This chosen contract does not add endpoints, Graph write grants,
+session generations, custom refresh families or broker-wide linking controls to
+the published preview. [Cosmos transaction scope](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/transactional-batch).
+
 Broker configuration is part of this guarantee. Firebase documents trusted
 provider behavior, and Identity Platform offers separate accounts per provider
 as well as manual linking. Test matching verified emails across providers before
@@ -103,7 +140,56 @@ permission-version changes, cursor invalidation/resync and a policy for pending
 edits. Never use a provider-wide audience or issuer as shared-tenant membership.
 The selected server-managed authorization mode still decides every read/write.
 
-## Token and session requirements
+For the selected External ID path, the current built-in account identifies the
+**broker's API-token subject**, not the upstream Apple/Google subject. It cannot
+detect an upstream provider being attached to an unchanged broker identity.
+The reviewed Microsoft documents establish federation and directory identities,
+but do not establish a no-email-auto-link guarantee for this deployment. Treat
+equal-email isolation and self-service linking behavior as acceptance gates;
+do not claim the BFF's lack of email matching proves the broker's behavior.
+Changing the API application or issuer also requires an explicit ownership
+migration because its subject namespace can change. See the
+[setup identity boundary](external-id-setup.md#account-and-linking-boundary).
+
+## Current token contract
+
+The selected first External ID integration reuses the existing BFF verifier and
+native browser adapter. Directory creation alone does not prove that an actual
+consumer token or callback meets this contract.
+
+| Boundary | Current preview behavior |
+| --- | --- |
+| Signature | Explicit allowlist `RS256`, `RS384`, `RS512`, `ES256`, `ES384`, `ES512`; no HMAC, unsigned or arbitrary token-supplied key endpoint |
+| API identity | Configured issuer, configured API audience present in `aud`, signature and expiry; optional `nbf` must be a valid integer no later than the BFF clock; exact required scope in whitespace-separated `scp`/`scope`; nonempty subject; `token_use` checked only when configured |
+| Missing checks | No `iat`/`auth_time` freshness, approved `azp` client allowlist, local maximum JWT lifetime or per-request upstream session-revocation lookup |
+| Discovery | Trusted configured issuer discovery is needed to construct the verifier; the default HTTP timeout is 10 seconds, while an explicitly supplied HTTP client keeps its own timeout |
+| JWKS | Pinned `go-oidc` v3.16.0 retains cached keys without a TTL or proactive refresh. Cache verification failure, including an unknown `kid`, triggers one remote fetch with shared in-flight suppression. There is no cross-request fetch cooldown or automatic retry loop |
+| Native login | Pinned `flutter_appauth` 12.1.0 delegates state, nonce, S256 PKCE and system-browser callback handling to platform AppAuth; the BFF verifies the separate API JWT and receives no login nonce |
+| Native credentials | Access token remains in RAM; refresh credential and the optional logout ID-token hint use platform secure storage. The controller refreshes before the provider expiration with a 30-second margin; restore must rebind through the existing verified BFF/session policy |
+
+If a required discovery/key fetch or signature/claim check fails, authentication
+fails. During a JWKS outage, a token which still verifies with cached keys can
+remain accepted until expiry; cached keys are not purged on outage. A removed
+remote key is not discovered proactively while cached verification succeeds.
+Missing/inactive BFF data grants are checked separately on requests and event
+revalidation. None of this promises instantaneous upstream logout or key
+revocation. [Current BFF](../bff/security.go),
+[pinned verifier](https://github.com/coreos/go-oidc/blob/v3.16.0/oidc/verify.go),
+[pinned key cache](https://github.com/coreos/go-oidc/blob/v3.16.0/oidc/jwks.go),
+[native adapter](../examples/flutter_app/lib/auth/native_oidc.dart),
+[session controller](../examples/flutter_app/lib/auth/auth_session_controller.dart).
+
+The new External ID access-token TTL, refresh lifetime and remote-signout delay
+are **unmeasured**. Record safe scalar lifetime/denial observations from actual
+consumer tests; a workforce run cannot establish them. There is no configured
+maximum credential age. For an already-issued token, its own expiry bounds local
+JWT acceptance, but broker refresh can extend access until the broker rejects
+it. No finite overall provider-revocation delay has been established. Local
+signout drains/purges the app's state and clears credentials; optional provider
+logout needs a registered return and is separate from revocation on other
+devices. An offline device cannot learn remote revocation immediately.
+
+## Additional adapter and session acceptance
 
 These are acceptance requirements for new adapters, not new production endpoints:
 
@@ -158,8 +244,8 @@ Entra, signed-fixture, simulator or offline SDK tests does not complete them.
 
 | Platform | Registration/adapter work | Real-provider acceptance |
 | --- | --- | --- |
-| iOS | Select broker browser PKCE or native Apple/Google SDK flow; review bundle IDs, exact callback, Apple capability/entitlements and signing. | Signed physical-device return, consent/cancel/deny, Apple private relay, refresh/re-auth, app termination/restart, offline reconnect and purge. Unsigned build/simulator evidence remains separate. |
-| Android | Google package/certificate fingerprints for each approved build variant; Apple broker/system-browser Services ID return; exact native callback. | Pixel login/callback, browser/account switching, cancellation, reinstall, refresh/revocation and authenticated offline outbox replay. |
+| iOS | External ID browser PKCE with the registered native callback; Apple broker registration requires its own developer-team approval. Native provider SDK capabilities/signing would be a separate change. | Signed physical-device return, consent/cancel/deny, Apple private relay, refresh/re-auth, app termination/restart, offline reconnect and purge. The owner chose unsigned testing, so build/simulator evidence remains separate from physical-device acceptance. |
+| Android | External ID browser PKCE with exact native callback. The Google client for federation is a broker Web application; Android signing fingerprints apply only if a direct native Google SDK is later selected. | Pixel login/callback, browser/account switching, cancellation, reinstall, refresh/revocation and authenticated offline outbox replay. |
 | Web | New web login adapter and runnable web sample; exact origins and HTTPS returns, popup/redirect recovery and CSRF protection; review persistence/XSS exposure. | Real browsers with popup denial, restricted third-party storage, reload/back navigation, account switching and offline IndexedDB purge. The current native sample has no web AppAuth adapter. |
 | macOS | Confirm selected broker/native SDK support, bundle callbacks and Keychain behavior. Firebase macOS setup calls for Keychain Sharing, unlike the present local legacy-Keychain sample. | Actual provider return, approved signing/capabilities where required, restart/restore, cancel/deny and revoke/purge. Do not infer this from current Entra success. |
 
@@ -189,10 +275,12 @@ settings, and Apple App ID/Services ID/Sign in with Apple keys/capabilities.
 Current authorization for unsigned Apple builds does not authorize Apple portal
 or signing changes. Do not infer these permissions from Azure resource approval.
 The owner performs browser sign-in/MFA/consent; never send secrets through chat.
-External-tenant consent differs from the current workforce test. Any required
-API-only admin consent or client preauthorization needs a new, exact proposal;
-do not add Microsoft Graph data access just because a registration walkthrough
-contains a default permission.
+External-tenant consent differs from the workforce test. The current dedicated
+API/native registration contract and API-only admin grant fall within the
+owner's Azure/tenant authorization, with existing normal access and verified
+readback. Do not add Microsoft Graph data access because a walkthrough contains
+a default permission, or silently expand CLI OAuth scopes. The owner completes
+any needed browser login/MFA when the specific operation is ready.
 [Application registration and external-tenant consent](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?toc=/entra/external-id/toc.json&bc=/entra/external-id/breadcrumb/toc.json).
 
 Apple federation requires an approved developer team, app/Services ID and private
@@ -214,5 +302,9 @@ the dependent work:
 4. [#29: Add automated security regression evidence](https://github.com/anaregdesign/cosmos-sync/issues/29), alongside server/client implementation.
 5. [#30: Complete owner-approved real-provider, platform and credential operations acceptance](https://github.com/anaregdesign/cosmos-sync/issues/30), after the portable checks and concrete account-setting approvals.
 
-Provider registrations, paid identity services and live provider verification
-remain pending their concrete owner settings and approvals.
+External ID is selected and its dedicated directory has been created. The
+registration contract, current token behavior and bounded future linking design
+are recorded above. Provider registrations, paid add-ons and live provider
+verification remain dependent on concrete external owner settings and evidence
+in [the setup record](external-id-setup.md). Design completion does not close
+the implementation or live-acceptance Issues.

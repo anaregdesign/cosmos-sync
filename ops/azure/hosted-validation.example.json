@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "endpoint": "https://APP.EXAMPLE.INVALID",
+  "authorizationMode": "builtin",
+  "replicas": 1,
+  "targetApprovalReference": "REPLACE_WITH_RECORDED_TARGET_APPROVAL",
+  "liveWriteApprovalReference": "REPLACE_WITH_RECORDED_THREE_MUTATION_APPROVAL",
+  "testDataRetentionAcknowledged": true,
+  "accessTokenFile": "/ABSOLUTE/PRIVATE/PATH/verified-api-access.jwt",
+  "ownerFile": "/ABSOLUTE/PRIVATE/PATH/approved-owner.local.json",
+  "receiptFile": "/ABSOLUTE/PRIVATE/PATH/registration-receipt.local.json",
+  "budget": {
+    "maxRuntimeSeconds": 90,
+    "maxProtocolRequests": 36,
+    "maxAcceptedAppMutations": 3
+  }
+}

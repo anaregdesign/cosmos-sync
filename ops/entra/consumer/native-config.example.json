@@ -1,0 +1,12 @@
+{
+  "issuer": "https://<CONSUMER_TENANT_ID>.ciamlogin.com/<CONSUMER_TENANT_ID>/v2.0",
+  "clientId": "<CONSUMER_NATIVE_APP_ID>",
+  "redirectUrl": "com.anaregdesign.cosmossync://auth/oauthredirect",
+  "scopes": [
+    "openid",
+    "profile",
+    "offline_access",
+    "api://<CONSUMER_API_APP_ID>/Cosmos.Sync"
+  ],
+  "discoveryUrl": "https://<CONSUMER_TENANT_ID>.ciamlogin.com/<CONSUMER_TENANT_ID>/v2.0/.well-known/openid-configuration"
+}

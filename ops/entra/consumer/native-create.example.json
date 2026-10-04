@@ -1,0 +1,44 @@
+{
+  "signInAudience": "AzureADMyOrg",
+  "isFallbackPublicClient": false,
+  "isDeviceOnlyAuthSupported": false,
+  "nativeAuthenticationApisEnabled": "none",
+  "passwordCredentials": [],
+  "keyCredentials": [],
+  "appRoles": [],
+  "requiredResourceAccess": [
+    {
+      "resourceAppId": "<CONSUMER_API_APP_ID>",
+      "resourceAccess": [
+        {
+          "id": "<NEW_CONSUMER_COSMOS_SYNC_SCOPE_UUID>",
+          "type": "Scope"
+        }
+      ]
+    }
+  ],
+  "identifierUris": [],
+  "spa": {
+    "redirectUris": []
+  },
+  "web": {
+    "redirectUris": [],
+    "implicitGrantSettings": {
+      "enableAccessTokenIssuance": false,
+      "enableIdTokenIssuance": false
+    }
+  },
+  "publicClient": {
+    "redirectUris": [
+      "com.anaregdesign.cosmossync://auth/oauthredirect"
+    ]
+  },
+  "api": {
+    "requestedAccessTokenVersion": 2,
+    "oauth2PermissionScopes": [],
+    "preAuthorizedApplications": [],
+    "knownClientApplications": []
+  },
+  "displayName": "Cosmos Sync Consumer Native (validation)",
+  "notes": "Cosmos Sync dedicated consumer validation; retain-for-reuse; provisioning=<OWNER_RUN_UUID>; role=native"
+}

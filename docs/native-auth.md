@@ -26,7 +26,11 @@ an external consumer tenant and reviewed configuration, separate from the
 current workforce-tenant validation. If native provider UI is required,
 Firebase Authentication/Identity Platform plus a dedicated backend identity
 proof exchange is the alternative under review. This recommendation is a design
-proposal, not an enabled provider deployment.
+proposal, not an enabled provider deployment. The selected dedicated CIAM tenant,
+two consumer app registrations and their service principals now exist, with
+API-only administrator consent and compatible public discovery/configuration
+readback. Google/Apple configuration, user-flow association and actual consumer
+login are still pending; see [the reproducible External ID setup](external-id-setup.md).
 
 An Apple/Google or broker **ID token** proves authentication to its intended
 relying party; it must not replace the API access token expected by existing
@@ -59,9 +63,11 @@ real provider/platform acceptance:
 
 Apple Developer/Google Cloud/broker registrations, signing or server credentials,
 new consent/scopes and paid resources require concrete owner approval before
-changes. External consumer-tenant API consent or client preauthorization may
-need a new scoped administrator approval; the existing workforce-tenant consent
-does not authorize it or any Graph data permission. Current one-account
+changes. The owner has already authorized the selected dedicated consumer
+tenant's necessary settings, and its native-to-API `AllPrincipals` consent for
+only `Cosmos.Sync` is verified. It adds no Graph data permissions or client
+preauthorization. Workforce consent/configuration remains separate. Google/Apple
+owning accounts and settings are the next external inputs. Current one-account
 verification and unsigned iOS choices remain in
 force. The pure Dart SDK has Chromium cache coverage; the current native Flutter
 app has no Web login target. Cancellation/denial, reinstall/relogin, account
@@ -70,10 +76,18 @@ coverage and explicitly recorded real-provider evidence on each claimed platform
 
 ## Register a public client and the API
 
-The owner must choose the OIDC provider/tenant, configure native **public-client**
-redirects and grant the test user access. These actions require the owner's
-provider access; the repository does not create registrations or consent on
-their behalf. No access, refresh or ID token should be pasted into an Issue.
+For a new deployment, the owner chooses the OIDC provider/tenant, configures
+native **public-client** redirects and grants the intended API permission using
+authorized provider access. These settings are not created automatically by the
+app or BFF. No access, refresh or ID token should be pasted into an Issue.
+
+The existing workforce validation completed actual one-account macOS AppAuth
+PKCE, secure restore and provider refresh. The separate consumer CIAM setup has
+completed two apps/two service principals and API-only consent; only anonymous
+discovery and the actual Flutter constructor have passed there. It has no
+associated customer user flow or verified consumer login. Each BFF deployment
+pins one exact issuer and API audience; selecting the consumer configuration does
+not add workforce token acceptance or migrate workforce cache/data ownership.
 
 For Microsoft Entra ID, prepare a tenant-specific API registration and a separate
 native public-client registration. Expose a delegated API scope such as
@@ -84,8 +98,10 @@ token's actual tenant/version and `aud`; the native client ID is not the API
 audience. A Microsoft Graph access token is not a BFF credential. See Microsoft's
 [Authorization Code/PKCE flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow)
 and [scope documentation](https://learn.microsoft.com/en-us/entra/identity-platform/scopes-oidc).
-The [dedicated Entra setup](entra-setup.md) provides the reviewed two-app,
-single-tenant proposal, exact callback, v2 API audience and per-user consent bodies.
+The [workforce Entra setup](entra-setup.md) records its two-app, single-tenant
+contract and per-user consent bodies. The [consumer External ID setup](external-id-setup.md)
+records the separately applied admin-only scope, API-specific `AllPrincipals`
+consent, six reproducible Graph operations and deployment settings.
 
 Provide the following non-secret values in the app's connection form:
 
@@ -98,6 +114,13 @@ Provide the following non-secret values in the app's connection form:
 | Scopes | `openid`, optional identity scopes, `offline_access`, and the BFF's delegated API scope |
 | Optional discovery URL | HTTPS discovery document on the issuer's origin; otherwise derived from issuer |
 | Optional logout redirect | Exact registered native post-logout URL, such as `com.anaregdesign.cosmossync:/logout` |
+
+For the selected consumer tenant, use the issuer and discovery URL from the
+verified **tenant-ID-host** metadata response. Its domain-alias discovery returned
+an issuer on a different origin; the current Flutter constructor rejects that
+combination. Matching origins and constructor success prove configuration
+compatibility only, not authentication or API-token admission. Consumer examples
+are in [ops/entra/consumer](../ops/entra/README.md#consumer-external-tenant).
 
 The redirect **scheme** must match the build's Android manifest placeholder and
 Apple `CFBundleURLTypes`. Changing it in the form alone cannot register an OS

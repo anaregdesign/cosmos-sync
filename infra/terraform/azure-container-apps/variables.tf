@@ -19,6 +19,19 @@ variable "deployment" {
   }
 }
 
+variable "infrastructure_resource_group_name" {
+  description = "Optional new, unused name for ACA's platform-managed infrastructure resource group in the environment/subnet subscription. Null preserves Azure's generated naming. This is an unqualified name, never an ARM ID or an existing application/data resource group."
+  type        = string
+  default     = null
+  validation {
+    condition = var.infrastructure_resource_group_name == null ? true : (
+      can(regex("^[A-Za-z0-9_.()-]{1,90}$", var.infrastructure_resource_group_name)) &&
+      !endswith(var.infrastructure_resource_group_name, ".")
+    )
+    error_message = "Use an unqualified 1–90 character resource group name with ASCII letters, digits, underscores, hyphens, periods or parentheses; it cannot end in a period. ARM IDs, spaces and empty names are invalid."
+  }
+}
+
 variable "cosmos" {
   description = "Existing NoSQL account/database/container. No account keys are read. Operator must verify Session consistency, one write region, /scopeId partition key and no expiring TTL."
   type = object({

@@ -113,6 +113,8 @@ jobs:
       - run: python3 tools/release_verify.py preflight
       - name: Validate Container Apps Terraform without Azure access
         run: bash infra/terraform/azure-container-apps/verify.sh
+      - name: Validate private ACA prerequisites without Azure access
+        run: bash infra/terraform/aca-validation-plan/verify.sh
   container:
     runs-on: ubuntu-latest
     steps:

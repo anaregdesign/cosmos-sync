@@ -1,0 +1,7 @@
+{
+  "clientId": "<CONSUMER_NATIVE_SERVICE_PRINCIPAL_OBJECT_ID>",
+  "resourceId": "<CONSUMER_API_SERVICE_PRINCIPAL_OBJECT_ID>",
+  "consentType": "AllPrincipals",
+  "principalId": null,
+  "scope": "Cosmos.Sync"
+}

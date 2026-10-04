@@ -1,0 +1,43 @@
+{
+  "signInAudience": "AzureADMyOrg",
+  "isFallbackPublicClient": false,
+  "isDeviceOnlyAuthSupported": false,
+  "nativeAuthenticationApisEnabled": "none",
+  "passwordCredentials": [],
+  "keyCredentials": [],
+  "appRoles": [],
+  "requiredResourceAccess": [],
+  "identifierUris": [],
+  "spa": {
+    "redirectUris": []
+  },
+  "web": {
+    "redirectUris": [],
+    "implicitGrantSettings": {
+      "enableAccessTokenIssuance": false,
+      "enableIdTokenIssuance": false
+    }
+  },
+  "publicClient": {
+    "redirectUris": []
+  },
+  "api": {
+    "requestedAccessTokenVersion": 2,
+    "oauth2PermissionScopes": [
+      {
+        "id": "<NEW_CONSUMER_COSMOS_SYNC_SCOPE_UUID>",
+        "value": "Cosmos.Sync",
+        "type": "Admin",
+        "isEnabled": true,
+        "adminConsentDisplayName": "Access authorized Cosmos Sync documents",
+        "adminConsentDescription": "Allows the native application to read and write only data authorized by the Cosmos Sync BFF. It does not grant access to another user\u2019s documents.",
+        "userConsentDisplayName": null,
+        "userConsentDescription": null
+      }
+    ],
+    "preAuthorizedApplications": [],
+    "knownClientApplications": []
+  },
+  "displayName": "Cosmos Sync Consumer BFF API (validation)",
+  "notes": "Cosmos Sync dedicated consumer validation; retain-for-reuse; provisioning=<OWNER_RUN_UUID>; role=api"
+}

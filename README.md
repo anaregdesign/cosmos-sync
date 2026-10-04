@@ -32,7 +32,9 @@ accounts.
 - `packages/cosmos_sync/`: native/browser SDK, cache/query/HTTP tests and examples.
 - `examples/flutter_app/`: normally runnable native Flutter sample with OIDC login, real BFF transport and document/offline/conflict UI. See its [setup guide](examples/flutter_app/README.md) and [native authentication](docs/native-auth.md).
 - `examples/flutter_smoke/`: separate deterministic native platform integration fixture; its test-injected transport does not demonstrate a real provider login or live Azure connection.
-- `infra/terraform/azure-container-apps/`: pinned, locally validated hosting template and mock-only plan checks; actual Azure deployment needs an approved plan.
+- `infra/terraform/azure-container-apps/`: pinned workload template, saved-plan deployment and mock checks; runtime acceptance stays separate from apply.
+- `infra/terraform/aca-validation-plan/`: private backend VNet/endpoint/DNS/Vault prerequisites; see the [retained topology and deploy sequence](docs/aca-validation-plan.md).
+- `tools/bootstrap_cursor_key.py`: offline-by-default cursor bootstrap and metadata-only existing-key reuse; [private-input example](ops/azure/cursor-bootstrap.example.json).
 - `docs/`: [product scope](docs/spec/product-completion.md), [protocol](docs/protocol.md), [architecture](docs/architecture.md), [security](docs/security.md), [platforms](docs/platforms.md), [performance](docs/performance.md), [release](docs/release.md).
 
 Use Go 1.26+ and Dart 3.12+; Flutter 3.44.6 is the measured native fixture baseline.
@@ -59,6 +61,8 @@ cd ../..
 python3 tools/cross_stack_smoke.py
 python3 tools/authorization_cross_stack_smoke.py
 bash infra/terraform/azure-container-apps/verify.sh
+bash infra/terraform/aca-validation-plan/verify.sh
+python3 -m unittest discover -s tools -p 'test_*.py' -v
 bash tools/emulator.sh test
 docker build -t cosmos-sync-bff:check bff
 ```
@@ -141,11 +145,27 @@ keeps actual Azure, hosted onboarding and consumer-provider gates separate.
 Dedicated Entra registration and actual macOS browser PKCE, API-token validation,
 secure credential restore, refresh and local sign-out passed. Physical Android
 app integration also passed real HTTP/SQLite with fixture authentication. The
-approved reusable Azure environment currently contains an empty tagged resource
-group; free-tier creation was rejected by the subscription offer and East US
-serverless creation failed because of capacity. Cosmos data operations await
-approval of an alternative region. Reusable Cosmos/Entra resources will be
-retained. Container Apps is the intended hosted target; its Terraform preparation
-does not authorize an actual deployment. [Physical-device acceptance](docs/physical-devices.md)
+retained East US environment contains its failed serverless account record.
+The retained West US 2 serverless account, database/container and exact human
+container role are created. Governance keeps public access disabled. All ten
+private backend prerequisites applied; the cursor key was initialized once and
+metadata-only public-tool reuse returned the same version without PUT. The BFF
+UAMI and exact container/secret roles are created. ACA recovery returned ARM
+`Succeeded` without a static IP or platform resources; the app failed with zero
+revisions. The reviewed saved plan is replacing only those same-name empty
+app/environment stubs while retaining the key, data, network and IAM resources.
+No BFF protocol calls or application-data writes have occurred.
+**Runtime private DNS/Vault/managed-identity acceptance and the hosted SDK test
+remain pending**.
+The Mac IP ACL does not provide direct Cosmos connectivity.
+
+Use the [retained private topology and portable deployment sequence](docs/aca-validation-plan.md)
+for the exact settings, narrow IAM, immutable state/bootstrap workflow, saved
+workload plan, recovery and network cost estimate. The current owner authorized
+necessary minimal Azure/tenant setup and retention; resource apply does not
+substitute for runtime acceptance. Separate CIAM API/native registrations and
+API-only consent exist, while consumer flows and Google/Apple login are pending;
+see [consumer identity setup](docs/external-id-setup.md).
+[Physical-device acceptance](docs/physical-devices.md)
 records the owner's unsigned iOS build choice: the build and simulator passed,
 while unsigned physical iPhone execution cannot be verified.
