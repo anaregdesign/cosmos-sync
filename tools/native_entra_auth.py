@@ -23,6 +23,7 @@ from flutter_app_smoke import (
 
 STAGES = frozenset({"browser_request_started", "native_callback_received",
                     "secure_restore_complete", "refresh_complete", "local_signout_complete"})
+MANUAL_STAGES = frozenset({"owner_start_ready"})
 PHASES = frozenset({"initial", "refresh"})
 GUID = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
 
@@ -98,14 +99,20 @@ def registration_directory(root, selected):
     return (selected if selected is not None else root / ".cache/entra-azure").absolute()
 
 
-def native_command(flutter, target, url, isolated_sign_in=False):
+def native_command(flutter, target, url, isolated_sign_in=False, manual_start=False):
     command = [
         flutter, "test", "integration_test/entra_auth_live_test.dart", "-d", target,
         "--dart-define=COSMOS_SYNC_ENTRA_CONTROL_URL=" + url, "--reporter", "expanded",
     ]
     if isolated_sign_in:
         command.append("--dart-define=COSMOS_SYNC_ENTRA_ISOLATED_SIGN_IN=true")
+    if manual_start:
+        command.append("--dart-define=COSMOS_SYNC_ENTRA_MANUAL_START=true")
     return command
+
+
+def expected_stages(manual_start=False):
+    return STAGES | MANUAL_STAGES if manual_start else STAGES
 
 
 class NativeControl:
@@ -152,7 +159,7 @@ class NativeControl:
                     if not isinstance(value, dict):
                         raise ValueError()
                     if self.path.endswith("/stage"):
-                        if set(value) != {"stage"} or value["stage"] not in STAGES:
+                        if set(value) != {"stage"} or value["stage"] not in STAGES | MANUAL_STAGES:
                             raise ValueError()
                         with control.lock:
                             if value["stage"] not in control.stages:
@@ -250,6 +257,8 @@ def main():
                         help="Explicit private approved receipt/owner directory; default retains workforce setup")
     parser.add_argument("--isolated-sign-in", action="store_true",
                         help="Request prompt=login and supported Apple ephemeral browser, not token/account authority")
+    parser.add_argument("--manual-start", action="store_true",
+                        help="Wait for the owner to tap Start while the selected app is foreground/resumed")
     parser.add_argument("--output")
     parser.add_argument("--flutter-bin", default=os.environ.get("FLUTTER_BIN", "flutter"))
     parser.add_argument("--go-bin", default=os.environ.get("GO_BIN", "go"))
@@ -284,7 +293,8 @@ def main():
         log_fd = os.open(directory / "flutter-private.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         print("NATIVE_ENTRA_OWNER_ASSISTED_RUN_STARTED", flush=True)
         with os.fdopen(log_fd, "w") as output:
-            command = native_command(args.flutter_bin, target, control.url, args.isolated_sign_in)
+            command = native_command(args.flutter_bin, target, control.url, args.isolated_sign_in,
+                                     args.manual_start)
             flutter_process = subprocess.Popen(command, cwd=root / "examples/flutter_app", stdout=output,
                                                stderr=subprocess.STDOUT, start_new_session=os.name == "posix")
             deadline = time.monotonic() + args.timeout
@@ -304,7 +314,7 @@ def main():
                 time.sleep(0.2)
             if flutter_process.returncode != 0:
                 raise RuntimeError("native_auth_target_failed")
-        if control.captured != PHASES or set(control.stages) != STAGES:
+        if control.captured != PHASES or set(control.stages) != expected_stages(args.manual_start):
             raise RuntimeError("native_auth_evidence_incomplete")
         env = dict(os.environ)
         env.setdefault("GOCACHE", str(root / ".cache/go-build"))
@@ -327,6 +337,7 @@ def main():
             raise RuntimeError("refresh_principal_changed")
         report = successful_native_evidence(args.device)
         report["isolatedInteractiveSessionRequested"] = args.isolated_sign_in
+        report["ownerInitiatedForegroundSignIn"] = args.manual_start
     finally:
         cleanup_native_run(flutter_process, control, reverse)
     private_json(directory / "proof.json", report)

@@ -98,6 +98,14 @@ class NativeEntraControlTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(self.control.stages, ["browser_request_started"])
 
+    def test_manual_readiness_stage_is_fixed_and_does_not_capture_a_token(self):
+        status, _, body = self.request(self.control.url + "stage", {"stage": "owner_start_ready"})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.control.stages, ["owner_start_ready"])
+        self.assertEqual(self.control.captured, set())
+        self.assertEqual(json.loads(body), {})
+        self.assertIn("NATIVE_ENTRA_STAGE_OWNER_START_READY", self.output.getvalue())
+
     def test_symlink_capture_does_not_overwrite_any_target(self):
         target = self.directory / "unrelated"
         target.write_text("unchanged")
@@ -246,6 +254,20 @@ class NativeTargetTests(unittest.TestCase):
         self.assertEqual(isolated[-1], "--dart-define=COSMOS_SYNC_ENTRA_ISOLATED_SIGN_IN=true")
         self.assertFalse(any("accessToken" in argument or "ownerObjectId" in argument
                              for argument in isolated))
+
+    def test_manual_start_is_explicit_and_preserves_native_trust_and_target(self):
+        default = native.native_command("flutter", "selected-device", "http://127.0.0.1:1234/capability/")
+        manual = native.native_command("flutter", "selected-device", "http://127.0.0.1:1234/capability/",
+                                       manual_start=True)
+        self.assertEqual(manual[:-1], default)
+        self.assertEqual(manual[-1], "--dart-define=COSMOS_SYNC_ENTRA_MANUAL_START=true")
+        self.assertFalse(any("accessToken" in argument or "ownerObjectId" in argument
+                             for argument in manual))
+
+    def test_manual_success_requires_readiness_in_addition_to_every_original_stage(self):
+        self.assertEqual(native.expected_stages(), native.STAGES)
+        self.assertEqual(native.expected_stages(True), native.STAGES | {"owner_start_ready"})
+        self.assertNotEqual(native.STAGES, native.expected_stages(True))
 
     def test_android_reuses_exact_physical_target_and_install_boundary(self):
         args = self.arguments(device="android", device_id_file=".cache/device.txt",

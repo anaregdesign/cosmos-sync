@@ -316,6 +316,18 @@ Isolation is a browser preference, not identity proof, recent-authentication
 attestation or provider revocation. The actual API JWT still must match the
 approved customer; a successful administrator SSO cannot substitute for it.
 
+For an attended physical Android run, use `--manual-start`. The test-only page
+waits for the owner to foreground Cosmos Sync and tap **Start Microsoft sign-in**.
+The button is disabled unless the app lifecycle is resumed and becomes single-use
+after the tap. No AppAuth request starts before that action; the resulting run
+also requires the fixed `owner_start_ready` stage alongside every ordinary
+callback/restore/refresh/signout stage. This changes no production adapter,
+authentication requirement, Android background-start policy or browser setting.
+The 2026-10-05 automatic physical attempt reached the AppAuth request stage but
+Android logged a background-activity `BAL_BLOCK`, the owner saw no browser and
+the bounded run ended without either API token. Its owned reverse mapping was
+removed. It is failed evidence, not customer authentication or a provider denial.
+
 For the currently approved one-human CIAM validation, choose
 **Cosmos Sync approved workforce owner** on the initial customer login page
 before entering an account address. Use the original workforce account only on

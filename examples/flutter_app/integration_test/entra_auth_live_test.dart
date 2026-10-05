@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,8 @@ import 'package:cosmos_sync_example/auth/native_oidc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+
+import 'support/owner_auth_gate.dart';
 
 /// Owner-assisted actual-provider target, separate from ordinary application UI.
 /// Only public configuration and a capability-bound loopback URL are supplied by
@@ -19,21 +22,27 @@ void main() {
       const isolatedSignIn = bool.fromEnvironment(
         'COSMOS_SYNC_ENTRA_ISOLATED_SIGN_IN',
       );
+      const manualStart = bool.fromEnvironment(
+        'COSMOS_SYNC_ENTRA_MANUAL_START',
+      );
       final control = _Control(Uri.parse(endpoint));
+      final ownerReady = Completer<void>();
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: Center(
-              child: Text(
-                'Microsoft sign-in validation\n'
-                'Use your own system browser window.\n'
-                'Approve only Cosmos Sync document access.\n'
-                'Credentials stay with Microsoft; no token is shown here.',
-                textAlign: TextAlign.center,
+        manualStart
+            ? OwnerAuthGate(onStart: ownerReady.complete)
+            : const MaterialApp(
+                home: Scaffold(
+                  body: Center(
+                    child: Text(
+                      'Microsoft sign-in validation\n'
+                      'Use your own system browser window.\n'
+                      'Approve only Cosmos Sync document access.\n'
+                      'Credentials stay with Microsoft; no token is shown here.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
       );
       var completed = false;
       await tester.runAsync(() async {
@@ -55,6 +64,14 @@ void main() {
             tokenStore: store,
           );
           current.configure(config);
+          if (manualStart) {
+            await control.stage('owner_start_ready');
+            await ownerReady.future;
+            _require(
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed,
+            );
+          }
           await control.stage('browser_request_started');
           debugPrint('COSMOS_SYNC_ENTRA_BROWSER_REQUEST_STARTED');
           await current.signIn();
