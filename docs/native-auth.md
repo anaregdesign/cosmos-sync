@@ -323,6 +323,11 @@ after the tap. No AppAuth request starts before that action; the resulting run
 also requires the fixed `owner_start_ready` stage alongside every ordinary
 callback/restore/refresh/signout stage. This changes no production adapter,
 authentication requirement, Android background-start policy or browser setting.
+Only manual mode enables device pointer propagation in the integration-test
+binding: Flutter live tests otherwise discard real touches even though
+`tester.tap` works. Live-binding regressions exercise the device event source,
+single-use input and the resumed-lifecycle requirement; automatic mode retains
+its normal input isolation.
 The 2026-10-05 automatic physical attempt reached the AppAuth request stage but
 Android logged a background-activity `BAL_BLOCK`, the owner saw no browser and
 the bounded run ended without either API token. Its owned reverse mapping was
