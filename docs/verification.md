@@ -661,3 +661,38 @@ cursor/cache field; it must not be concatenated into that revision. Active
 production identity/client lifecycle, actual CIAM freshness and hosted MI/
 Cosmos/onboarding, plus final physical Android, remain unfinished. The cloud
 ledger is unchanged at 7/40 attempts and zero accepted data mutations.
+
+Committed broker checkpoint `2adb51fbeea1f9dfa47c094ceecacd6baa5be746`
+independently passed all nine jobs in
+[CI 37261483463](https://github.com/anaregdesign/cosmos-sync/actions/runs/37261483463).
+That exact-source outcome is separate from the following protocol extension.
+
+## Coordinated optional identity-generation protocol
+
+The BFF and Dart SDK now support optional paired `identityGeneration` and
+`identityId` fields, their exact request assertions, and signed session/journal/
+snapshot/event context binding. Identity generation is 1..10,000; credential
+IDs are server-issued 64-hex bindings. Membership `permissionVersion` remains
+the original numeric data-partition write fence. Current legacy/builtin scopes
+omit the new fields; no production directory authorization mode is activated.
+
+Model/HTTP and actual native SQLite/Chromium IndexedDB checks cover persistence,
+independent generation/credential changes, partial/malformed/out-of-range
+metadata, purge before pending transmission, typed pending-waiter failure,
+SSE authorization loss and refusal to adopt an old in-flight consistency
+envelope. Legacy JSON/envelopes remain compatible, but cannot transfer to a
+bound identity scope. Actual signed-JWT HTTP checks deny client-added bindings
+before storage and verify explicit browser preflight for both new headers.
+
+The full BFF vet/format/race/build passed (main176.431s), all176 native and157
+actual Chromium SDK tests passed with clean analysis, all9 actual Cosmos emulator
+subtests passed, and signed-Go-HTTP/native-Dart authorization cross-stack
+preservation passed. The ordinary Flutter app retained clean analysis/format
+and all72 native tests;153 portable Python tests and protocol/package-doc
+synchronization passed. Fixture identities remain labeled; no real customer,
+hosted MI/Graph/Cosmos or final physical acceptance is inferred.
+
+Production account/policy initialization for random directory accounts,
+explicit lifecycle routes, native/Web fresh-challenge/link UI and the actual
+OIDC/cloud gates remain open. No BFF attempt, resource/network/image/replica/
+data change or publication occurred; physical iOS is not a prerequisite.

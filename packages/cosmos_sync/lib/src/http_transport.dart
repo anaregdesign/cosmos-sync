@@ -501,6 +501,11 @@ class HttpSyncTransport
     request.headers['X-Cosmos-Sync-Principal'] = session.principalId;
     request.headers['X-Cosmos-Sync-Scope-Mode'] = session.scopeMode.name;
     request.headers['X-Cosmos-Sync-Permission'] = session.permissionVersion;
+    if (session.identityGeneration != null) {
+      request.headers['X-Cosmos-Sync-Identity-Generation'] =
+          '${session.identityGeneration}';
+      request.headers['X-Cosmos-Sync-Identity'] = session.identityId!;
+    }
     if (token != null) request.headers[_sessionHeader] = token;
   }
 
@@ -517,7 +522,12 @@ class HttpSyncTransport
     code: code,
     message: 'Change stream returned $code.',
     statusCode: switch (code) {
-      'unauthorized' => 401,
+      'unauthorized' ||
+      'identity_session_invalid' ||
+      'identity_binding_changed' ||
+      'identity_binding_inactive' ||
+      'identity_binding_required' ||
+      'identity_registration_required' => 401,
       'forbidden' || 'session_mismatch' => 403,
       'resync_required' => 410,
       'rate_limited' ||

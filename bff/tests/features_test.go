@@ -248,7 +248,7 @@ func TestExplicitCORSPreflightAndRedactedMetrics(t *testing.T) {
 		r := httptest.NewRequest("OPTIONS", "https://api.test/v1/events", nil)
 		r.Header.Set("Origin", origin)
 		r.Header.Set("Access-Control-Request-Method", "GET")
-		r.Header.Set("Access-Control-Request-Headers", "authorization,x-cosmos-sync-principal,last-event-id")
+		r.Header.Set("Access-Control-Request-Headers", "authorization,x-cosmos-sync-principal,x-cosmos-sync-identity-generation,x-cosmos-sync-identity,last-event-id")
 		w := httptest.NewRecorder()
 		api.handler.ServeHTTP(w, r)
 		return w
@@ -257,6 +257,11 @@ func TestExplicitCORSPreflightAndRedactedMetrics(t *testing.T) {
 	status(t, response, 204)
 	if response.Header().Get("Access-Control-Allow-Origin") != "https://app.example" || !strings.Contains(response.Header().Get("Access-Control-Allow-Headers"), syncbff.PrincipalHeader) {
 		t.Fatal("missing explicit preflight headers")
+	}
+	for _, header := range []string{syncbff.IdentityHeader, syncbff.IdentityGenerationHeader} {
+		if !strings.Contains(response.Header().Get("Access-Control-Allow-Headers"), header) {
+			t.Fatal("missing coordinated identity-binding preflight header")
+		}
 	}
 	status(t, preflight("https://evil.example"), 403)
 	status(t, api.request(t, token, "GET", "/v1/session", nil), 200)
@@ -272,6 +277,33 @@ func TestExplicitCORSPreflightAndRedactedMetrics(t *testing.T) {
 		t.Fatal("metrics missing")
 	}
 	status(t, api.requestRaw(t, token, "GET", "/metrics", nil, false), 401)
+}
+
+func TestLegacyScopeCannotAdoptClientIdentityBinding(t *testing.T) {
+	api := newTestAPI(t, nil, nil)
+	token := api.issuer.token(t, nil)
+	scope := scopeBinding(t, api, token, "user")
+	for _, path := range []string{"/v1/sync", "/v1/snapshot", "/v1/events", "/v1/mutations"} {
+		method := http.MethodGet
+		if path == "/v1/mutations" {
+			method = http.MethodPost
+		}
+		request := httptest.NewRequest(method, "https://api.test"+path, strings.NewReader(`{}`))
+		request.Header.Set("Authorization", "Bearer "+token)
+		bindScope(request, scope)
+		request.Header.Set(syncbff.IdentityGenerationHeader, "1")
+		request.Header.Set(syncbff.IdentityHeader, strings.Repeat("a", 64))
+		response := httptest.NewRecorder()
+		api.handler.ServeHTTP(response, request)
+		errorCode(t, response, 401, "identity_session_invalid")
+	}
+	var page syncResponse
+	response := api.request(t, token, http.MethodGet, "/v1/sync", nil)
+	status(t, response, 200)
+	decode(t, response, &page)
+	if len(page.Changes) != 0 {
+		t.Fatal("client identity assertions reached document storage")
+	}
 }
 
 func TestRateAndDocumentLimitsAreBounded(t *testing.T) {

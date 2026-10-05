@@ -155,6 +155,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, scope)
 		return
 	}
+	if err := checkIdentityRequestBinding(r, scope); err != nil {
+		s.writeError(w, err)
+		return
+	}
 	if r.Header.Get(ScopeHeader) != scope.ID || r.Header.Get(PermissionHeader) != scope.PermissionVersion || r.Header.Get(PrincipalHeader) != scope.PrincipalID || r.Header.Get(ScopeModeHeader) != scope.ScopeMode {
 		s.writeError(w, protocolError(403, "session_mismatch"))
 		return

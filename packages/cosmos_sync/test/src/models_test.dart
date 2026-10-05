@@ -4,6 +4,97 @@ import 'package:test/test.dart';
 void main() {
   const maximum = 9007199254740991;
 
+  group('optional server-verified identity binding', () {
+    const legacy = SessionInfo(
+      scopeId: 'scope',
+      principalId: 'principal',
+      permissionVersion: '2',
+      scopeMode: SyncScopeMode.shared,
+    );
+    final identity = 'a' * 64;
+    final otherIdentity = 'b' * 64;
+
+    test('legacy serialization and binding remain unchanged', () {
+      expect(legacy.toJson(), {
+        'scopeId': 'scope',
+        'principalId': 'principal',
+        'permissionVersion': '2',
+        'scopeMode': 'shared',
+      });
+      final restored = SessionInfo.fromJson(legacy.toJson());
+      expect(restored.sameScope(legacy), isTrue);
+      expect(restored.identityGeneration, isNull);
+      expect(restored.identityId, isNull);
+    });
+
+    test('identity generation and credential independently bind the scope', () {
+      final original = SessionInfo.fromJson({
+        ...legacy.toJson(),
+        'identityGeneration': 1,
+        'identityId': identity,
+      });
+      expect(original.permissionVersion, '2');
+      expect(
+        original.sameScope(SessionInfo.fromJson(original.toJson())),
+        isTrue,
+      );
+      expect(original.sameScope(legacy), isFalse);
+      for (final changes in [
+        {'identityGeneration': 2},
+        {'identityId': otherIdentity},
+      ]) {
+        expect(
+          original.sameScope(
+            SessionInfo.fromJson({...original.toJson(), ...changes}),
+          ),
+          isFalse,
+        );
+      }
+      expect(
+        SessionInfo.fromJson({
+          ...original.toJson(),
+          'identityGeneration': SessionInfo.maximumIdentityGeneration,
+        }).identityGeneration,
+        10000,
+      );
+    });
+
+    test('partial, malformed and out-of-range bindings fail closed', () {
+      for (final fields in <Map<String, Object?>>[
+        {'identityGeneration': 1},
+        {'identityId': identity},
+        {'identityGeneration': null, 'identityId': null},
+        {'identityGeneration': 0, 'identityId': identity},
+        {'identityGeneration': -1, 'identityId': identity},
+        {'identityGeneration': 10001, 'identityId': identity},
+        {'identityGeneration': 1.5, 'identityId': identity},
+        {'identityGeneration': '1', 'identityId': identity},
+        {'identityGeneration': true, 'identityId': identity},
+        {'identityGeneration': 1, 'identityId': 'A' * 64},
+        {'identityGeneration': 1, 'identityId': 'a' * 63},
+        {'identityGeneration': 1, 'identityId': ''},
+        {'identityGeneration': 1, 'identityId': 'email@example.test'},
+        {
+          'identityGeneration': 1,
+          'identityId': [identity],
+        },
+      ]) {
+        expect(
+          () => SessionInfo.fromJson({...legacy.toJson(), ...fields}),
+          throwsFormatException,
+          reason: '$fields',
+        );
+        expect(
+          () => SessionInfo.fromJson({
+            ...legacy.toJson(),
+            ...fields,
+          }, allowLegacy: true),
+          throwsFormatException,
+        );
+      }
+    });
+  });
+
   test(
     'JSON keeps portable integer boundaries and finite fractional values',
     () {

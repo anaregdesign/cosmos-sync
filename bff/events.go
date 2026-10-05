@@ -99,7 +99,10 @@ func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request, scope Scope
 		if ctx.Err() != nil {
 			return false
 		}
-		if err != nil || current.ID != scope.ID || current.PrincipalID != scope.PrincipalID || current.PermissionVersion != scope.PermissionVersion || !current.CanRead {
+		if err == nil {
+			err = checkScopeBinding(current, scope)
+		}
+		if err != nil {
 			code := "forbidden"
 			if e, ok := err.(*ProtocolError); ok {
 				code = e.Code
@@ -129,7 +132,10 @@ func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request, scope Scope
 		if ctx.Err() != nil {
 			return false
 		}
-		if err != nil || current.ID != scope.ID || current.PrincipalID != scope.PrincipalID || current.PermissionVersion != scope.PermissionVersion || !current.CanRead {
+		if err == nil {
+			err = checkScopeBinding(current, scope)
+		}
+		if err != nil {
 			code := "forbidden"
 			if e, ok := err.(*ProtocolError); ok {
 				code = e.Code
@@ -164,7 +170,10 @@ func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request, scope Scope
 			if ctx.Err() != nil {
 				return
 			}
-			if err != nil || current.PermissionVersion != scope.PermissionVersion || current.ID != scope.ID || current.PrincipalID != scope.PrincipalID || !current.CanRead {
+			if err == nil {
+				err = checkScopeBinding(current, scope)
+			}
+			if err != nil {
 				code := "forbidden"
 				if e, ok := err.(*ProtocolError); ok {
 					code = e.Code

@@ -32,7 +32,7 @@ final subscription = client.watchQuery(definition).listen((snapshot) {
 // Later: await subscription.cancel();
 ```
 
-An empty page has no next cursor. A nonempty page's next cursor is a position, not a promise of another page. It captures every ordered field value and the document ID, remains usable if the source document is deleted, and is bound to the filter/order definition plus the client's identity/scope context. A limit may change between pages. Cache or server changes can move documents across page boundaries; pagination does not freeze a snapshot. Start again when the identity, scope or permission version changes.
+An empty page has no next cursor. A nonempty page's next cursor is a position, not a promise of another page. It captures every ordered field value and the document ID, remains usable if the source document is deleted, and is bound to the filter/order definition plus the client's identity/scope context, including optional verified identity generation/credential metadata. A limit may change between pages. Cache or server changes can move documents across page boundaries; pagination does not freeze a snapshot. Start again when the identity, identity generation, scope or permission version changes.
 
 ## Predicate semantics
 

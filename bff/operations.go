@@ -163,7 +163,7 @@ func (s *Server) cors(w http.ResponseWriter, r *http.Request) bool {
 		s.writeError(w, protocolError(403, "preflight_forbidden"))
 		return false
 	}
-	headers := []string{"Authorization", "Content-Type", ScopeHeader, PermissionHeader, PrincipalHeader, ScopeModeHeader, SessionHeader, "Last-Event-ID"}
+	headers := []string{"Authorization", "Content-Type", ScopeHeader, PermissionHeader, PrincipalHeader, ScopeModeHeader, IdentityGenerationHeader, IdentityHeader, SessionHeader, "Last-Event-ID"}
 	for _, requested := range strings.Split(r.Header.Get("Access-Control-Request-Headers"), ",") {
 		if strings.TrimSpace(requested) == "" {
 			continue

@@ -54,8 +54,10 @@ credential. The existing reauthentication proof may also serve as that proof
 when it is the same retained credential. The last credential cannot be removed.
 Both link and unlink advance the internal session generation; old internal
 sessions cannot start or commit another transaction. These generations are
-**not yet wired into production JWT/session/cursor checks or Flutter cache
-rebinding**, and therefore do not claim current preview-wide revocation.
+**not yet emitted by production directory authorization**. The coordinated
+optional protocol fields now bind BFF contexts and Dart request/cache metadata,
+but no production factory/lookup emits a directory-backed scope yet. They
+therefore do not claim current preview-wide revocation.
 
 ### Trusted broker-profile reader
 
@@ -181,7 +183,11 @@ provider fixtures remain necessary, but actual Google/Apple connection evidence
 is not part of this delivery. Do not expose linking UI or accept raw provider ID tokens at sync
 routes merely because these internal transactions pass.
 
-Identity generation must remain separate from the numeric membership
+Identity generation remains separate from the numeric membership
 `permissionVersion` used by the data-partition write fence. Concatenating a
 generation into that version violates the current BFF/Dart contract and cannot
-replace explicit session/cursor/cache integration.
+replace explicit session/cursor/cache integration. The optional
+`identityGeneration`/`identityId` session fields and corresponding request headers
+are coordinated across signed contexts, SSE revalidation and native/browser
+SDK cache equality; production account/policy authorization still needs to
+supply the trusted values.

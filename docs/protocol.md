@@ -10,6 +10,34 @@ Explicit builtin authorization accepts `scope=user` for the registered account's
 
 Mutations, sync, snapshots and events send `X-Cosmos-Sync-Scope`, `X-Cosmos-Sync-Principal`, `X-Cosmos-Sync-Permission` and `X-Cosmos-Sync-Scope-Mode` from the verified session. Missing or mismatched assertions return 403 `session_mismatch` before data access. `X-Cosmos-Sync-Session` optionally echoes the BFF's opaque signed Cosmos consistency envelope. Its purpose and principal/grant/history context differ from every cursor. It is consistency metadata, never a Cosmos credential.
 
+### Optional identity-generation binding
+
+The coordinated BFF/Dart extension also supports
+`{identityGeneration:integer,identityId:string}` in a verified session.
+Both fields must be present together: generation is 1..10,000 and the identity
+ID is 64 lowercase hexadecimal characters identifying the approved credential
+binding, not an email or caller account claim. Current legacy/builtin modes
+omit both fields; adding this extension does not activate the staged identity
+directory or add a lifecycle route.
+
+An identity-bound data request additionally sends
+`X-Cosmos-Sync-Identity-Generation` and `X-Cosmos-Sync-Identity` from that session.
+Missing, stale, malformed, duplicated or mismatched identity assertions return
+401 `identity_session_invalid` before data access. A legacy scope cannot adopt
+a caller-provided identity binding. The existing numeric membership
+`permissionVersion` remains unchanged and independently fences writes in the
+data partition; it is not a composed identity/policy version.
+
+Signed consistency, journal, snapshot and event contexts bind both identity
+fields when present. An older context without them cannot transfer to an
+identity-bound scope. SDK session equality, SQLite/IndexedDB persisted session
+metadata, query coverage and late-response consistency checks include both.
+An observed generation/credential change purges and pauses the old cache/outbox
+before pending transmission. Old metadata remains readable as an unbound
+session, never silently upgraded into a bound authority. Offline revocation is
+still unknowable until online revalidation; these fields alone are not a
+cross-partition atomic revocation guarantee.
+
 ## Builtin account and membership management
 
 These additional routes are available only with `authorization.mode=builtin`.
@@ -49,7 +77,7 @@ The SDK commits local acceptance before its write Future resolves. Confirmed dat
 
 When enabled, `GET /v1/snapshot?cursor=<opaque>&limit=1..100` returns `{documents:Document[],cursor:string,syncCursor:string,cutoverSequence:integer,hasMore:boolean}`. The first request captures head H. Every page deterministically folds the immutable retained journal through H, including tombstones, and orders by ID. The signed snapshot cursor fixes H and offset. The final local commit adopts `syncCursor` at H; subsequent journal sync obtains H+1 onward. Intermediate pages retain incomplete coverage, durable snapshot progress and exact outbox identities. A newer confirmed ACK never moves backward. This is bounded replay, with O(retained history) work per snapshot page, not a Cosmos SQL snapshot. HTTP413 `snapshot_limit_exceeded` falls back to retained-journal bootstrap.
 
-Cursor purposes are separate: `cursor-v1`, `snapshot-v1`, `events-v1`, and `session-v1`. All bind scope, principal, mode, permission version and configured history epoch. Invalid generation/signature/context returns 410 `resync_required`; the client clears confirmed coverage and resumes a snapshot or full journal while preserving pending identities and bases. Changing a grant instead follows the authorization purge policy.
+Cursor purposes are separate: `cursor-v1`, `snapshot-v1`, `events-v1`, and `session-v1`. All bind scope, principal, mode, permission version, optional identity generation/credential and configured history epoch. Invalid cursor/signature/context returns 410 `resync_required`; the client clears confirmed coverage and resumes a snapshot or full journal while preserving pending identities and bases. An observed identity-generation change or grant denial instead follows the authorization purge policy.
 
 Journal, receipts and tombstones have no TTL/garbage collection. Configured event/estimated-byte limits reject new writes with 507 `scope_capacity_exceeded` before storage growth crosses the supported envelope; accepted receipt retries still work. This preserves the replay horizon for all retained operations. Capacity increase and future compaction require explicit operator action and a separate recovery design.
 

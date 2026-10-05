@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,8 @@ const PermissionHeader = "X-Cosmos-Sync-Permission"
 const SessionHeader = "X-Cosmos-Sync-Session"
 const PrincipalHeader = "X-Cosmos-Sync-Principal"
 const ScopeModeHeader = "X-Cosmos-Sync-Scope-Mode"
+const IdentityGenerationHeader = "X-Cosmos-Sync-Identity-Generation"
+const IdentityHeader = "X-Cosmos-Sync-Identity"
 
 type OIDCConfig struct {
 	Issuer           string   `json:"issuer"`
@@ -41,12 +44,14 @@ type Grant struct {
 	ScopeMode         string `json:"scopeMode"`
 }
 type Scope struct {
-	ID                string `json:"scopeId"`
-	PermissionVersion string `json:"permissionVersion"`
-	PrincipalID       string `json:"principalId"`
-	ScopeMode         string `json:"scopeMode"`
-	CanRead           bool   `json:"-"`
-	CanWrite          bool   `json:"-"`
+	ID                 string `json:"scopeId"`
+	PermissionVersion  string `json:"permissionVersion"`
+	PrincipalID        string `json:"principalId"`
+	ScopeMode          string `json:"scopeMode"`
+	IdentityGeneration int64  `json:"identityGeneration,omitempty"`
+	IdentityID         string `json:"identityId,omitempty"`
+	CanRead            bool   `json:"-"`
+	CanWrite           bool   `json:"-"`
 }
 type Config struct {
 	Listen          string               `json:"listen"`
@@ -262,15 +267,17 @@ func (s *Server) verifyAccessPrincipal(ctx context.Context, token string) (verif
 }
 
 type signedContext struct {
-	Version    int    `json:"v"`
-	Scope      string `json:"scope"`
-	Permission string `json:"permission"`
-	Sequence   int64  `json:"sequence,omitempty"`
-	Token      string `json:"token,omitempty"`
-	Principal  string `json:"principal"`
-	Mode       string `json:"mode"`
-	Epoch      string `json:"epoch"`
-	Offset     int    `json:"offset,omitempty"`
+	Version            int    `json:"v"`
+	Scope              string `json:"scope"`
+	Permission         string `json:"permission"`
+	Sequence           int64  `json:"sequence,omitempty"`
+	Token              string `json:"token,omitempty"`
+	Principal          string `json:"principal"`
+	Mode               string `json:"mode"`
+	IdentityGeneration int64  `json:"identityGeneration,omitempty"`
+	IdentityID         string `json:"identityId,omitempty"`
+	Epoch              string `json:"epoch"`
+	Offset             int    `json:"offset,omitempty"`
 }
 
 func (s *Server) sign(purpose string, value signedContext) string {
@@ -300,12 +307,51 @@ func (s *Server) verifyContext(purpose, context string, scope Scope) (signedCont
 		return invalid()
 	}
 	var value signedContext
-	if json.Unmarshal(data, &value) != nil || value.Version != 1 || value.Scope != scope.ID || value.Permission != scope.PermissionVersion || value.Principal != scope.PrincipalID || value.Mode != scope.ScopeMode || value.Epoch != s.config.HistoryEpoch {
+	if json.Unmarshal(data, &value) != nil || value.Version != 1 || value.Scope != scope.ID || value.Permission != scope.PermissionVersion || value.Principal != scope.PrincipalID || value.Mode != scope.ScopeMode || value.Epoch != s.config.HistoryEpoch ||
+		!scope.validIdentityBinding() || value.IdentityGeneration != scope.IdentityGeneration || value.IdentityID != scope.IdentityID {
 		return invalid()
 	}
 	return value, nil
 }
 
 func (s *Server) boundContext(scope Scope, sequence int64) signedContext {
-	return signedContext{Version: 1, Scope: scope.ID, Permission: scope.PermissionVersion, Principal: scope.PrincipalID, Mode: scope.ScopeMode, Epoch: s.config.HistoryEpoch, Sequence: sequence}
+	return signedContext{Version: 1, Scope: scope.ID, Permission: scope.PermissionVersion, Principal: scope.PrincipalID, Mode: scope.ScopeMode,
+		IdentityGeneration: scope.IdentityGeneration, IdentityID: scope.IdentityID, Epoch: s.config.HistoryEpoch, Sequence: sequence}
+}
+
+func (scope Scope) validIdentityBinding() bool {
+	return scope.IdentityGeneration == 0 && scope.IdentityID == "" ||
+		scope.IdentityGeneration >= 1 && scope.IdentityGeneration <= maxIdentityGeneration && accountIDPattern.MatchString(scope.IdentityID)
+}
+
+func (scope Scope) sameBinding(other Scope) bool {
+	return scope.ID == other.ID && scope.PrincipalID == other.PrincipalID && scope.ScopeMode == other.ScopeMode &&
+		scope.PermissionVersion == other.PermissionVersion && scope.IdentityGeneration == other.IdentityGeneration && scope.IdentityID == other.IdentityID
+}
+
+func checkScopeBinding(current, previous Scope) error {
+	if current.IdentityGeneration != previous.IdentityGeneration || current.IdentityID != previous.IdentityID {
+		return protocolError(401, "identity_session_invalid")
+	}
+	if !current.sameBinding(previous) || !current.CanRead {
+		return protocolError(403, "forbidden")
+	}
+	return nil
+}
+
+func checkIdentityRequestBinding(request *http.Request, scope Scope) error {
+	if !scope.validIdentityBinding() {
+		return protocolError(503, "identity_directory_unavailable")
+	}
+	if scope.IdentityGeneration == 0 {
+		if len(request.Header.Values(IdentityGenerationHeader)) != 0 || len(request.Header.Values(IdentityHeader)) != 0 {
+			return protocolError(401, "identity_session_invalid")
+		}
+		return nil
+	}
+	if len(request.Header.Values(IdentityGenerationHeader)) != 1 || len(request.Header.Values(IdentityHeader)) != 1 ||
+		request.Header.Get(IdentityGenerationHeader) != strconv.FormatInt(scope.IdentityGeneration, 10) || request.Header.Get(IdentityHeader) != scope.IdentityID {
+		return protocolError(401, "identity_session_invalid")
+	}
+	return nil
 }

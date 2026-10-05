@@ -364,8 +364,5 @@ func (s *Server) reauthorizeScope(ctx context.Context, token string, previous Sc
 	if err != nil {
 		return err
 	}
-	if current.ID != previous.ID || current.PrincipalID != previous.PrincipalID || current.PermissionVersion != previous.PermissionVersion || !current.CanRead {
-		return protocolError(403, "forbidden")
-	}
-	return nil
+	return checkScopeBinding(current, previous)
 }
