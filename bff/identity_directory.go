@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/url"
@@ -294,7 +293,7 @@ func (d *identityDirectory) edit(ctx context.Context, apply func(*identityDirect
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		state, version, err := d.store.loadIdentityDirectory(ctx)
+		state, version, err := d.load(ctx)
 		if err != nil {
 			return err
 		}
@@ -307,15 +306,11 @@ func (d *identityDirectory) edit(ctx context.Context, apply func(*identityDirect
 			if version == "" || !validIdentityDirectory(state) {
 				return protocolError(503, "identity_directory_unavailable")
 			}
-			body, err := encodeJSON(state)
+			copy, err := cloneIdentityDirectory(state)
 			if err != nil {
-				return protocolError(503, "identity_directory_unavailable")
+				return err
 			}
-			var copy identityDirectoryState
-			if json.Unmarshal(body, &copy) != nil {
-				return protocolError(503, "identity_directory_unavailable")
-			}
-			state = &copy
+			state = copy
 		}
 		now := d.now().UTC().Truncate(time.Second)
 		for digest, challenge := range state.Challenges {
@@ -346,7 +341,7 @@ func (d *identityDirectory) edit(ctx context.Context, apply func(*identityDirect
 		}
 		err = d.store.compareIdentityDirectory(ctx, version, state)
 		if err == nil {
-			return nil
+			return observeIdentityDirectory(ctx, state)
 		}
 		var failure *ProtocolError
 		if !errors.As(err, &failure) || failure.Code != "authorization_contention" {

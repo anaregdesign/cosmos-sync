@@ -315,6 +315,32 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 			session.IdentityID != account.IdentityIDs[0] {
 			t.Fatal("independent SDK client failed exact persisted random-account resolution", err)
 		}
+		personalWriter, personalReader := newStore(), newStore()
+		if initialized, err := personalWriter.ensureDirectoryAccount(ctx, resolved); err != nil || initialized != account.Account {
+			t.Fatal("real directory account failed its separate atomic personal-policy initialization", err)
+		}
+		if initialized, err := personalReader.ensureDirectoryAccount(ctx, resolved); err != nil || initialized != account.Account {
+			t.Fatal("independent actual SDK client lost random-account provenance/personal policy", err)
+		}
+		retained, err := personalReader.authorizationAccount(withAuthorizationSessions(ctx), account.AccountID)
+		if err != nil || retained == nil || retained.DirectoryVersion != directoryAccountVersion || retained.Identity != (AccountIdentity{}) {
+			t.Fatal("random account metadata was implicitly converted to a hash-derived identity", err)
+		}
+		mutation := operation(930, "directory-personal", "put", 0, `{"value":"random-owned"}`)
+		mutation.PrincipalID, mutation.AuthorizationVersion = account.AccountID, "1"
+		document, dataSession := mutate(t, personalWriter, account.PersonalScopeID, mutation, "")
+		page, _, err := personalReader.Sync(ctx, account.PersonalScopeID, 0, 100, dataSession)
+		if err != nil || len(page.Changes) != 1 || page.Changes[0].ID != document.ID {
+			t.Fatal("stable random ownership failed the real numeric policy write/read boundary", err)
+		}
+		resolved.Generation++
+		if initialized, err := personalReader.ensureDirectoryAccount(ctx, resolved); err != nil || initialized != account.Account {
+			t.Fatal("identity generation reset or moved the persisted personal data partition", err)
+		}
+		shared, err := personalWriter.CreateSharedScope(ctx, account.AccountID, "cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+		if err != nil || shared.OwnerAccountID != account.AccountID {
+			t.Fatal("random-account provenance was rejected by real shared-policy creation", err)
+		}
 		fixture.profile["identities"].([]map[string]any)[0]["issuerAssignedId"] = brokerTestOther
 		_, _, err = fixture.verifier.resolve(ctx, access, second)
 		assertCode(t, err, "identity_binding_changed")

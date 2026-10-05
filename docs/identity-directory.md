@@ -40,6 +40,18 @@ independent server-generated 256-bit values; their personal scope namespace is
 stable across linking. Registration has its own server-issued challenge.
 There is no recovery, account deletion or automatic migration endpoint.
 
+Internal memory and Cosmos authorization stores now initialize the random
+account's personal policy without deriving a new issuer/subject account.
+An explicit `identity-directory-v1` provenance marker distinguishes these
+records from existing hash-derived accounts; a mismatched origin or incomplete
+account/policy pair fails closed without repair, adoption or migration. The
+account record and personal policy are created together in the personal data
+partition, with acknowledged-session readback. Subsequent identity-generation
+changes leave that policy and ownership unchanged. Directory registration and
+personal initialization remain two separate partition transactions; a failed
+initialization returns an error and can be retried, not a globally atomic signup.
+No production caller currently invokes this internal capability.
+
 Challenges use 256 random bits; only their SHA-256 digest is retained. They expire
 after 300 seconds and bind the operation, account/session generation, approved
 proof target and callback. At commit, both current-account reauthentication and
@@ -108,6 +120,11 @@ record. A conditional exclusive create or ETag-matched replacement atomically
 covers account mappings, unique identity bindings, challenge consumption, proof
 replay entries, session generations and audit. The official SDK uses Session
 consistency and the existing request-local authorization session chain.
+Within a request, directory reads additionally retain only a revision/body
+security high-water mark. A missing, older or conflicting same-revision read
+after an observed directory version fails closed; this is not an identity or
+Graph profile-result cache. An acknowledged directory write advances that
+request-local mark. Independent requests still perform current reads.
 Conditional write conflicts cause at most eight reload/revalidation attempts.
 An ambiguous failed write returns an error, not an inferred successful account;
 the committed challenge, if any, still cannot assign twice.

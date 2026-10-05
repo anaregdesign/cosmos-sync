@@ -129,7 +129,7 @@ func (v *brokerProofVerifier) resolve(ctx context.Context, accessToken string, d
 		return directoryAccount{}, directorySession{}, err
 	}
 	ctx = withAuthorizationSessions(ctx)
-	state, version, err := directory.store.loadIdentityDirectory(ctx)
+	state, version, err := directory.load(ctx)
 	if err != nil {
 		return directoryAccount{}, directorySession{}, err
 	}

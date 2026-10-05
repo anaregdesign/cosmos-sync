@@ -696,3 +696,37 @@ Production account/policy initialization for random directory accounts,
 explicit lifecycle routes, native/Web fresh-challenge/link UI and the actual
 OIDC/cloud gates remain open. No BFF attempt, resource/network/image/replica/
 data change or publication occurred; physical iOS is not a prerequisite.
+
+The coordinated protocol checkpoint was committed as
+`d8da58cc21726ec45f1968c9688fde3ada04dbbf` and independently passed all nine
+jobs in [CI 37263540553](https://github.com/anaregdesign/cosmos-sync/actions/runs/37263540553).
+
+## Internal random-account authorization bridge
+
+The memory and official-SDK Cosmos stores now support deliberate random-account
+personal-policy initialization. Exact immutable provenance distinguishes the
+directory namespace from legacy issuer/subject accounts; mismatches, partial
+metadata and corruption fail closed without implicit migration or repair.
+Personal account/policy creation is one acknowledged, session-bound batch in
+the personal partition. It is not atomic with the separate directory transaction.
+Generation changes preserve the account, existing personal data and numeric
+membership/write fence. Registered random accounts can create shared scopes and
+receive ordinary owner-managed grants.
+
+The directory also retains a request-local revision/body high-water mark and
+rejects rollback, disappearance or same-revision equivocation. Memory directory
+CAS returns defensive copies and rejects stale writes; no Graph/profile-result
+cache or cross-request permission cache was added.
+
+Full BFF race tests passed (main214.613s), vet/format/build passed, and all nine
+actual emulator subtests passed. The extended broker/emulator case independently
+reloads random-account provenance and personal policy, writes/reads owned data
+through the unchanged numeric fence and creates a shared scope. Additional
+memory/SDK-wire tests verify atomic initialization, concurrent idempotency,
+generation-independent policy retention, invalid inputs and unchanged corrupt
+metadata on failure.
+
+This remains an internal capability, not a configured production directory mode,
+lifecycle route or hosted identity acceptance. No live BFF attempt, Azure or
+physical-device operation, deployment or publication occurred; the live ledger
+remains 7/40 attempts and zero accepted application mutations.

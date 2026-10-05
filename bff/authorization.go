@@ -39,7 +39,8 @@ type Account struct {
 
 type accountRecord struct {
 	Account
-	Identity AccountIdentity `json:"identity"`
+	Identity         AccountIdentity `json:"identity"`
+	DirectoryVersion string          `json:"directoryVersion,omitempty"`
 }
 
 type ScopeMember struct {
@@ -93,6 +94,47 @@ type AuthorizationStore interface {
 	LoadAuthorizationPolicy(context.Context, string) (*AuthorizationPolicy, error)
 	LoadAuthorizationPolicyAt(context.Context, string, string) (*AuthorizationPolicy, error)
 	ChangeMembership(context.Context, string, string, MembershipChange) (SharedScope, error)
+}
+
+type directoryAuthorizationStore interface {
+	AuthorizationStore
+	ensureDirectoryAccount(context.Context, directoryAccount) (Account, error)
+}
+
+const directoryAccountVersion = "identity-directory-v1"
+
+func validAccountIdentity(identity AccountIdentity) bool {
+	return identity.Issuer != "" && len(identity.Issuer) <= 2048 && identity.Subject != "" && len(identity.Subject) <= 512
+}
+
+func validAccountRecord(record accountRecord, accountID string) bool {
+	if !accountIDPattern.MatchString(accountID) || record.Account != (Account{accountID, personalScopeID(accountID)}) {
+		return false
+	}
+	if record.DirectoryVersion == directoryAccountVersion {
+		return record.Identity == (AccountIdentity{})
+	}
+	return record.DirectoryVersion == "" && validAccountIdentity(record.Identity) && record.Account == identityAccount(record.Identity)
+}
+
+func validDirectoryAccount(account directoryAccount) bool {
+	if !validAccountRecord(accountRecord{Account: account.Account, DirectoryVersion: directoryAccountVersion}, account.AccountID) ||
+		account.Generation < 1 || account.Generation > maxIdentityGeneration ||
+		len(account.IdentityIDs) == 0 || len(account.IdentityIDs) > maxAccountIdentities {
+		return false
+	}
+	seen := make(map[string]bool, len(account.IdentityIDs))
+	for _, id := range account.IdentityIDs {
+		if !accountIDPattern.MatchString(id) || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return true
+}
+
+func validPersonalPolicy(policy *AuthorizationPolicy, accountID string) bool {
+	return validAuthorizationPolicy(policy, personalScopeID(accountID)) && policy.Mode == "user" && policy.OwnerAccountID == accountID
 }
 
 func namespacedID(parts ...string) string {
