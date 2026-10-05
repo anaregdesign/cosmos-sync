@@ -734,7 +734,7 @@ remains 7/40 attempts and zero accepted application mutations.
 That bridge source, `c006759cae99f9c98d7c55e4b382d8ee254fd842`, independently
 passed all nine jobs in
 [CI 37264986518](https://github.com/anaregdesign/cosmos-sync/actions/runs/37264986518).
-It does not verify the following working-tree runtime extension.
+It does not verify the following separate runtime checkpoint.
 
 ## Opt-in coordinated account lifecycle, 2026-10-05
 
@@ -756,12 +756,18 @@ image or retained Azure runtime is migrated or replaced.
 | Actual Cosmos emulator | All 11 subtests passed, including production-factory lifecycle and the same real Dart driver through two independently constructed official-SDK stores; owned emulator removed, Eventual semantics remain nonproduction |
 | Preservation smokes | Native HTTP restart/ACK/conflict/delete, TLS shared-authorization fencing, disposable SIGKILL recovery, actual Chromium HTTP/SSE and ordinary macOS HTTP/SQLite/isolated Keychain UI passed |
 | Production compilation and ordinary Web | Normal local Web build and Android debug APK passed; ordinary signed-fixture Chromium UI observed reload, exact outbox retention, offline rebind denial, online rebind/ACK and logout purge with successful owned cleanup |
-| Control/release preparation | All 153 Python tests, package-document mirrors and prepare-only preflight passed; package dry-run reached validation with only the expected dirty-Git warning and must be repeated after committing |
+| Control/release preparation | All 153 Python tests, package-document mirrors and prepare-only preflight passed; the post-commit package dry-run passed with zero warnings and performed no publication |
 
 Local receipts identify a dirty tree based on `c006759`, not an exact subsequent
-commit. CI now includes portable lifecycle/panel tests and explicitly enabled
-native/emulator Go/Dart directory drivers, without adding a tenth job. Record all
-nine exact-new-head outcomes separately before closing automation acceptance.
+commit. Runtime source
+[`8ba5a11`](https://github.com/anaregdesign/cosmos-sync/commit/8ba5a11ef844e21b53aea24f2217acf5a1a73211)
+is committed and pushed in PR #39. Its exact-head
+[CI 37277515244](https://github.com/anaregdesign/cosmos-sync/actions/runs/37277515244)
+passed all nine jobs: `dart`, `bff`, `container`, `flutter-web`, `cosmos-emulator`,
+`browser`, `flutter-macos`, `release-tools` and `cross-stack`. CI includes portable
+lifecycle/panel tests and explicitly enabled native/emulator Go/Dart directory
+drivers, without adding a tenth job. This completes deterministic automation
+acceptance in #29, not the separate live or final physical acceptance Issues.
 The first final browser cross-stack invocation lacked `CHROME_EXECUTABLE`; the
 same check passed with the actual installed Chrome explicitly selected. No
 dependency/version change or browser installation was needed.
@@ -787,6 +793,12 @@ external HTTPS, insecure ingress disabled, HTTP port 8080, client-certificate
 Ignore, executable-only command, one Allow rule and min0/max1. A 24-hour query
 of the retained resource-specific HTTP table succeeded with zero rows. Neither
 metadata nor that empty result identifies the evaluated ingress peer or the
-historical Envoy403/log-delivery cause. No new BFF probe, resource/identity/network/
+historical Envoy403/log-delivery cause. The separate environment read reports
+public access Enabled, internal false, an existing subnet and azure-monitor log
+destination. The serving revision is Provisioned/Healthy/ScaledToZero with zero
+replicas and all traffic; the inactive revision is stopped. Resource Health
+explicitly returned `UnsupportedResourceType`, not an application failure or a
+verified health signal. These reads do not establish successful request routing.
+No new BFF probe, resource/identity/network/
 image/replica change, data mutation, publication or physical operation occurred;
 the ledger remains **7/40 attempts, 33 remaining and zero accepted mutations**.
