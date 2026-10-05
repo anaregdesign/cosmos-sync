@@ -27,11 +27,13 @@ void main() {
   late JSAny? previous;
   var clears = 0;
   var renewals = 0;
+  String? proofNonce;
 
   setUp(() {
     previous = globalThis.getProperty<JSAny?>('cosmosSyncAuth'.toJS);
     clears = 0;
     renewals = 0;
+    proofNonce = null;
     response = jsonEncode({
       'ok': true,
       'accessToken': 'fixture-api-token',
@@ -65,10 +67,37 @@ void main() {
       }).toJS,
     );
     bridge.setProperty('endSession'.toJS, result.toJS);
+    bridge.setProperty(
+      'freshProof'.toJS,
+      ((JSString value, JSString nonce) {
+        proofNonce = nonce.toDart;
+        return result(value);
+      }).toJS,
+    );
+    bridge.setProperty(
+      'cancelProof'.toJS,
+      (() => Future<JSString>.value('{"ok":true}'.toJS).toJS).toJS,
+    );
     globalThis.setProperty('cosmosSyncAuth'.toJS, bridge);
     client = WebOidcClient();
   });
   tearDown(() => globalThis.setProperty('cosmosSyncAuth'.toJS, previous));
+
+  test(
+    'only explicit isolated proof interop exports ID proof and server nonce',
+    () async {
+      final proof = await client.freshIdentityProof(config, 'f' * 64);
+      expect(proofNonce, 'f' * 64);
+      expect(proof.accessToken, 'fixture-api-token');
+      expect(proof.idToken, 'fixture-id-must-not-be-an-api-token');
+      expect(proof.toJson().containsKey('refreshToken'), false);
+      expect(proof.toString(), isNot(contains('fixture-')));
+      final ordinary = await client.signIn(config);
+      expect(ordinary.idToken, null);
+      expect(ordinary.refreshToken, null);
+      await client.cancelIdentityProof();
+    },
+  );
 
   test(
     'actual JavaScript interop exports only the API access credential',

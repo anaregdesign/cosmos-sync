@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,7 +13,7 @@ RefreshTokenStore createTokenStore() => NativeRefreshTokenStore();
 String defaultRedirectUrl() =>
     'com.anaregdesign.cosmossync://auth/oauthredirect';
 
-class NativeOidcClient implements OidcClient {
+class NativeOidcClient implements FreshOidcClient {
   NativeOidcClient({
     FlutterAppAuth? appAuth,
     this.freshInteractiveSession = false,
@@ -85,6 +88,51 @@ class NativeOidcClient implements OidcClient {
         ),
       ),
     );
+  }
+
+  @override
+  Future<FreshIdentityProof> freshIdentityProof(
+    OidcConfig config,
+    String nonce,
+  ) async {
+    _checkPlatform();
+    validateIdentityNonce(nonce);
+    if (config.browser) {
+      throw const AuthException(
+        'invalid_config',
+        'Use the approved native callback for identity authentication.',
+      );
+    }
+    final response = await _run(
+      () => _appAuth.authorizeAndExchangeCode(
+        AuthorizationTokenRequest(
+          config.clientId,
+          config.redirectUrl,
+          discoveryUrl: config.discoveryUrl,
+          scopes: config.scopes,
+          nonce: nonce,
+          promptValues: const ['login'],
+          additionalParameters: {
+            'max_age': '0',
+            'claims': jsonEncode({
+              'id_token': {
+                'auth_time': {'essential': true},
+              },
+            }),
+          },
+          allowInsecureConnections: false,
+          externalUserAgent:
+              {
+                TargetPlatform.iOS,
+                TargetPlatform.macOS,
+              }.contains(defaultTargetPlatform)
+              ? ExternalUserAgent.ephemeralAsWebAuthenticationSession
+              : ExternalUserAgent.asWebAuthenticationSession,
+        ),
+      ),
+    );
+    // Refresh credentials from this separate exchange are never retained.
+    return freshProofFromTokens(_convert(response), config);
   }
 
   @override

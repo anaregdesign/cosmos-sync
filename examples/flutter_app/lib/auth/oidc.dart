@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:cosmos_sync/cosmos_sync.dart';
+
 /// A browser navigation preference, never proof of a provider identity.
 enum BrokerProvider { google, apple }
 
@@ -315,6 +317,56 @@ abstract interface class OidcClient {
   Future<OidcTokens> signIn(OidcConfig config);
   Future<OidcTokens> refresh(OidcConfig config, String refreshToken);
   Future<void> endSession(OidcConfig config, String? idToken);
+}
+
+/// An isolated interactive proof; it must not replace the main credentials.
+abstract interface class FreshOidcClient implements OidcClient {
+  Future<FreshIdentityProof> freshIdentityProof(
+    OidcConfig config,
+    String nonce,
+  );
+}
+
+/// Browser clients can additionally clear an isolated proof's private cache.
+abstract interface class CancellableFreshOidcClient implements FreshOidcClient {
+  Future<void> cancelIdentityProof();
+}
+
+void validateIdentityNonce(String nonce) {
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(nonce)) {
+    throw const AuthException(
+      'invalid_identity_challenge',
+      'Use a fresh challenge from the configured BFF.',
+    );
+  }
+}
+
+FreshIdentityProof freshProofFromTokens(OidcTokens tokens, OidcConfig config) {
+  if (tokens.accessToken == null ||
+      tokens.idToken == null ||
+      tokens.expiresAt == null ||
+      !tokens.expiresAt!.isAfter(
+        DateTime.now().add(const Duration(seconds: 30)),
+      ) ||
+      tokens.tokenType?.toLowerCase() != 'bearer' ||
+      tokens.scopes != null &&
+          config.apiScopes.any((scope) => !tokens.scopes!.contains(scope))) {
+    throw const AuthException(
+      'invalid_proof_response',
+      'The provider did not return an API and ID proof. Reauthenticate online.',
+    );
+  }
+  try {
+    return FreshIdentityProof(
+      accessToken: tokens.accessToken!,
+      idToken: tokens.idToken!,
+    );
+  } on FormatException {
+    throw const AuthException(
+      'invalid_proof_response',
+      'The provider did not return a usable identity proof.',
+    );
+  }
 }
 
 /// A browser SDK owns its in-memory refresh credential; it is never exported.

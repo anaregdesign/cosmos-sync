@@ -17,9 +17,10 @@ Terraform and its runbook are tracked in [#31](https://github.com/anaregdesign/c
 clean-checkout hosted onboarding is tracked in [#32](https://github.com/anaregdesign/cosmos-sync/issues/32).
 
 **Apple and Google remain intended future end-user login providers.** The
-current Flutter adapter implements native OIDC/PKCE with a dedicated Entra API
-access-token validation path; Apple/Google login, account linking and provider
-acceptance are additional work, not delivered support. The [social-login design
+current Flutter application implements native OIDC/PKCE and memory-only Web MSAL
+with a dedicated API-access-token path. Unpublished opt-in account lifecycle
+source is described below; actual Apple/Google login and provider acceptance are
+not delivered support. The [social-login design
 and roadmap](docs/social-auth.md) compares an API-token identity broker with
 native provider login followed by a backend session exchange. Raw Apple/Google
 ID tokens are not Cosmos Sync API credentials. BFF account and membership policy controls
@@ -29,14 +30,14 @@ accounts.
 On 2026-10-04 the owner removed actual Google/Apple connections, provider
 configuration and live-provider acceptance from this delivery. Development
 continues with simulators; physical Android verification is the final gate.
-External ID OIDC, server authorization, linking safety and hosted Cosmos
-acceptance remain separate unfinished work, not inferred from workforce login.
+Actual External ID fresh OIDC, hosted reader/Cosmos and final device acceptance
+remain separate unfinished work, not inferred from workforce login or fixtures.
 
 ## Layout and verification
 
 - `bff/`: Go service, official Azure SDK, security/atomicity tests and opt-in emulator integration.
 - `packages/cosmos_sync/`: native/browser SDK, cache/query/HTTP tests and examples.
-- `examples/flutter_app/`: normally runnable native Flutter sample with OIDC login, real BFF transport and document/offline/conflict UI. See its [setup guide](examples/flutter_app/README.md) and [native authentication](docs/native-auth.md).
+- `examples/flutter_app/`: normally runnable native/Web Flutter sample with OIDC login, real BFF transport and document/offline/conflict UI. See its [setup guide](examples/flutter_app/README.md) and [native authentication](docs/native-auth.md).
 - `examples/flutter_smoke/`: separate deterministic native platform integration fixture; its test-injected transport does not demonstrate a real provider login or live Azure connection.
 - `infra/terraform/azure-container-apps/`: pinned workload template, saved-plan deployment and mock checks; runtime acceptance stays separate from apply.
 - `infra/terraform/aca-validation-plan/`: private backend VNet/endpoint/DNS/Vault prerequisites; see the [retained topology and deploy sequence](docs/aca-validation-plan.md).
@@ -46,9 +47,10 @@ acceptance remain separate unfinished work, not inferred from workforce login.
 Use Go 1.26+ and Dart 3.12+; Flutter 3.44.6 is the measured native fixture baseline.
 
 The SDK is a pure Dart package usable from Flutter; it does not contain widgets.
-Flutter application code lives in `examples/flutter_app/lib/`. Configure the
-selected HTTPS BFF and native public OIDC client in that app. Credentials belong
-in the OS browser and native secure store, never source code or a pasted token.
+Flutter application code lives in `examples/flutter_app/lib/`. Configure the selected HTTPS BFF and public native/SPA OIDC client in that app.
+Native restore uses OS secure storage; Web credentials remain in memory.
+Credentials belong in the supported provider/browser flow, never source code or
+a pasted token.
 Actual provider/cloud/physical-device acceptance is tracked separately from the
 existing local signed-fixture and simulator evidence.
 
@@ -121,6 +123,18 @@ accepts its trusted HTTPS ingress boundary and Key Vault secret reference.
 Existing deployments can retain `config.example.json` and explicit legacy
 grants. That mode requires atomic grant distribution to every replica and is
 not automatically migrated to built-in ownership.
+
+The unpublished [directory extension](docs/identity-directory.md) is explicitly
+selected with [`config.directory.example.json`](bff/config.directory.example.json).
+It wires a secret-free trusted broker reader, explicit fresh-proof registration/
+link/unlink, stable random ownership, identity-bound sessions/cursors/caches and
+confirmation/recovery UI. Proofs never replace the main credentials; email and
+provider navigation never link accounts. The original published package/image and
+retained Azure deployment are unchanged. Actual customer nonce/authentication-time,
+MI/Graph and production capacity/recovery checks are required before deployment.
+The current Terraform workload template still selects builtin or legacy mode;
+directory activation needs a separately reviewed compatible image/configuration,
+not an unreviewed template apply.
 
 ```sh
 cd bff

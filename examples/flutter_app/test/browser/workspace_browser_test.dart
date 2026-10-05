@@ -60,6 +60,39 @@ void main() {
   });
 
   test(
+    'identity expectation rejects a changed principal before reopening IndexedDB',
+    () async {
+      final original = await open(repository);
+      await original.put('private', {'text': 'must be purged on mismatch'});
+      await original.close();
+      await expectLater(
+        repository.open(
+          config: config,
+          credentialBinding: 'same-credential-session',
+          tokenProvider: () async => 'fixture-only-api-token',
+          expectedIdentity: const SessionInfo(
+            scopeId: 'scope',
+            principalId: 'different-account',
+            permissionVersion: '1',
+          ),
+        ),
+        throwsA(
+          isA<TransportException>().having(
+            (error) => error.code,
+            'code',
+            'identity_session_invalid',
+          ),
+        ),
+      );
+      expect(
+        web.window.localStorage.getItem('$namespace.cache-registry'),
+        null,
+      );
+      await expectLater(open(repository, offline: true), throwsStateError);
+    },
+  );
+
+  test(
     'real IndexedDB preserves a committed operation inside the verified document',
     () async {
       var client = await open(repository);

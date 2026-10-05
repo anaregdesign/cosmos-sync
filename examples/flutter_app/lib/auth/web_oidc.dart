@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:js_interop';
 
+import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:web/web.dart' as web;
 
 import 'oidc.dart';
@@ -13,8 +14,12 @@ external JSPromise<JSString> _refresh(JSString config);
 external JSPromise<JSString> _clear();
 @JS('cosmosSyncAuth.endSession')
 external JSPromise<JSString> _endSession(JSString config);
+@JS('cosmosSyncAuth.freshProof')
+external JSPromise<JSString> _freshProof(JSString config, JSString nonce);
+@JS('cosmosSyncAuth.cancelProof')
+external JSPromise<JSString> _cancelProof();
 
-class WebOidcClient implements MemoryOidcClient {
+class WebOidcClient implements MemoryOidcClient, CancellableFreshOidcClient {
   @override
   Future<OidcTokens> signIn(OidcConfig config) =>
       _tokens(() => _signIn(_encoded(config)).toDart);
@@ -39,6 +44,38 @@ class WebOidcClient implements MemoryOidcClient {
   @override
   Future<void> endSession(OidcConfig config, String? idToken) async {
     await _response(() => _endSession(_encoded(config)).toDart);
+  }
+
+  @override
+  Future<FreshIdentityProof> freshIdentityProof(
+    OidcConfig config,
+    String nonce,
+  ) async {
+    validateIdentityNonce(nonce);
+    final response = await _response(
+      () => _freshProof(_encoded(config), nonce.toJS).toDart,
+    );
+    try {
+      return freshProofFromTokens(
+        OidcTokens(
+          accessToken: response['accessToken'] as String,
+          idToken: response['idToken'] as String,
+          expiresAt: DateTime.parse(response['expiresAt'] as String),
+          tokenType: response['tokenType'] as String,
+          scopes: (response['scopes'] as List).cast<String>(),
+        ),
+        config,
+      );
+    } on AuthException {
+      rethrow;
+    } on Object {
+      throw const OidcFailure(OidcFailureKind.failed);
+    }
+  }
+
+  @override
+  Future<void> cancelIdentityProof() async {
+    await _response(() => _cancelProof().toDart);
   }
 
   JSString _encoded(OidcConfig config) {

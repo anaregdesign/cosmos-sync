@@ -350,6 +350,82 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("directory HTTP replicas preserve owned data and reject removed credentials", func(t *testing.T) {
+		first := startIdentityHTTPFixture(t, newBrokerProofFixture(t), newStore(), "http-emulator-v1")
+		second := startIdentityHTTPFixture(t, first.broker, newStore(), "http-emulator-v1")
+		first.addProfile(brokerTestOther, brokerProofSecondUser)
+		token, account, original := first.register(t, brokerTestObject)
+		first.request(t, token, "POST", "/v1/mutations", &original,
+			operation(940, "http-directory-owned", "put", 0, `{"value":"before-link"}`), 200)
+		initial := first.request(t, token, "GET", "/v1/sync", &original, nil, 200)
+		var cursor string
+		if json.Unmarshal(initial["cursor"], &cursor) != nil || cursor == "" {
+			t.Fatal("actual Cosmos HTTP response did not issue a signed cursor")
+		}
+		shared := identityHTTPDecode[SharedScope](t, first.request(t, token, "POST", "/v1/scopes", &original,
+			map[string]string{"operationId": "cccccccc-cccc-4ccc-8ccc-ccccccccccc1"}, 200))
+		raw := second.challenge(t, token, &original, "link", "", first.broker.signed.target.Callback)
+		otherToken := first.broker.access(t, map[string]any{"oid": brokerTestOther}, 0)
+		linked := identityHTTPDecode[identityAccountResponse](t, second.request(t, token, "POST", "/v1/identities/link", &original,
+			map[string]any{"challenge": raw,
+				"reauthentication": identityProofRequest{token, first.broker.id(t, raw, nil, 0)},
+				"identity":         identityProofRequest{otherToken, first.broker.id(t, raw, map[string]any{"oid": brokerTestOther}, 0)}}, 200))
+		if linked.Account != account.Account || linked.IdentityGeneration != 2 {
+			t.Fatal("independent actual Cosmos HTTP replica moved ownership or lost its generation")
+		}
+		first.request(t, token, "GET", "/v1/sync", &original, nil, 401)
+		secondary := identityHTTPDecode[Scope](t, first.request(t, otherToken, "GET", "/v1/session?scope=user", nil, nil, 200))
+		if secondary.ID != account.PersonalScopeID || secondary.PrincipalID != account.AccountID ||
+			secondary.PermissionVersion != "1" || secondary.IdentityGeneration != 2 {
+			t.Fatal("linked credential did not retain the numeric same-partition policy fence")
+		}
+		first.request(t, otherToken, "GET", "/v1/sync?cursor="+cursor, &secondary, nil, 410)
+		covered := first.request(t, otherToken, "GET", "/v1/sync", &secondary, nil, 200)
+		if !bytes.Contains(covered["changes"], []byte("before-link")) {
+			t.Fatal("linked credential lost the original actual Cosmos data")
+		}
+		first.request(t, otherToken, "POST", "/v1/mutations", &secondary,
+			operation(941, "http-directory-owned", "put", 1, `{"value":"after-link"}`), 200)
+		policy := identityHTTPDecode[SharedScope](t, first.request(t, otherToken, "GET", "/v1/scopes/"+shared.ScopeID+"/members", &secondary, nil, 200))
+		if policy.OwnerAccountID != account.AccountID || policy.ScopeID != shared.ScopeID || policy.Revision != 1 {
+			t.Fatal("identity generation changed actual shared policy ownership or revision")
+		}
+		primary := identityHTTPDecode[Scope](t, second.request(t, token, "GET", "/v1/session?scope=user", nil, nil, 200))
+		raw = second.challenge(t, token, &primary, "unlink", secondary.IdentityID, first.broker.signed.target.Callback)
+		retained := identityProofRequest{token, first.broker.id(t, raw, nil, 0)}
+		unlinked := identityHTTPDecode[identityAccountResponse](t, second.request(t, token, "POST", "/v1/identities/unlink", &primary,
+			map[string]any{"challenge": raw, "reauthentication": retained, "identity": retained}, 200))
+		if unlinked.Account != account.Account || unlinked.IdentityGeneration != 3 || len(unlinked.Identities) != 1 {
+			t.Fatal("actual HTTP unlink did not retain the original random account")
+		}
+		first.request(t, otherToken, "GET", "/v1/session?scope=user", nil, nil, 401)
+		first.request(t, otherToken, "POST", "/v1/mutations", &secondary,
+			operation(942, "http-directory-owned", "delete", 2, "null"), 401)
+		fresh := newStore()
+		state, version, err := (cosmosIdentityDirectoryStore{fresh}).loadIdentityDirectory(withAuthorizationSessions(ctx))
+		if err != nil || version == "" || !validIdentityDirectory(state) ||
+			state.Accounts[account.AccountID].Generation != 3 || state.Bindings[secondary.IdentityID].Active {
+			t.Fatal("independent SDK read lost the committed unlink/tombstone", err)
+		}
+		record, err := fresh.authorizationAccount(withAuthorizationSessions(ctx), account.AccountID)
+		if err != nil || record == nil || record.DirectoryVersion != directoryAccountVersion || record.Account != account.Account {
+			t.Fatal("HTTP lifecycle changed the independently persisted account provenance", err)
+		}
+		page, _, err := fresh.Sync(ctx, account.PersonalScopeID, 0, 100, "")
+		if err != nil || len(page.Changes) != 2 || page.Changes[1].Version != 2 || page.Changes[1].Deleted {
+			t.Fatal("removed HTTP credential wrote data or linking lost retained history", err)
+		}
+	})
+
+	t.Run("signed HTTP Dart lifecycle uses real Cosmos storage", func(t *testing.T) {
+		if os.Getenv("COSMOS_SYNC_IDENTITY_DART") != "1" {
+			t.Skip("explicit disposable Dart identity fixture not requested")
+		}
+		first := startIdentityHTTPFixture(t, newBrokerProofFixture(t), newStore(), "dart-http-emulator-v1")
+		second := startIdentityHTTPFixture(t, first.broker, newStore(), "dart-http-emulator-v1")
+		runDirectoryDartLifecycle(t, first, second)
+	})
+
 	t.Run("builtin durable account membership replay and revocation fence", func(t *testing.T) {
 		first, second := newStore(), newStore()
 		identity := AccountIdentity{Issuer: "https://builtin-emulator.test", Subject: "owner"}

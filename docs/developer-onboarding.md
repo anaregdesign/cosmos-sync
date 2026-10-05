@@ -95,8 +95,11 @@ SQLite and a signed test identity adapter. It exercises the protocol without
 Azure or a real provider; it does not perform provider registration or a hosted
 deployment. A physical Android target requires the separate explicitly selected
 device procedure in [physical-device validation](physical-devices.md). The sample
-targets Android API 24+, iOS 15+ and macOS 12+. It supplies no Flutter Web, Linux
-or Windows login app; Chromium SDK persistence tests are separate coverage.
+targets Android API 24+, iOS 15+ and macOS 12+, and also supplies a Web target with
+memory-only MSAL and IndexedDB/Web Locks. Build its pinned local auth assets and
+register the exact SPA bridge as described in [Web authentication](web-auth.md).
+Linux/Windows Flutter applications are not supplied. Chromium application,
+SDK-storage and actual provider results remain distinct evidence.
 
 ## 2. Prepare the hosting and identity inputs
 
@@ -154,6 +157,15 @@ For new deployments the template selects `builtin` but requires the explicit
 actual immutable image and intended new namespace. The example leaves that
 assertion false, so it cannot silently deploy an unverified policy image. This
 assertion does not approve a cloud apply or migrate a legacy deployment.
+
+The unpublished `directory` extension is not selectable by this Terraform
+template. Its explicit source configuration is
+[`config.directory.example.json`](../bff/config.directory.example.json), with a
+sole public-client namespace and server-only secret-free reader metadata.
+Do not inject those unknown fields into the original retained image or change
+the legacy/builtin authorization mode implicitly. A separately reviewed
+compatible image and workload adaptation must precede any directory deployment;
+local lifecycle/emulator tests do not approve that apply.
 
 ACA runtime configuration uses non-secret `COSMOS_SYNC_CONFIG_JSON`, explicit
 `COSMOS_SYNC_TLS_MODE=container-apps` behind HTTPS ingress, and a selected managed
@@ -243,8 +255,9 @@ The shared owner cannot be replaced or edited as an ordinary member. A nonowner
 cannot self-grant. A conflicting revision returns `membership_conflict`; refresh
 the membership view and ask for an explicit new operation rather than silently
 overwrite it. Unknown accounts cannot be invited by email through these APIs.
-Provider invitations, cross-provider linking, owner transfer and account/scope
-deletion are separate work. API authentication alone grants no membership of
+Provider invitations, owner transfer and account/scope deletion are separate
+work. Explicit linking is available only in the opt-in directory source described
+below, not this builtin contract. API authentication alone grants no membership of
 someone else's shared scope.
 
 Leaving `authorization.mode` unset or choosing `legacy` retains the explicit
@@ -263,11 +276,22 @@ from the validated workforce Entra setup. The dedicated CIAM directory now has
 API/native apps, their service principals and an API-only administrator grant;
 its user flow and actual common consumer OIDC login remain unverified. Actual
 Google/Apple provider configuration is outside current delivery scope. The
-current hosted test selects the already tested workforce API JWT.
+current retained hosted target still selects the already tested workforce API JWT.
 Built-in data ownership neither creates a provider registration nor grants shared
 membership by email. The official comparison and
 implementation acceptance are recorded in
 [#33](https://github.com/anaregdesign/cosmos-sync/issues/33).
+
+The opt-in [directory lifecycle](identity-directory.md) instead requires explicit
+registration with independently verified fresh API/ID proofs and an uncached
+trusted broker profile. It preserves random personal/shared ownership across
+link/unlink and binds sessions/cursors/caches to a separate identity generation.
+The application confirms local pending-data loss, drains/purges before proof
+acquisition and verifies the new session before opening a cache. Recovery uses
+only a remaining credential; ambiguous submitted results require signout and new
+online resolution. This source wiring is implemented, but actual selected-customer
+nonce/integer authentication time and ACA MI/Graph execution remain unverified.
+The administrative profile is not a substitute for the approved customer.
 
 ## 4. Run the application, then integrate the SDK
 

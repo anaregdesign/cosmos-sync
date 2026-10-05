@@ -13,7 +13,10 @@ provider login or turn a provider ID token into API authorization. The native
 sample currently validates Entra OIDC/PKCE; its separate Web target uses
 memory-only MSAL and BFF-verified IndexedDB ownership. Actual Google/Apple
 connections are cancelled for this delivery, not passed. Explicit account
-linking remains tracked in the [social-login roadmap](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/social-auth.md).
+linking has unpublished opt-in transport/application source, tracked in the
+[social-login roadmap](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/social-auth.md).
+The published `0.2.0-dev.1` archive is unchanged; current-source APIs below are not
+claims about that archive or a deployed directory service.
 
 ## Durable local writes
 
@@ -100,6 +103,33 @@ Selecting a different explicit mode/shared ID purges an incompatible offline
 cache and pauses it before displaying old data. A token identity switch or remote
 revocation still requires reconnecting to the BFF to be detected.
 
+## Opt-in identity lifecycle
+
+An explicitly configured directory BFF exposes typed `identityCapabilities()`,
+`createIdentityChallenge()`, `registerIdentity()`, `accountIdentities()`,
+`linkIdentity()` and `unlinkIdentity()` on `HttpSyncTransport`. The SDK supplies
+validated, redacted models, not a login UI or OAuth implementation. Obtain
+`FreshIdentityProof` from supported fresh code/PKCE authentication using the exact
+server target/nonce; never construct ownership from email, decode a client
+partition claim or substitute a raw provider ID token at sync routes.
+
+The application must confirm local pending-data loss and drain/purge before
+changing identity. Registration sends its fresh API bearer plus the dedicated
+ID proof; link/unlink need an existing verified identity-bound session,
+current-credential reauthentication and independent new/remaining credential
+control. Online management binds only the principal and identity pair, not data
+scope/permission headers or a Cosmos consistency envelope. The data client keeps
+its separate scope and numeric membership fence.
+
+These one-shot identity operations do not enter the document outbox and do not
+share membership-management replay semantics. After submission, resolve an
+unknown outcome through a new online session, never reuse a consumed challenge.
+Every result requires fresh account/generation/credential verification before
+resuming data. Active-credential removal omits `currentIdentityId` and requires
+sign-in with a remaining credential. Last-credential removal is forbidden;
+deletion/migration remain operator-review-required, without an SDK endpoint.
+See the [exact lifecycle protocol](doc/protocol.md#directory-identity-lifecycle).
+
 ## Queries and coverage
 
 ```dart
@@ -143,11 +173,15 @@ missed events. No background-execution guarantee is implied.
 
 ## Identity, cache ownership and limits
 
-Sessions bind principal, scope, mode and permission version. Fresh-token requests
+Sessions bind principal, scope, mode and permission version. Directory sessions
+also bind the paired `identityGeneration`/`identityId`; membership versions remain
+independent numeric fences. Fresh-token requests
 assert that same identity; the server derives routing. 401/403 or a changed session
 conservatively purges cache/outbox and pauses. `resume()` explicitly adopts a newly
 verified session. `await signOut()` drains in-flight work before purge. Offline
 revocation cannot be learned before reconnection, and purge may discard local edits.
+SQLite/IndexedDB retain the complete verified session JSON; legacy sessions omit
+the identity pair rather than inventing a generation or adopting an identity.
 
 Use one isolate/cache owner per principal/scope. Native SQLite guards duplicate
 opens within an isolate and uses advisory file locks across processes; separate

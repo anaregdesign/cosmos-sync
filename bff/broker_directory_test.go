@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,6 +53,7 @@ func brokerTestProfile() map[string]any {
 }
 
 type brokerCredential struct {
+	mu      sync.Mutex
 	calls   int
 	options policy.TokenRequestOptions
 	token   azcore.AccessToken
@@ -59,6 +61,8 @@ type brokerCredential struct {
 }
 
 func (c *brokerCredential) GetToken(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.calls++
 	c.options = options
 	return c.token, c.err

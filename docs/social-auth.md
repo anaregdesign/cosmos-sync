@@ -111,9 +111,9 @@ reviewable operation. Unlink requires recent authentication, session invalidatio
 and a remaining usable login/recovery method. Do not migrate documents or lose
 the account ID when switching providers.
 
-### Selected linking contract (production activation not implemented)
+### Selected linking contract (unpublished opt-in source)
 
-The implementation contract for the future dedicated link/unlink boundary is:
+The contract for the dedicated directory link/unlink boundary is:
 
 | Rule | Selected bound and behavior |
 | --- | --- |
@@ -135,14 +135,15 @@ Only a dedicated identity-proof endpoint may handle upstream login proof; sync
 APIs continue to require API access JWTs. The broker must provide trustworthy
 binding and authentication-time evidence, and its direct SDK/self-service linking
 must not bypass this transaction. If either cannot be established, linking stays
-disabled. The [staged internal identity-directory core](identity-directory.md) now exercises
-this transactional model with a bounded, single-record Cosmos adapter and
-explicitly labeled internal proof-stamp tests. It is disconnected from production
-factories and routes. Trusted upstream/fresh-auth proof, broker self-service
-enforcement, production session/cursor/cache wiring, production capacity and
-recovery remain activation gates. This chosen contract adds no endpoints, Graph
-write grants, active session generations, custom refresh families or broker-wide
-linking controls to the published preview.
+disabled in that deployment. The [opt-in identity directory](identity-directory.md)
+wires a bounded single-record Cosmos adapter, correlated signed API/ID proof and
+uncached trusted Graph reader through explicit `authorization.mode=directory`.
+Its dedicated HTTP routes, identity-bound sessions/contexts, typed transport and
+native/Web lifecycle UI are source-tested, not deployed/live acceptance. The
+retained image and published archive are unchanged. Actual upstream fresh-auth
+issuance, hosted MI/Graph, out-of-band broker behavior and production capacity/
+recovery remain gates. No Graph write grant, custom BFF refresh family, automatic
+account migration or broker-wide linking control is introduced.
 [Cosmos transaction scope](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/transactional-batch).
 
 Broker configuration is part of this guarantee. Firebase documents trusted
@@ -161,8 +162,9 @@ SDK mutation attacks. A safe BFF button alone does not enforce that boundary.
 The legacy BFF mode derives its personal partition from verified issuer, tenant
 and subject. The opt-in [built-in authorization mode](authorization.md) now
 provides a durable account directory keyed by verified issuer/subject, personal
-self-access and fixed-owner shared membership. Production cross-provider linking and
-legacy-data migration remain **unimplemented**. Migration requires an explicit
+self-access and fixed-owner shared membership. The unpublished directory extension
+adds explicit trusted identity lifecycle; actual cross-provider deployment and
+legacy-data migration remain **unverified/unimplemented**, respectively. Migration requires an explicit
 mapping of old scope IDs, retained journal and receipt integrity,
 permission-version changes, cursor invalidation/resync and a policy for pending
 edits. Never use a provider-wide audience or issuer as shared-tenant membership.
@@ -189,12 +191,12 @@ consumer token or callback meets this contract.
 | --- | --- |
 | Signature | Explicit allowlist `RS256`, `RS384`, `RS512`, `ES256`, `ES384`, `ES512`; no HMAC, unsigned or arbitrary token-supplied key endpoint |
 | API identity | Configured issuer, configured API audience present in `aud`, signature and expiry; optional `nbf` must be a valid integer no later than the BFF clock; exact required scope in whitespace-separated `scp`/`scope`; nonempty subject; `token_use` checked only when configured; optional configured client admission requires exact signed `azp` |
-| Missing checks | No production `iat`/`auth_time` freshness, local maximum JWT lifetime or per-request upstream session-revocation lookup. The staged core does not supply provider verification or activate these checks on sync routes |
+| Ordinary API lifetime | No fresh-auth requirement or local maximum JWT lifetime is added to ordinary sync JWTs. Dedicated directory proofs require verified integer `iat`/`auth_time`, challenge nonce and fresh control; directory authorization separately rechecks the exact upstream credential set, not a universal provider-session revocation service |
 | Discovery | Trusted configured issuer discovery is needed to construct the verifier; the default HTTP timeout is 10 seconds, while an explicitly supplied HTTP client keeps its own timeout |
 | JWKS | Pinned `go-oidc` v3.16.0 retains cached keys without a TTL or proactive refresh. Cache verification failure, including an unknown `kid`, triggers one remote fetch with shared in-flight suppression. There is no cross-request fetch cooldown or automatic retry loop |
 | Native login | Pinned `flutter_appauth` 12.1.0 delegates state, nonce, S256 PKCE and system-browser callback handling to platform AppAuth; the BFF verifies the separate API JWT and receives no login nonce |
 | Native credentials | Access token remains in RAM; refresh credential and the optional logout ID-token hint use platform secure storage. The controller refreshes before the provider expiration with a 30-second margin; restore must rebind through the existing verified BFF/session policy |
-| Web login/credentials | Locally bundled MSAL Browser 5.24.0 handles popup code/PKCE through an exact same-origin SPA redirect bridge. Account/refresh credentials stay in MSAL memory; only the API access response reaches Dart. A new document must sign in and verify the BFF online before reopening persisted IndexedDB |
+| Web login/credentials | Locally bundled MSAL Browser 5.24.0 handles popup code/PKCE through an exact same-origin SPA redirect bridge. Ordinary paths export only the API access response. An independent memory-only proof instance exports a dedicated API/ID pair without adopting its account. A new document must sign in and verify the BFF online before reopening persisted IndexedDB |
 
 If a required discovery/key fetch or signature/claim check fails, authentication
 fails. During a JWKS outage, a token which still verifies with cached keys can

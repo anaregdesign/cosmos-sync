@@ -11,6 +11,8 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
   let generation = 0;
   let current = null;
   let busy = false;
+  let proofGeneration = 0;
+  let proofCandidate = null;
 
   function configuration(encoded) {
     if (!secureContext || typeof encoded !== "string" || encoded.length > 65536) {
@@ -92,11 +94,28 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
     generation++;
     const previous = current;
     current = null;
-    if (previous) {
+    try {
+      await cancelProof();
+    } finally {
+      if (previous) {
+        try {
+          await previous.ready;
+        } finally {
+          await bounded(previous.client.clearCache(), 10000);
+        }
+      }
+    }
+  }
+
+  async function cancelProof() {
+    proofGeneration++;
+    const candidate = proofCandidate;
+    proofCandidate = null;
+    if (candidate) {
       try {
-        await previous.ready;
+        await candidate.ready;
       } finally {
-        await bounded(previous.client.clearCache(), 10000);
+        await bounded(candidate.client.clearCache(), 10000);
       }
     }
   }
@@ -115,12 +134,7 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
     }
   }
 
-  async function accepted(promise, candidate, expectedGeneration, scopes) {
-    const result = await promise;
-    if (generation !== expectedGeneration || current !== candidate) {
-      await bounded(candidate.client.clearCache(), 10000);
-      throw cancelled();
-    }
+  function checkedTokens(result, scopes, account) {
     if (typeof result.accessToken !== "string" ||
         !result.accessToken || result.accessToken.length > 16384 ||
         result.tokenType?.toLowerCase() !== "bearer" ||
@@ -129,19 +143,44 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
         !Array.isArray(result.scopes) ||
         scopes.some((scope) => !result.scopes.includes(scope)) ||
         !result.account?.homeAccountId ||
-        (candidate.account &&
-          (result.account.homeAccountId !== candidate.account.homeAccountId ||
-            result.account.localAccountId !== candidate.account.localAccountId ||
-            result.account.tenantId !== candidate.account.tenantId))) {
+        (account &&
+          (result.account.homeAccountId !== account.homeAccountId ||
+            result.account.localAccountId !== account.localAccountId ||
+            result.account.tenantId !== account.tenantId))) {
       throw interaction();
     }
-    candidate.account = result.account;
     return {
       accessToken: result.accessToken,
       tokenType: result.tokenType,
       scopes: result.scopes,
       expiresAt: result.expiresOn.toISOString(),
     };
+  }
+
+  async function accepted(promise, candidate, expectedGeneration, scopes) {
+    const result = await promise;
+    if (generation !== expectedGeneration || current !== candidate) {
+      await bounded(candidate.client.clearCache(), 10000);
+      throw cancelled();
+    }
+    const tokens = checkedTokens(result, scopes, candidate.account);
+    candidate.account = result.account;
+    return tokens;
+  }
+
+  async function acceptedProof(promise, candidate, main, expectedGeneration,
+      expectedProofGeneration, scopes) {
+    const result = await promise;
+    if (generation !== expectedGeneration || current !== main ||
+        proofGeneration !== expectedProofGeneration || proofCandidate !== candidate) {
+      await bounded(candidate.client.clearCache(), 10000);
+      throw cancelled();
+    }
+    const tokens = checkedTokens(result, scopes);
+    if (typeof result.idToken !== "string" || !result.idToken ||
+        result.idToken.length > 16384 ||
+        !/^[A-Za-z0-9\-._~+/]+=*$/.test(result.idToken)) throw failed();
+    return { ...tokens, idToken: result.idToken };
   }
 
   return Object.freeze({
@@ -200,6 +239,45 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
         busy = false;
       }
     }),
+    freshProof: (encoded, nonce) => response(async () => {
+      if (busy || typeof nonce !== "string" || !/^[0-9a-f]{64}$/.test(nonce)) {
+        throw failed();
+      }
+      const config = configuration(encoded);
+      const main = current;
+      if (!main?.account || main.key !== config.key) throw interaction();
+      const expectedGeneration = generation;
+      const expectedProofGeneration = ++proofGeneration;
+      busy = true;
+      let candidate;
+      try {
+        const client = createClient(config.options);
+        candidate = { client, ready: bounded(client.initialize(), 10000) };
+        proofCandidate = candidate;
+        await candidate.ready;
+        if (generation !== expectedGeneration || current !== main ||
+            proofGeneration !== expectedProofGeneration || proofCandidate !== candidate) {
+          throw cancelled();
+        }
+        return await bounded(acceptedProof(client.loginPopup({
+          scopes: config.scopes,
+          redirectUri: redirect,
+          nonce,
+          prompt: "login",
+          claims: JSON.stringify({ id_token: { auth_time: { essential: true } } }),
+          extraQueryParameters: { max_age: "0" },
+        }), candidate, main, expectedGeneration, expectedProofGeneration,
+        config.scopes), 180000);
+      } finally {
+        if (proofCandidate === candidate) proofCandidate = null;
+        try {
+          if (candidate) await bounded(candidate.client.clearCache(), 10000);
+        } finally {
+          busy = false;
+        }
+      }
+    }),
+    cancelProof: () => response(async () => { await cancelProof(); }),
     clear: () => response(async () => { await clear(); }),
     endSession: (encoded) => response(async () => {
       if (busy) throw failed();

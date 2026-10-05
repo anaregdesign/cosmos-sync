@@ -246,8 +246,9 @@ evidence is retained in
 actual identifiers and runtime context stay private.
 
 The corresponding Go component performs exact, uncached, bounded user-profile
-reads and fingerprint revalidation. It is not connected to production
-account/session/link routes. The retained old BFF image has not been updated,
+reads and fingerprint revalidation. The unpublished explicit directory factory
+now connects it to account/session/link routes, matching typed transport and
+isolated native/Web fresh-proof UI. The retained old BFF image has not been updated,
 and actual UAMI assertion/token exchange/Graph access from ACA is **unverified**.
 Successful FIC creation alone cannot verify that exchange. No runtime, linking,
 hosted-Cosmos or customer-authentication acceptance is inferred from configuration.

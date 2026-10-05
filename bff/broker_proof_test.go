@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ type brokerProofFixture struct {
 	profile  map[string]any
 	profiles map[string]map[string]any
 	requests int
+	graphMu  sync.Mutex
 }
 
 func newBrokerProofFixture(t *testing.T) *brokerProofFixture {
@@ -53,6 +55,8 @@ func newBrokerProofFixture(t *testing.T) *brokerProofFixture {
 	}
 	f.profiles = map[string]map[string]any{brokerTestObject: f.profile}
 	graph := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.graphMu.Lock()
+		defer f.graphMu.Unlock()
 		f.requests++
 		object := strings.TrimPrefix(r.URL.Path, "/v1.0/users/")
 		profile, exists := f.profiles[object]

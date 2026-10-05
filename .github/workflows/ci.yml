@@ -53,7 +53,7 @@ jobs:
         with:
           sdk: stable
       - run: dart pub get
-      - run: dart test --platform chrome test/browser test/cache_conformance_test.dart test/client_capabilities_test.dart test/src/models_test.dart test/src/query_test.dart test/src/http_transport_test.dart test/src/authorization_test.dart
+      - run: dart test --platform chrome test/browser test/cache_conformance_test.dart test/client_capabilities_test.dart test/src/models_test.dart test/src/query_test.dart test/src/http_transport_test.dart test/src/authorization_test.dart test/src/identity_test.dart test/src/identity_transport_test.dart
       - run: python3 tools/browser_benchmark.py --documents=50
         working-directory: .
         env:
@@ -67,7 +67,14 @@ jobs:
         with:
           go-version-file: bff/go.mod
           cache-dependency-path: bff/go.sum
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1
+        with:
+          sdk: stable
+      - run: dart pub get
+        working-directory: packages/cosmos_sync
       - run: bash tools/emulator.sh test
+        env:
+          COSMOS_SYNC_IDENTITY_DART: '1'
   flutter-macos:
     runs-on: macos-latest
     timeout-minutes: 25
@@ -144,7 +151,7 @@ jobs:
         working-directory: examples/flutter_app
       - run: flutter test
         working-directory: examples/flutter_app
-      - run: flutter test --platform chrome test/browser test/auth/memory_session_test.dart
+      - run: flutter test --platform chrome test/browser test/auth/memory_session_test.dart test/identity_panel_test.dart
         working-directory: examples/flutter_app
       - run: flutter build web --no-pub --no-web-resources-cdn
         working-directory: examples/flutter_app
@@ -183,6 +190,11 @@ jobs:
         working-directory: packages/cosmos_sync
       - run: python3 tools/cross_stack_smoke.py
       - run: python3 tools/authorization_cross_stack_smoke.py
+      - name: Verify signed directory lifecycle through native Dart and TLS
+        run: go test -run '^TestDirectoryDartLifecycleCrossStack$' -count=1 -timeout=90s -v
+        working-directory: bff
+        env:
+          COSMOS_SYNC_IDENTITY_DART: '1'
       - run: python3 tools/cache_crash_smoke.py
       - run: python3 tools/browser_cross_stack_smoke.py
         env:

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:cosmos_sync_example/auth/auth_session_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -504,6 +505,194 @@ void main() {
     expect(validated.scopes, ['openid', 'api']);
     expect(() => validated.scopes.add('secret'), throwsUnsupportedError);
   });
+
+  group('isolated identity proofs', () {
+    late FreshFakeOidc fresh;
+    late IdentityChallenge challenge;
+    setUp(() {
+      auth.dispose();
+      fresh = FreshFakeOidc();
+      final configured = config(
+        clientId: '22222222-2222-4222-8222-222222222222',
+      );
+      auth = AuthSessionController(
+        oidc: fresh,
+        tokenStore: store,
+        clock: () => now,
+      )..configure(configured);
+      fresh.signInAction = (_) async => tokens();
+      fresh.refreshAction = (_, _) async => tokens();
+      challenge = IdentityChallenge(
+        challenge: 'f' * 64,
+        operation: IdentityOperation.link,
+        expiresAt: now.add(const Duration(minutes: 5)),
+        target: IdentityProofTarget(
+          issuer: configured.issuer,
+          clientId: configured.clientId,
+          callback: configured.redirectUrl,
+          provider: 'entra',
+          namespace: 'customer-v1',
+        ),
+      );
+    });
+
+    test('proof never adopts or persists separate credentials', () async {
+      await auth.signIn();
+      final binding = auth.credentialSessionId;
+      final stored = store.value;
+      final proof = await auth.freshIdentityProof(challenge);
+      expect(fresh.nonce, challenge.challenge);
+      expect(proof.accessToken, 'separate.api');
+      expect(auth.credentialSessionId, binding);
+      expect(await auth.accessToken(), 'access-secret');
+      expect(store.value, stored);
+      expect(store.value, isNot(contains('separate')));
+      expect(auth.state, AuthSessionState.ready);
+    });
+
+    test(
+      'pending proof excludes refresh, configuration and other popups',
+      () async {
+        await auth.signIn();
+        final response = Completer<FreshIdentityProof>();
+        fresh.proofAction = (_, _) => response.future;
+        final proving = auth.freshIdentityProof(challenge);
+        expect(auth.state, AuthSessionState.provingIdentity);
+        await expectLater(auth.accessToken(), throwsA(code('auth_busy')));
+        await expectLater(auth.signIn(), throwsA(code('auth_busy')));
+        await expectLater(
+          auth.freshIdentityProof(challenge),
+          throwsA(code('auth_busy')),
+        );
+        expect(() => auth.configure(config()), throwsA(code('auth_busy')));
+        response.complete(FreshFakeOidc.proof());
+        await proving;
+        expect(fresh.proofCalls, 1);
+        expect(fresh.refreshCalls, 0);
+        expect(await auth.accessToken(), 'access-secret');
+      },
+    );
+
+    test(
+      'cancelled late proof cannot change the original secure session',
+      () async {
+        await auth.signIn();
+        final binding = auth.credentialSessionId;
+        final stored = store.value;
+        final response = Completer<FreshIdentityProof>();
+        fresh.proofAction = (_, _) => response.future;
+        final failed = expectLater(
+          auth.freshIdentityProof(challenge),
+          throwsA(code('cancelled')),
+        );
+        await auth.cancelIdentityProof();
+        response.complete(FreshFakeOidc.proof());
+        await failed;
+        expect(auth.credentialSessionId, binding);
+        expect(store.value, stored);
+        expect(auth.state, AuthSessionState.ready);
+      },
+    );
+
+    test('signout fences a late proof and removes main credentials', () async {
+      await auth.signIn();
+      final response = Completer<FreshIdentityProof>();
+      fresh.proofAction = (_, _) => response.future;
+      final failed = expectLater(
+        auth.freshIdentityProof(challenge),
+        throwsA(code('cancelled')),
+      );
+      await auth.signOut();
+      response.complete(FreshFakeOidc.proof());
+      await failed;
+      expect(auth.state, AuthSessionState.signedOut);
+      expect(auth.credentialSessionId, null);
+      expect(store.value, null);
+    });
+
+    test(
+      'raw proof failures remain fixed and preserve main credentials',
+      () async {
+        await auth.signIn();
+        final stored = store.value;
+        fresh.proofAction = (_, _) async => throw Exception('separate-secret');
+        await expectLater(
+          auth.freshIdentityProof(challenge),
+          throwsA(code('identity_proof_failed')),
+        );
+        expect(auth.error.toString(), isNot(contains('separate-secret')));
+        expect(store.value, stored);
+        expect(auth.isSignedIn, true);
+        expect(auth.state, AuthSessionState.ready);
+      },
+    );
+
+    test(
+      'expired and mismatched challenges cannot invoke the provider',
+      () async {
+        await auth.signIn();
+        now = now.add(const Duration(minutes: 6));
+        await expectLater(
+          auth.freshIdentityProof(challenge),
+          throwsA(code('invalid_identity_challenge')),
+        );
+        now = start;
+        final mismatch = IdentityChallenge(
+          challenge: challenge.challenge,
+          operation: challenge.operation,
+          expiresAt: challenge.expiresAt,
+          target: IdentityProofTarget(
+            issuer: challenge.target.issuer,
+            clientId: '33333333-3333-4333-8333-333333333333',
+            callback: challenge.target.callback,
+            provider: 'entra',
+            namespace: 'customer-v1',
+          ),
+        );
+        await expectLater(
+          auth.freshIdentityProof(mismatch),
+          throwsA(code('invalid_identity_challenge')),
+        );
+        expect(fresh.proofCalls, 0);
+      },
+    );
+
+    test(
+      'synchronous proof-state cancellation runs before provider launch',
+      () async {
+        await auth.signIn();
+        auth.addListener(() {
+          if (auth.state == AuthSessionState.provingIdentity) {
+            unawaited(auth.cancelIdentityProof());
+          }
+        });
+        await expectLater(
+          auth.freshIdentityProof(challenge),
+          throwsA(code('cancelled')),
+        );
+        expect(fresh.proofCalls, 0);
+        expect(auth.isSignedIn, true);
+      },
+    );
+  });
+}
+
+class FreshFakeOidc extends FakeOidc implements FreshOidcClient {
+  Future<FreshIdentityProof> Function(OidcConfig, String) proofAction =
+      (_, _) async => proof();
+  int proofCalls = 0;
+  String? nonce;
+  static FreshIdentityProof proof() =>
+      FreshIdentityProof(accessToken: 'separate.api', idToken: 'separate.id');
+  @override
+  Future<FreshIdentityProof> freshIdentityProof(
+    OidcConfig config,
+    String nonce,
+  ) {
+    this.nonce = nonce;
+    proofCalls++;
+    return proofAction(config, nonce);
+  }
 }
 
 class FakeOidc implements OidcClient {

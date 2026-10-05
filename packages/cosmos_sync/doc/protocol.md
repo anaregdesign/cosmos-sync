@@ -17,8 +17,9 @@ The coordinated BFF/Dart extension also supports
 Both fields must be present together: generation is 1..10,000 and the identity
 ID is 64 lowercase hexadecimal characters identifying the approved credential
 binding, not an email or caller account claim. Current legacy/builtin modes
-omit both fields; adding this extension does not activate the staged identity
-directory or add a lifecycle route.
+omit both fields. Explicit `authorization.mode=directory` emits them from a
+fresh verified broker-profile/directory lookup. The opt-in source implementation
+does not automatically activate or migrate a deployment.
 
 An identity-bound data request additionally sends
 `X-Cosmos-Sync-Identity-Generation` and `X-Cosmos-Sync-Identity` from that session.
@@ -40,10 +41,10 @@ cross-partition atomic revocation guarantee.
 
 ## Builtin account and membership management
 
-These additional routes are available only with `authorization.mode=builtin`.
-The staged internal identity directory adds no wire endpoints and does not
-replace this account/session contract; see [its activation boundary](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/identity-directory.md).
-`GET /v1/account` registers/returns `{accountId,personalScopeId}`.
+These additional routes are available with `authorization.mode=builtin` or
+`directory`. `GET /v1/account` returns `{accountId,personalScopeId}`; builtin
+registers its issuer/subject account, while directory requires an existing
+explicitly registered account and rechecks its broker binding.
 `POST /v1/scopes` accepts `{operationId:UUID}` and returns the immutable creation
 result `{scopeId,ownerAccountId,revision:1,members:[]}`; the verified creator is the
 fixed owner. No caller owner/role fields are accepted.
@@ -61,13 +62,73 @@ Bodies are at most 4 KiB, revisions 1..10,000 and distinct retained member accou
 at most 128. Starting at revision 9,744, only rights reductions are accepted;
 256 reserved revisions ensure every active member can be revoked. These online operations do not use the document outbox. Optional
 `X-Cosmos-Sync-Principal` asserts the verified account and prevents a token-provider
-identity switch. See [authorization](authorization.md) for limits and revocation.
+identity switch. Directory management additionally requires the exact principal
+and identity-generation/identity headers. It sends no data scope/mode/permission
+assertions or Cosmos consistency envelope. See [authorization](authorization.md)
+for limits and revocation.
+
+## Directory identity lifecycle
+
+Only explicit `authorization.mode=directory` exposes these routes. Every request
+still needs a valid API access JWT; raw provider/broker ID tokens never become
+bearer credentials for ordinary account/session/data routes. The trusted server
+configuration and bounded metadata store are described in
+[the identity directory](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/identity-directory.md). These are unpublished source
+interfaces, not a claim about the retained hosted image or actual CIAM issuance.
+
+| Request | Body or result |
+| --- | --- |
+| `GET /v1/identity/capabilities` | Version 1, approved `{issuer,provider,namespace,clientId,callback}` targets, freshness 300 seconds, maximum 8 identities, recovery `remaining-identity-only`, deletion/migration `operator-review-required` |
+| `POST /v1/identity/challenges` | `{operation:"register"|"link"|"unlink",callback,removeIdentityId?}`; returns `{challenge,operation,expiresAt,target}` with the persisted UTC expiry |
+| `POST /v1/identity/register` | Fresh correlated API bearer plus `{challenge,idToken}` |
+| `GET /v1/identities` | Current account and its active opaque identity IDs/providers |
+| `POST /v1/identities/link` | `{challenge,reauthentication:{accessToken,idToken},identity:{accessToken,idToken}}` |
+| `POST /v1/identities/unlink` | Same proof-pair shape; `identity` proves control of a remaining linked credential |
+
+Capabilities require an approved fresh broker profile but not prior registration.
+Register challenge/commit requests carry no principal or identity assertions and
+cannot replace an existing assignment or ownership tombstone. Other lifecycle
+requests require exact `X-Cosmos-Sync-Principal`,
+`X-Cosmos-Sync-Identity-Generation` and `X-Cosmos-Sync-Identity` assertions from a
+verified session. `removeIdentityId` is required only for an unlink challenge.
+It selects an existing binding; it is never proof of control or ownership.
+
+Register/list/link/unlink return
+`{accountId,personalScopeId,identityGeneration,currentIdentityId?,identities:[{identityId,provider}]}`.
+Link/unlink keep the immutable account/data owner and increment generation by
+one. Removing the active credential omits `currentIdentityId`; the old bearer
+cannot open another session. The last credential cannot be removed. Ownership
+remains reserved after unlink; only its original account can relink it.
+
+Lifecycle bodies reject unknown/duplicate fields and exceed neither 128 KiB nor
+the individual proof bounds. Challenges/proofs bind the exact approved target,
+operation, account and generation. Signature/issuer/audience/scope/client,
+signed object/tenant correlation, server nonce and integer fresh `auth_time` are
+verified independently; email, refresh or `iat` alone is not reauthentication.
+Directory CAS atomically consumes challenge/proof/audit/generation once. Replay
+is rejected, not success-shaped idempotency. A lost/ambiguous result requires new
+online resolution, never resubmission of the old proof.
+
+Directory registration and personal-policy initialization are separate
+transactions. Initialization failure returns an error; a new verified `/session`
+can initialize that exact committed account idempotently. Graph, directory and
+personal/shared partitions are not globally atomic. An in-flight data write can
+commit between directory checks while its old-session response is denied; the
+numeric same-partition membership fence is unchanged. Non-SSE directory requests
+have a 30-second context; SSE retains its bounded lifetime/revalidation.
+
+The application explicitly confirms pending-data loss, drains/purges before
+proof acquisition and verifies the new identity before reopening any data cache.
+Submitted failures or an unverifiable new session require signout and explicit
+online reauthentication. Proofs never replace primary credentials or enter an
+offline outbox. Recovery is normal sign-in with a remaining linked credential,
+not an email search, replacement registration, deletion or migration endpoint.
 
 ## Documents and mutations
 
 `Document = {id: string, data: JSON object|null, version: positive integer, deleted: boolean}`. Versions/sequences/preconditions are exact JSON integers at most `2^53-1`. Native and web reject unsafe integral JSON data rather than round it. IDs contain 1–128 ASCII letters/numbers, dot, underscore or hyphen, beginning with a letter/number. Data is bounded to 256 KiB on the BFF; the SDK uses a conservative 255 KiB bound. Unknown request fields and duplicate JSON keys are rejected.
 
-`POST /v1/mutations` accepts `{operationId: UUID, documentId, kind: "put"|"delete", data: object|null, baseVersion: integer}`. Base zero means absent. Reply: `{document: Document}`. Metadata head, document, immutable journal event and receipt commit atomically inside one logical partition. Builtin mode also includes an ETag-conditional policy replacement as a fifth batch operation, preventing an old authorization from committing after a revocation commit. Receipt identity includes the authenticated principal and operation ID; its hash binds scope, principal, kind, document, data and original base. Identical replay returns the original result only with current write access; a changed payload returns 409 `idempotency_mismatch`. A stale base returns 409 `{code:"conflict",current:Document|null}`. Document/conflict responses reauthorize after storage; a denial after a pre-revocation commit does not prove rollback.
+`POST /v1/mutations` accepts `{operationId: UUID, documentId, kind: "put"|"delete", data: object|null, baseVersion: integer}`. Base zero means absent. Reply: `{document: Document}`. Metadata head, document, immutable journal event and receipt commit atomically inside one logical partition. Builtin/directory policy storage also includes an ETag-conditional policy replacement as a fifth batch operation, preventing an old data-membership authorization from committing after its same-partition revocation commit. Receipt identity includes the authenticated principal and operation ID; its hash binds scope, principal, kind, document, data and original base. Identical replay returns the original result only with current write access; a changed payload returns 409 `idempotency_mismatch`. A stale base returns 409 `{code:"conflict",current:Document|null}`. Document/conflict responses reauthorize after storage; a denial after a pre-revocation commit does not prove rollback.
 
 The SDK commits local acceptance before its write Future resolves. Confirmed data and pending overlays remain separate. A first edit records the observed server version; later pulls do not rebase it. Successors can depend on a predecessor's actual ACK. Before first transmission the exact resolved request is persisted. Retries never change an ambiguous operation. Explicit conflict retry creates a new operation ID; discard cannot remove a possibly committed unknown outcome.
 

@@ -14,6 +14,15 @@ explicit compatible-image/new-namespace verification assertion. Explicit legacy
 mode contains empty grants and denies all end users. Neither mode adopts legacy
 data or provisions identity-provider accounts automatically.
 
+The unpublished directory lifecycle extension is deliberately not a selectable
+mode in this template. Its server-only configuration is documented in
+[the source directory contract](../../../docs/identity-directory.md).
+Using it on ACA requires a separately reviewed compatible immutable image and
+workload adaptation, including the already authorized cross-tenant reader
+prerequisites. No Graph grant, federated credential or directory namespace is
+implicitly created here. Do not send directory fields to an older strict-decoder
+image or interpret a builtin plan as a directory deployment.
+
 ACA launches `command = ["/cosmos-sync-bff"]` with no `args`, taking configuration
 from `COSMOS_SYNC_CONFIG_JSON`. This replaces the published image's default
 file-config command and avoids combining `-config` with environment JSON; the BFF

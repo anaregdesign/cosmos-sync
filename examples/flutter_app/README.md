@@ -43,10 +43,11 @@ installable physical iPhone application.
 
 Apple and Google are the intended end-user login providers. This version uses
 native OIDC/PKCE and an API-specific access token, with the dedicated Entra path
-used for validation. Apple/Google buttons, stable linked accounts and actual
-provider/platform acceptance are tracked in the [social-login roadmap](../../docs/social-auth.md)
+used for validation. Default-disabled provider navigation and unpublished opt-in
+account-lifecycle UI are implemented; actual provider/platform acceptance is
+tracked in the [social-login roadmap](../../docs/social-auth.md)
 and [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2).
-They are not implemented support claims. The owner cancelled actual Google/Apple
+These source paths are not live support claims. The owner cancelled actual Google/Apple
 connections for this delivery; keep both capability flags disabled. The selected
 External ID broker/API-token boundary keeps raw provider ID tokens away from sync routes;
 email matching must never automatically link accounts. Provider registrations,
@@ -100,12 +101,43 @@ interactive sign-in rotates that binding and requires another online BFF session
 verification. Restoring/opening offline does not refresh a token or decode JWT
 claims. The next online request refreshes an access token as needed.
 
-On Web, sign-in uses a popup and provider-managed code/PKCE. The adapter exports
+On Web, ordinary sign-in uses a popup and provider-managed code/PKCE. That path exports
 only the API access token; refresh credentials stay inside MSAL memory. Reloading
 the page signs out and retains the locked IndexedDB outbox, but cannot restore
 credentials or open the cache offline. Sign in again and complete online BFF
 verification before reopening that principal's cache. Offline reopening is
 available only within the already verified document lifetime.
+
+## Opt-in account lifecycle
+
+A compatible directory-mode BFF advertises verified capabilities before the
+application shows registration/link/unlink/recovery actions. Legacy/builtin
+deployments do not acquire those capabilities automatically. The retained Azure
+image is unchanged, so this source UI is not yet hosted customer acceptance.
+
+Before registration or an identity change, the app confirms pending-data loss,
+drains requests and purges its owned workspace caches. Cancelling confirmation
+retains the exact pending operation and submits no challenge. Explicit consent
+may lose local pending edits; server-owned documents and shared ownership are
+not moved or deleted. Actions are disabled offline, while busy or without an
+approved fresh-proof adapter.
+
+Native AppAuth and a separate memory-only MSAL instance request the server nonce,
+fresh login and essential authentication time. The dedicated proof method returns
+an ephemeral API/ID pair; it never replaces the main API/refresh credential,
+selects a new main account or writes either proof into secure storage/SQLite/
+IndexedDB. Ordinary Web token exports still contain no ID or refresh token.
+Native cancellation fences late results logically; dismiss the system browser
+as well.
+
+A successful response still requires a fresh matching BFF account/generation/
+credential session before reopening data. Submitted-but-ambiguous outcomes and
+unverifiable new sessions sign out rather than replaying the proof. Removing the
+active credential also signs out. Recovery clears local state and uses normal
+online sign-in with a remaining linked credential, never email matching or
+replacement registration. The last credential cannot be removed; account
+deletion/migration have no self-service endpoint.
+See [the directory contract](../../docs/identity-directory.md).
 
 ## Edit and synchronize
 
@@ -186,7 +218,6 @@ authentication bypass.
 This proves native UI/storage and BFF protocol integration. It does **not** prove
 a real provider's system-browser login, live Azure grants/managed identity, or
 physical-device deployment. Those owner-dependent checks remain open in
-[Issue #18](https://github.com/anaregdesign/cosmos-sync/issues/18),
 [Issue #20](https://github.com/anaregdesign/cosmos-sync/issues/20), and
 [Issue #24](https://github.com/anaregdesign/cosmos-sync/issues/24).
 
@@ -202,3 +233,11 @@ python3 tools/flutter_web_smoke.py --output artifacts/flutter-web-fixture.json
 Run from the repository root with a fresh ignored receipt path. Its OIDC adapter
 is compiled only into the integration target. It proves browser application
 lifecycle, not live MSAL login, CIAM customer identity or hosted Azure/Cosmos.
+
+The 2026-10-05 directory-lifecycle checkpoint passed 99 native unit/widget tests,
+24 actual Chromium tests and 19 Node/MSAL tests with clean analysis/format.
+It covers registration/link/unlink/recovery, explicit pending-loss confirmation
+and cancellation, primary-credential preservation, signout/close during proof,
+ambiguous outcomes and expected-identity rejection before cache open. Provider
+responses remain fixtures; actual CIAM nonce/integer `auth_time`, hosted reader/
+Cosmos and final physical Android acceptance remain separate gates.

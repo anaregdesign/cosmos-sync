@@ -1,20 +1,55 @@
-# Staged identity-directory core
+# Opt-in External ID identity directory
 
-The internal Go identity-directory core implements bounded registration,
-explicit link/unlink transactions and corresponding storage/failure tests.
-**It is not connected to a production factory, configuration setting or HTTP
-route.** Existing `/v1/account`, authorization, session, cursor and SDK behavior
-still use the published issuer/subject contract. No existing personal partition
-or data owner is migrated. This work does not enable Google/Apple federation,
-prove broker self-service enforcement, or complete Issues #27-29. The owner
+The Go BFF now wires bounded registration, explicit link/unlink transactions,
+trusted broker-profile reads and identity-bound authorization through explicit
+`authorization.mode:"directory"`. The Dart transport and native/Web application
+include matching ephemeral fresh-proof and account-lifecycle paths. **This is an
+unpublished, opt-in source implementation, not a deployed or live-accepted CIAM
+service.** Legacy/builtin modes retain their issuer/subject behavior and omit
+directory lifecycle routes. No existing personal partition or data owner is
+migrated. The retained Azure image has not been updated. The owner
 cancelled actual Google/Apple connections in #30 as not planned on 2026-10-04;
 trusted linking/authorization requirements remain. Use simulators during
 development and defer physical Android checks until the final gate.
 
+## Explicit server configuration
+
+Start from [the directory example](../bff/config.directory.example.json), replacing
+every placeholder with the exact approved deployment identifier. This mode requires
+the GUID-host CIAM v2 issuer and tenant, a distinct GUID API audience and public
+client, `tenantClaim:"tid"`, exactly one `allowedClientIds` entry and 1..16 distinct
+approved callbacks. Native and SPA callbacks may share that client and namespace;
+verify the actual application registration supports both before deployment.
+Callbacks do not form ownership keys. Separate client registrations cannot be
+silently admitted as the same namespace.
+
+The server-only directory settings pin the CIAM initial domain, the dedicated
+reader application's client ID, managed-identity client ID, approved workforce
+tenant IDs and immutable namespace. They contain no credential. The reader's
+source-homed multitenant app, retained UAMI federated credential and target-only
+Graph `User.Read.All` grant must already exist. The runtime does not provision
+them or fall back to CLI/default credentials for Graph. Cosmos continues to use
+the configured server data-plane credential and existing `/scopeId` container.
+Directory settings under any other mode, mixed legacy grants, unsupported
+storage or inconsistent trust fail startup. Memory storage is development-only.
+Readiness indicates completed startup/configuration, not continuous Graph or
+Cosmos availability.
+
+The provided ACA Terraform workload template still supports only builtin/legacy.
+Directory deployment requires a separately reviewed compatible image and explicit
+workload configuration; the example is not permission to alter the retained
+runtime or claim hosted acceptance.
+
+The [wire protocol](protocol.md#directory-identity-lifecycle) specifies the
+capability/challenge/register/list/link/unlink routes. Registration is explicit;
+ordinary account resolution never creates a directory account. Recovery uses
+only a remaining linked credential; deletion and migration require operator
+review and have no HTTP endpoint.
+
 ## Trusted proof boundary
 
 The core accepts internal proof stamps, not JWTs or client JSON. An internal
-OIDC ID-proof verifier now checks an operator-approved exact issuer, sole native
+OIDC ID-proof verifier now checks an operator-approved exact issuer, sole public
 client audience and HTTPS JWKS URL; asymmetric signatures and bounded key
 rotation; exact server nonce; integer `auth_time`, `iat`, `exp` and optional
 `nbf`; and ID-token purpose. It rejects API scope/access-token headers, ambiguous
@@ -23,15 +58,18 @@ and unapproved targets. Profile/email claims are not ownership inputs. The
 directory still checks authentication against stored challenge issuance and
 consumes the proof atomically; the JWT component alone does not consume a nonce.
 
-This verifier is also inactive and is not a browser/code/PKCE adapter. The
-internal broker adapter described below correlates verified API/ID tokens and
+This verifier is used only by the dedicated lifecycle proof boundary, not as an
+API-token replacement or browser/code/PKCE adapter. The broker adapter below
+correlates verified API/ID tokens and
 the freshly read upstream identity; actual OAuth callback and broker issuance
 evidence remain separate. A broker ID token identifies the broker subject, not
 necessarily an upstream provider subject. Production integration must prove broker
 self-service additions/removals cannot bypass BFF approval. An unchanged broker
 subject, signed `azp`, `domain_hint`, email, refresh, `iat` or a client timestamp
-cannot supply that proof. Until those properties are established, activation
-remains disabled; the core is not an authentication verifier.
+cannot supply that proof. The configured BFF rechecks the complete broker profile
+and denies added/replaced credentials instead of adopting them. Actual deployment
+self-service/freshness acceptance remains unverified; do not enable it merely
+because signed fixtures pass.
 
 Approved targets pin the issuer, provider, namespace, client and exact callback.
 Account ownership keys include the issuer, upstream subject, provider and client
@@ -49,8 +87,9 @@ account record and personal policy are created together in the personal data
 partition, with acknowledged-session readback. Subsequent identity-generation
 changes leave that policy and ownership unchanged. Directory registration and
 personal initialization remain two separate partition transactions; a failed
-initialization returns an error and can be retried, not a globally atomic signup.
-No production caller currently invokes this internal capability.
+initialization returns an error, not a globally atomic signup. A new verified
+online `/session` can recover that exact account's personal initialization
+idempotently; it cannot repeat or infer a successful registration challenge.
 
 Challenges use 256 random bits; only their SHA-256 digest is retained. They expire
 after 300 seconds and bind the operation, account/session generation, approved
@@ -65,11 +104,10 @@ Unlink requires independently verified fresh control of a remaining active
 credential. The existing reauthentication proof may also serve as that proof
 when it is the same retained credential. The last credential cannot be removed.
 Both link and unlink advance the internal session generation; old internal
-sessions cannot start or commit another transaction. These generations are
-**not yet emitted by production directory authorization**. The coordinated
-optional protocol fields now bind BFF contexts and Dart request/cache metadata,
-but no production factory/lookup emits a directory-backed scope yet. They
-therefore do not claim current preview-wide revocation.
+sessions cannot start or commit another transaction. Directory authorization
+emits the paired `identityGeneration`/`identityId` fields in personal/shared
+sessions and binds all signed contexts, request assertions and SDK caches.
+They do not establish globally atomic or offline identity revocation.
 
 ### Trusted broker-profile reader
 
@@ -94,19 +132,19 @@ redirects or result cache. Errors contain fixed protocol codes, not raw Graph
 messages or credentials. Configured trust is not proof of an actual hosted
 managed-identity token exchange.
 
-This reader and adapter are still **not wired into production**. The internal
-adapter uses the existing API JWT signature, audience, delegated-scope and
+The explicit directory factory wires this reader and adapter. The adapter uses
+the existing API JWT signature, audience, delegated-scope and
 client-admission checks, then requires signed exact `oid`, `tid`, client and
 v2 metadata. It correlates the independently signed fresh ID proof by object/
 tenant rather than assuming API/native `sub` equality. Only the configured
-CIAM issuer and distinct API/native audiences are accepted. Ownership derives
+CIAM issuer and distinct API/public-client audiences are accepted. Ownership derives
 from the freshly read upstream issuer/object namespace, never email.
 
 The broker-required directory rejects generic ID-proof stamps without this
 correlated binding. Its existing one-partition CAS consumes the nonce/proof/
 audit and expected binding together. Link/unlink reauthentication and relinking
 must match the retained binding; neither a recreated broker object nor a replaced
-upstream credential can adopt ownership. A read-only internal API resolver
+upstream credential can adopt ownership. A read-only API resolver
 rechecks Graph and returns only an existing active exact account/generation.
 It does not implicitly register, repair metadata, migrate ownership or consume
 an identity challenge. A profile GET alone supplies neither authentication time
@@ -128,6 +166,13 @@ request-local mark. Independent requests still perform current reads.
 Conditional write conflicts cause at most eight reload/revalidation attempts.
 An ambiguous failed write returns an error, not an inferred successful account;
 the committed challenge, if any, still cannot assign twice.
+
+Graph, directory metadata and personal/shared data are separate boundaries.
+Directory revalidation before access and after slow reads/writes is not a
+transactional identity fence inside each data partition. An in-flight authorized
+write can commit between directory checks even if its old-session response is
+then denied. The existing same-partition numeric membership-policy fence still
+applies. Neither a denial nor cache purge proves rollback of an earlier commit.
 
 This is a small, serialized reference boundary, not a production-scale directory.
 It retains at most 64 accounts, 256 identity bindings, 256 challenges, 512 proof
@@ -177,28 +222,62 @@ the reserved challenge slot, unused-challenge expiry and pending-generation
 credit independently across accounts. Official-SDK
 transport tests verify the actual one-partition create/conditional-replace wire,
 operation count, ETag and session propagation. These are offline tests, not
-live Cosmos acceptance. The actual emulator contention test now verifies signed
-local proofs before racing independent SDK clients; it does not activate HTTP
-linking or establish a CIAM/provider deployment.
+live Cosmos acceptance. The actual emulator contention test verifies signed
+local proofs before racing independent SDK clients. A separate factory/HTTP
+case uses two independently constructed Cosmos stores and the real directory
+routes: registration, owned writes, shared ownership, link, generation/cursor
+rejection, unlink and removed-credential denial. A fresh SDK client then checks
+retained provenance, tombstones and unchanged data history. It is not a
+CIAM/provider deployment or production-consistency result.
+
+An opt-in coordinated driver additionally runs real Dart `HttpSyncTransport` and
+SQLite through two TLS BFF instances, first with shared memory storage and then
+with independently constructed actual Cosmos-emulator stores. Signed local API/
+ID proofs drive registration, an ACKed edit, remote link before pending delivery,
+learned-generation purge and typed waiter failure, linked read/write, stable shared
+ownership, unlink/removed-credential denial, explicit remaining-credential resume
+and retained version-two data. Go owns the test-only proof issuer, certificate
+and bounded child; native TLS trusts only that fixture certificate without
+disabling verification. No such proof issuer exists in the production binary.
+These results remain separate from actual code/PKCE, customer freshness and
+hosted MI/Graph/Cosmos.
 
 Additional RSA/TLS/JWKS API/ID and Graph-transport fixtures verify differing
 subjects with matching signed objects, wrong signatures/claims/audiences/scopes/
 clients/nonce/authentication time before Graph, fresh uncached profile reads,
 broker-only registration, durable fingerprint corruption and duplicate-object
 denial, explicit link/unlink, generation advancement, tombstone/relink and exact
-read-only account resolution. The emulator also reloads an expected broker
+read-only account resolution. Production-factory HTTP adversarial tests directly
+change the simulated broker's credentials outside the BFF transaction: added,
+removed and replaced credentials, disabled accounts and deleted profiles all
+deny a correctly signed token for the same broker object at session/account/
+identity/sync/snapshot routes. Client-forged `providerData` is rejected, registration
+cannot adopt the changed object, and directory proof/audit/ownership state remains
+unchanged. Restoring only the exact original trusted fixture profile reveals the
+same owned data; no alternative credential is adopted. These are deterministic
+broker mutations, not actual live provider SDK operations.
+The emulator also reloads an expected broker
 fingerprint through an independent actual SDK client and rejects a changed
 credential without adopting it. These Graph responses are local fixtures,
 not managed-identity or customer-login acceptance.
 
-Before production use, settle and verify the CIAM upstream-binding/fresh-auth
-adapter and out-of-band mutation policy; review production capacity and
-recovery; wire every account lookup, authorization management route, session,
-cursor and client cache surface; and provide common External ID OIDC, cloud and
+Native AppAuth and isolated memory-only MSAL proof paths request the server nonce,
+`prompt=login`, `max_age=0` and essential `auth_time`. Proof exchanges never replace
+or persist the primary credentials. The application confirms local pending-data
+loss, drains/purges before a challenge and independently checks the resulting
+account/session before opening SQLite/IndexedDB. Ambiguous submitted outcomes
+require signout and new online resolution, never proof replay. Removing the
+current credential requires explicit sign-in with a remaining one.
+
+Before production use, verify actual CIAM upstream-binding/fresh-auth issuance
+and out-of-band mutation behavior; review production capacity and recovery;
+provide common External ID OIDC, cloud and
 the final Android evidence required by the active Issues. Deterministic signed
 provider fixtures remain necessary, but actual Google/Apple connection evidence
-is not part of this delivery. Do not expose linking UI or accept raw provider ID tokens at sync
-routes merely because these internal transactions pass.
+is not part of this delivery. The UI is visible only after verified BFF directory
+capabilities and is disabled offline or without fresh-proof support. Do not deploy
+that capability or accept raw provider ID tokens at sync routes merely because
+these tests pass.
 
 Identity generation remains separate from the numeric membership
 `permissionVersion` used by the data-partition write fence. Concatenating a
@@ -206,5 +285,5 @@ generation into that version violates the current BFF/Dart contract and cannot
 replace explicit session/cursor/cache integration. The optional
 `identityGeneration`/`identityId` session fields and corresponding request headers
 are coordinated across signed contexts, SSE revalidation and native/browser
-SDK cache equality; production account/policy authorization still needs to
-supply the trusted values.
+SDK cache equality; directory account/policy authorization supplies the trusted
+values only when that mode is deliberately configured.

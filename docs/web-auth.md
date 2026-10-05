@@ -46,7 +46,7 @@ memory-only adapter. See [MSAL redirect bridge](https://learn.microsoft.com/en-u
 ## Credentials and durable cache
 
 MSAL performs authorization code/PKCE and retains its account/token cache only
-in memory. The adapter exports the API access token, type, expiry and granted
+in memory. The ordinary adapter exports the API access token, type, expiry and granted
 scopes, never a refresh token, ID token or provider account identifier. Silent
 renewal uses the same MSAL account and forces renewal. State changes, cancellation,
 local signout and controller close invalidate late callbacks and clear SDK
@@ -70,6 +70,25 @@ explicitly. There is no volatile fallback, foreign-database enumeration or
 origin-wide deletion. Explicit signout drains in-flight work and purges owned
 caches before clearing credentials. Learned terminal auth/session denial also
 purges authority and cache. Offline clients cannot discover remote revocation.
+
+## Isolated account-lifecycle proofs
+
+Verified directory capabilities enable a dedicated fresh-proof popup path using
+a separate MSAL instance and private memory cache. It requests the server nonce,
+`prompt=login`, `max_age=0` and essential `auth_time`, and exports an API/ID pair
+only through that ephemeral proof method. It never selects/replaces the main
+active account or persists either proof/refresh credential. Cleanup and logical
+cancellation fence late responses; fixed failures do not expose provider details.
+Ordinary sign-in/renewal still exports no ID token or account identifier.
+
+The shared application confirms unsent-data loss, drains/purges before obtaining
+proofs and checks account/generation/credential before opening IndexedDB.
+Ambiguous submitted results and removal of the active credential require new
+online sign-in with a remaining linked identity. A reload does not preserve proof
+authority or create recovery by email. Native and SPA callbacks can share one
+approved public client/namespace, but that mixed registration must be verified
+before deployment. Actual MSAL/customer nonce/authentication-time issuance remains
+unverified; local JS/Chromium checks do not establish it.
 
 The BFF uses bearer headers, not ambient auth cookies or token-bearing URLs.
 Exact-origin CORS is not authentication. MSAL owns login state/nonce/PKCE; no

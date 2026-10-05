@@ -70,9 +70,28 @@ The preference is excluded from stored credential/cache bindings: every new
 interactive login still generates a new credential session and requires a
 BFF-verified owner before cache access. Buttons do not enforce which identity
 provider the broker ultimately used. There is no direct Google/Apple SDK, custom
-token exchange, account linking or provider-ID-token admission in this adapter.
+token exchange or provider-ID-token admission in the ordinary navigation flow.
+Explicit directory account actions use the separate fresh-proof path below.
 The current consumer deployment has not yet configured or verified either
 provider, so its capability flags must remain disabled.
+
+## Isolated fresh identity proofs
+
+Only verified directory capabilities enable account registration/link/unlink.
+AppAuth proof requests use the BFF nonce, `prompt=login`, `max_age=0` and essential
+`auth_time`; Apple platforms request an ephemeral authentication session where
+supported. These parameters request fresh authentication, not proof that the
+actual broker issued the required signed claims. The BFF verifies API/ID tokens
+and broker binding independently; missing/noninteger freshness is rejected.
+
+The proof's API/ID pair remains ephemeral and its refresh credential is discarded.
+It never replaces the primary access/refresh/logout-hint credentials or opaque
+cache binding. The shared UI separately confirms local pending-data disposal,
+drains/purges before the challenge and verifies the resulting BFF identity before
+reopening data. Cancellation invalidates late proof callbacks; native AppAuth has
+no supported programmatic system-browser cancellation, so the owner must also
+dismiss that window. An ambiguous submitted outcome requires explicit online
+sign-in, never replay. See [the directory contract](identity-directory.md).
 
 ## Future Apple and Google deployment reference
 

@@ -80,6 +80,7 @@ abstract class WorkspaceRepositoryBase {
     required String credentialBinding,
     required Future<String> Function() tokenProvider,
     bool offline = false,
+    SessionInfo? expectedIdentity,
   }) async {
     config.validateScopeSelection();
     await prepare();
@@ -107,6 +108,17 @@ abstract class WorkspaceRepositoryBase {
               verified.scopeId != config.sharedScopeId)) {
         throw StateError(
           'The verified session does not match the selected scope.',
+        );
+      }
+      if (expectedIdentity != null &&
+          (verified.principalId != expectedIdentity.principalId ||
+              verified.identityGeneration !=
+                  expectedIdentity.identityGeneration ||
+              verified.identityId != expectedIdentity.identityId)) {
+        throw const TransportException(
+          statusCode: 401,
+          code: 'identity_session_invalid',
+          message: 'The new data session does not match the verified identity.',
         );
       }
       final identity = sha256

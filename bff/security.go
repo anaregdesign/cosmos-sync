@@ -135,12 +135,28 @@ func (s *Server) authorizeSelectedAt(ctx context.Context, token, mode, scopeID, 
 	if mode == "" {
 		mode = "user"
 	}
-	if s.builtinAuthorization() {
+	if s.managedAuthorization() {
 		if mode != "user" && mode != "shared" {
 			return Scope{}, protocolError(400, "invalid_scope_mode")
 		}
 	} else if mode != "user" && mode != "tenant" {
 		return Scope{}, protocolError(400, "invalid_scope_mode")
+	}
+	if s.directory != nil {
+		account, session, err := s.directory.resolve(ctx, token)
+		if err != nil {
+			return Scope{}, err
+		}
+		initialized, err := s.directory.authorization.ensureDirectoryAccount(ctx, account)
+		if err != nil {
+			return Scope{}, err
+		}
+		scope, err := s.authorizeAccountPolicy(ctx, initialized, mode, scopeID, dataMinimum)
+		if err != nil {
+			return Scope{}, err
+		}
+		scope.IdentityGeneration, scope.IdentityID = session.Generation, session.IdentityID
+		return scope, nil
 	}
 	identity, tenant, err := s.verifyAccessIdentity(ctx, token)
 	if err != nil {

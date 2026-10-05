@@ -2,6 +2,7 @@ package syncbff
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 )
@@ -22,9 +24,14 @@ type Server struct {
 	controls      *runtimeControls
 	metrics       *metrics
 	authorization AuthorizationStore
+	directory     *identityRuntime
 }
 
 func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Server, error) {
+	return NewServerContext(context.Background(), config, store, verifier)
+}
+
+func NewServerContext(ctx context.Context, config Config, store Store, verifier *oidc.IDTokenVerifier) (*Server, error) {
 	if store == nil || verifier == nil {
 		return nil, fmt.Errorf("store and OIDC verifier are required")
 	}
@@ -50,16 +57,19 @@ func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Ser
 		return nil, err
 	}
 	var authorization AuthorizationStore
+	if config.Authorization.Directory != nil && config.Authorization.Mode != "directory" {
+		return nil, fmt.Errorf("identity directory settings require explicit directory authorization")
+	}
 	switch config.Authorization.Mode {
 	case "", "legacy":
-	case "builtin":
+	case "builtin", "directory":
 		if len(config.Grants) != 0 || config.GrantsFile != "" {
-			return nil, fmt.Errorf("builtin authorization cannot be combined with legacy grants")
+			return nil, fmt.Errorf("managed authorization cannot be combined with legacy grants")
 		}
 		var ok bool
 		authorization, ok = store.(AuthorizationStore)
 		if !ok {
-			return nil, fmt.Errorf("builtin authorization requires an authorization-capable store")
+			return nil, fmt.Errorf("managed authorization requires an authorization-capable store")
 		}
 	default:
 		return nil, fmt.Errorf("unsupported authorization mode")
@@ -80,12 +90,29 @@ func NewServer(config Config, store Store, verifier *oidc.IDTokenVerifier) (*Ser
 			return nil, err
 		}
 	}
-	return &Server{config: config, store: store, verifier: verifier, key: key, controls: controls, metrics: newMetrics(), authorization: authorization}, nil
+	server := &Server{config: config, store: store, verifier: verifier, key: key, controls: controls, metrics: newMetrics(), authorization: authorization}
+	if config.Authorization.Mode == "directory" {
+		runtime, err := newIdentityRuntime(ctx, server, config.Authorization.Directory)
+		if err != nil {
+			return nil, err
+		}
+		server.directory = runtime
+		copy := *config.Authorization.Directory
+		copy.Callbacks = append([]string(nil), copy.Callbacks...)
+		copy.WorkforceTenantIDs = append([]string(nil), copy.WorkforceTenantIDs...)
+		server.config.Authorization.Directory = &copy
+	}
+	return server, nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if s.builtinAuthorization() {
+	if s.managedAuthorization() {
 		r = r.WithContext(withAuthorizationSessions(r.Context()))
+	}
+	if s.directory != nil && r.URL.Path != "/v1/events" {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		r = r.WithContext(ctx)
 	}
 	observed := newObservedResponse(w)
 	w = observed
@@ -124,6 +151,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	auth := strings.Fields(r.Header.Get("Authorization"))
 	if len(auth) != 2 || !strings.EqualFold(auth[0], "Bearer") {
 		s.writeError(w, protocolError(401, "unauthorized"))
+		return
+	}
+	if s.serveIdentity(w, r, auth[1]) {
 		return
 	}
 	mode := r.Header.Get(ScopeModeHeader)
@@ -172,7 +202,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		session = value.Token
 	}
-	if s.builtinAuthorization() && session != "" {
+	if s.managedAuthorization() && session != "" {
 		if err := s.reauthorizeScope(r.Context(), auth[1], scope, session); err != nil {
 			s.writeError(w, err)
 			return
@@ -208,7 +238,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		mutation.PrincipalID = scope.PrincipalID
-		if s.builtinAuthorization() {
+		if s.managedAuthorization() {
 			mutation.AuthorizationVersion = scope.PermissionVersion
 		}
 		hash, e := validateMutation(&mutation, scope.ID)
@@ -219,6 +249,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(mutation.Data) > s.controls.options.MaxDocumentBytes {
 			s.writeError(w, protocolError(400, "document_too_large"))
 			return
+		}
+		if s.directory != nil {
+			if err := s.reauthorizeScope(r.Context(), auth[1], scope, session); err != nil {
+				s.writeError(w, err)
+				return
+			}
 		}
 		document, token, e := s.store.Mutate(r.Context(), scope.ID, mutation, hash, session)
 		setSession(token)

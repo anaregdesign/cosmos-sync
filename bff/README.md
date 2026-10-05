@@ -22,9 +22,9 @@ Set `COSMOS_SYNC_TLS_MODE=container-apps` only when using Azure Container Apps H
 
 Configure startup/readiness probes as `GET /readyz` and liveness as `GET /healthz` on the target HTTP port. Only these two GET routes permit an HTTP probe without the forwarded protocol header in Container Apps mode. They expose fixed status values. Readiness means OIDC discovery, Cosmos container initialization and server configuration completed successfully before listening; it does not continuously test remote dependencies. JWT/session routes and metrics retain their existing authorization checks. The process waits for active requests to drain on SIGTERM/SIGINT, then forcibly closes remaining requests after a 10-second grace period. SSE clients must reconnect and retrieve durable changes from their applied cursor.
 
-The OIDC issuer must use HTTPS and expose discovery/JWKS. Use a dedicated API audience and an access-token scope (`cosmos_sync` by default). Tokens need `sub`, valid issuer/audience/signature/expiry, and a complete space-delimited required scope. Only legacy grants require the configured tenant claim (`tid` by default). `nbf` is enforced. Provider roles, groups and email never assign application data access. For issuers such as Cognito, configure `tokenUse: "access"` when that claim is available. The BFF never exchanges credentials or accepts ID tokens lacking the API scope.
+The OIDC issuer must use HTTPS and expose discovery/JWKS. Use a dedicated API audience and an access-token scope (`cosmos_sync` by default). Tokens need `sub`, valid issuer/audience/signature/expiry, and a complete space-delimited required scope. Legacy grants require the configured tenant claim (`tid` by default); directory mode also requires its exact signed CIAM `tid`/`oid` contract. `nbf` is enforced. Provider roles, groups and email never assign application data access. For issuers such as Cognito, configure `tokenUse: "access"` when that claim is available. Ordinary API routes never substitute ID tokens for API access. Directory proof bodies and the server-only managed-identity exchange are separate boundaries.
 
-Optionally set `oidc.allowedClientIds` to the registered native public client IDs
+Optionally set `oidc.allowedClientIds` to the registered native/SPA public client IDs
 when API access must be restricted to those clients. The BFF first verifies the
 JWT signature, issuer, API audience and lifetime, then requires the signed `azp`
 string to match one configured ID exactly. Missing, empty, malformed or
@@ -47,7 +47,7 @@ This setting adds an issuer-attested client ID restriction. It does not attest a
 native app binary, prevent another app from using a public client ID, prove
 Google/Apple authentication or enforce that a consumer used a particular
 upstream provider. Those requirements belong to the configured External ID user
-flow and provider controls. Accounts remain bound to verified issuer/subject;
+flow and provider controls. Legacy/builtin accounts remain bound to verified issuer/subject;
 client IDs and provider hints never grant data permissions or link identities.
 
 In legacy mode the external grants JSON is read into fresh local storage on every request and before each SSE hint or heartbeat. Replace the file atomically and update all replicas together. An unreadable or invalid grants source fails closed. Bump `permissionVersion` whenever access policy changes. Removing a grant or setting `active: false` returns 403 at the next observed authorization check; legacy writes already authorized can still commit. Previously issued cursors cannot survive a version change. Revocation cannot be discovered by an offline client until reconnection.
@@ -77,11 +77,42 @@ An earlier commit can lose its acknowledgement after revocation; 403 is not proo
 of rollback. See [the complete authorization contract](../docs/authorization.md)
 for APIs, costs, limits and fail-closed migration.
 
+## Opt-in directory account lifecycle
+
+Unpublished source supports explicit `authorization.mode=directory` with
+[`config.directory.example.json`](config.directory.example.json). Replace its
+placeholders with approved CIAM/API/public-client, callback, namespace and
+secret-free reader metadata. The factory rejects inconsistent trust, mixed legacy
+grants and unsupported storage. It uses the existing Cosmos container; it never
+creates providers, Graph grants or a managed identity.
+
+The dedicated lifecycle routes issue fresh challenges and implement explicit
+registration/link/unlink. Independently verified API/ID proofs, exact signed
+object/tenant correlation and an uncached trusted Graph profile establish the
+binding; email, a broker UID alone and client-supplied provider data do not.
+Ordinary resolution is read-only and cannot register or adopt changed credentials.
+Random account/personal/shared ownership survives linking, while identity
+generation invalidates old sessions, signed contexts and learned client caches.
+Numeric shared-membership fences remain independent.
+
+Directory metadata and personal/shared data use separate partition transactions.
+Rechecking directory authorization is not a transactional identity-revocation
+fence: an earlier write can commit while its old-session acknowledgement is
+denied. Removing the last credential is forbidden. Recovery uses a remaining
+credential; deletion/migration require operator review and have no endpoint.
+See [the directory contract](../docs/identity-directory.md) and
+[exact lifecycle protocol](../docs/protocol.md#directory-identity-lifecycle).
+
+The published images and retained Azure runtime do not include this extension.
+The supplied Terraform workload template still selects only builtin/legacy.
+Actual CIAM fresh-proof issuance, hosted MI/Graph, capacity/recovery review and
+compatible image/configuration are deployment gates, not inferred from fixtures.
+
 ## Legacy personal and shared tenant scopes
 
 `GET /v1/session?scope=user` selects a personal grant; `scope=tenant` selects a server-managed shared tenant membership. An omitted mode defaults to `user`. A principal can have both grants. Tenant members share documents, but their operation receipts and signed contexts remain bound to the verified actor. Supported roles are denied (neither capability), read-only, and read-write. Denied roles cannot establish a session. Write capability requires read capability: an invalid write-only inline grant prevents server startup, and an invalid live grants file fails closed. Read-only membership can synchronize but cannot mutate. No membership management endpoint accepts client-selected tenant IDs.
 
-The session contains `scopeId`, `principalId`, `permissionVersion`, and `scopeMode`. Every mutation, sync, snapshot and event request must return all four expectations using `X-Cosmos-Sync-Scope`, `X-Cosmos-Sync-Principal`, `X-Cosmos-Sync-Permission`, and `X-Cosmos-Sync-Scope-Mode`. The BFF compares them to current verified JWT/grants before storage access. This prevents an account switch from committing one actor's outbox under another actor in the same shared partition. Expectation headers never select an arbitrary partition.
+The legacy session contains `scopeId`, `principalId`, `permissionVersion`, and `scopeMode`. Every mutation, sync, snapshot and event request must return all four expectations using `X-Cosmos-Sync-Scope`, `X-Cosmos-Sync-Principal`, `X-Cosmos-Sync-Permission`, and `X-Cosmos-Sync-Scope-Mode`. The BFF compares them to current verified JWT/grants before storage access. This prevents an account switch from committing one actor's outbox under another actor in the same shared partition. Expectation headers never select an arbitrary partition. Directory sessions additionally require the paired identity assertions documented in the protocol.
 
 Personal partitions hash the framed issuer, tenant and subject. Shared tenant partitions hash a separate domain, issuer and tenant. `principalId` always hashes the issuer, tenant and subject. The BFF enforces scope isolation, membership and optimistic document versions; it does not implement document-specific ACLs.
 
@@ -123,5 +154,15 @@ administration CAS/replay, remove/readd generations, reserved revocation capacit
 legacy data isolation, and post-store response revocation. The real emulator
 uses two SDK clients and holds a stale five-operation write while another client
 revokes membership, then verifies no head/document/journal/receipt committed.
+
+Directory tests additionally exercise the actual opt-in factory, strict lifecycle
+HTTP, signed API/ID/JWKS and uncached Graph fixtures, out-of-band credential
+replacement denial, session/cursor/SSE fences and explicit initialization recovery.
+With `COSMOS_SYNC_IDENTITY_DART=1`, the coordinated TLS/Dart/SQLite driver verifies
+registration, ACKed data, remote linking before pending delivery, typed purge,
+stable shared ownership, unlink/removed-credential denial and explicit remaining-
+credential resume. The emulator runs that same driver through two independent
+Cosmos SDK stores. These are signed local fixtures, not customer login or hosted
+managed-identity proof.
 
 `TestDartFixture` in `tests` is skipped normally. Set `COSMOS_SYNC_E2E_READY_FILE` and `COSMOS_SYNC_E2E_STOP_FILE` for a bounded, local HTTP fixture with real signed JWT verification and enabled snapshot/SSE endpoints. Optional `COSMOS_SYNC_E2E_ORIGIN` permits one exact local browser origin. The fixture writes a disposable token into a mode-0600 ready file and stops after the stop file or 89 seconds.

@@ -730,3 +730,63 @@ This remains an internal capability, not a configured production directory mode,
 lifecycle route or hosted identity acceptance. No live BFF attempt, Azure or
 physical-device operation, deployment or publication occurred; the live ledger
 remains 7/40 attempts and zero accepted application mutations.
+
+That bridge source, `c006759cae99f9c98d7c55e4b382d8ee254fd842`, independently
+passed all nine jobs in
+[CI 37264986518](https://github.com/anaregdesign/cosmos-sync/actions/runs/37264986518).
+It does not verify the following working-tree runtime extension.
+
+## Opt-in coordinated account lifecycle, 2026-10-05
+
+The new unpublished source explicitly selects directory authorization, strict
+registration/list/link/unlink HTTP routes and trusted broker revalidation. Native
+AppAuth and isolated memory-only MSAL fresh proofs feed matching transport and
+application lifecycle paths. Random account/personal/shared ownership remains
+stable; identity generation is separate from numeric membership permission.
+Legacy/builtin behavior is preserved. No old data namespace, published archive,
+image or retained Azure runtime is migrated or replaced.
+
+| Check | Measured evidence and limits |
+| --- | --- |
+| BFF validation | Full vet/format/race/build passed, main race package 226.778 seconds; subsequent race-enabled added/removed/replaced/disabled/deleted broker-profile HTTP cases also passed |
+| Actual lifecycle HTTP | Explicit production factory, signed local API/ID/JWKS and uncached Graph fixtures cover freshness/replay/assertions, read-only resolution, ownership, initialization recovery, old cursors, slow reads and active events |
+| Native/browser SDK | Clean format/analysis, 183 native SQLite tests and 164 actual Chromium tests; typed lifecycle models/transport, generation purge and independent numeric membership fences |
+| Ordinary application | Clean format/analysis, 99 native unit/widget tests, 24 actual Chromium tests and 19 Node/MSAL tests; pending confirmation/cancellation, proof preservation/signout/close, ambiguity/recovery and rejection before cache open |
+| Coordinated native lifecycle | Actual Go TLS, signed fixture proofs, real Dart HTTP/SQLite, two BFFs, register/ACK/link/pending purge/typed waiter/unlink/removed denial/remaining-credential resume and retained data passed |
+| Actual Cosmos emulator | All 11 subtests passed, including production-factory lifecycle and the same real Dart driver through two independently constructed official-SDK stores; owned emulator removed, Eventual semantics remain nonproduction |
+| Preservation smokes | Native HTTP restart/ACK/conflict/delete, TLS shared-authorization fencing, disposable SIGKILL recovery, actual Chromium HTTP/SSE and ordinary macOS HTTP/SQLite/isolated Keychain UI passed |
+| Production compilation and ordinary Web | Normal local Web build and Android debug APK passed; ordinary signed-fixture Chromium UI observed reload, exact outbox retention, offline rebind denial, online rebind/ACK and logout purge with successful owned cleanup |
+| Control/release preparation | All 153 Python tests, package-document mirrors and prepare-only preflight passed; package dry-run reached validation with only the expected dirty-Git warning and must be repeated after committing |
+
+Local receipts identify a dirty tree based on `c006759`, not an exact subsequent
+commit. CI now includes portable lifecycle/panel tests and explicitly enabled
+native/emulator Go/Dart directory drivers, without adding a tenth job. Record all
+nine exact-new-head outcomes separately before closing automation acceptance.
+The first final browser cross-stack invocation lacked `CHROME_EXECUTABLE`; the
+same check passed with the actual installed Chrome explicitly selected. No
+dependency/version change or browser installation was needed.
+
+The mock application fixture initially lacked its real snapshot route, correctly
+leaving pending edits and preventing an identity change. Accurate snapshot and
+ACK assertions fixed the fixture; pending-loss consent was not relaxed. The
+coordinated Go fixture similarly required snapshots to be enabled. Its driver
+now asserts the existing exact learned-scope `StateError` and
+`PendingWritesException.reason == authorization_changed`, rather than changing
+SDK contracts. Dialog initiation uses real async for actual SQLite continuations.
+
+The supplied ACA Terraform template still supports builtin/legacy only. Directory
+hosting needs an explicitly reviewed compatible image/configuration and the
+already prepared secret-free reader; the retained image cannot accept these new
+fields. Actual selected-customer initial/refreshed API JWTs, server nonce and
+integer `auth_time`, hosted UAMI/Graph/Cosmos and final physical Android
+OS/relaunch/airplane/suspension remain unverified. Physical iOS is not a prerequisite;
+actual Google/Apple connections remain owner-cancelled.
+
+Fresh exact-app ARM metadata still reports Succeeded, one top-level UAMI,
+external HTTPS, insecure ingress disabled, HTTP port 8080, client-certificate
+Ignore, executable-only command, one Allow rule and min0/max1. A 24-hour query
+of the retained resource-specific HTTP table succeeded with zero rows. Neither
+metadata nor that empty result identifies the evaluated ingress peer or the
+historical Envoy403/log-delivery cause. No new BFF probe, resource/identity/network/
+image/replica change, data mutation, publication or physical operation occurred;
+the ledger remains **7/40 attempts, 33 remaining and zero accepted mutations**.

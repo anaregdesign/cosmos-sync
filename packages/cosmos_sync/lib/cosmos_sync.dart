@@ -14,5 +14,6 @@ export 'src/authorization.dart'
         CreateSharedScopeRequest,
         SetSharedScopeMemberRequest;
 export 'src/query.dart';
+export 'src/identity.dart';
 export 'src/sqlite_cache.dart'
     if (dart.library.js_interop) 'src/indexed_db_cache.dart';

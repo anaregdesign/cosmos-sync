@@ -2,7 +2,7 @@
 
 The Go BFF is the only component with Cosmos data-plane credentials. End-user authentication proves an API identity; the BFF separately enforces application data authorization. Configure one trusted HTTPS OIDC issuer, the BFF-specific access-token audience and a required API scope. Accept only supported asymmetric signature algorithms and reject expired/not-yet-valid/incorrect-issuer/incorrect-audience tokens. Provider roles/groups, email and client document owner fields do not grant data permissions. The production entrypoint has no development authentication bypass.
 
-Clients cannot provide an arbitrary owner, partition key, Cosmos SQL expression or trusted version/cursor. Strict IDs and bounded JSON payloads constrain batch serialization and cost. Unknown JSON fields are rejected. Expected principal/scope/mode/permission headers are assertions only; the BFF derives and compares the real scope before data access. Sync cursors and consistency envelopes are purpose-separated, HMAC authenticated and principal/scope/mode/permission/epoch bound, including optional server-verified identity generation/credential metadata. A caller cannot add that binding to a legacy scope. It remains separate from the numeric data-partition policy fence; the extension does not activate the staged directory or establish cross-partition atomic revocation. HTTPS and trusted server endpoints are essential because document data and bearer tokens cross the network. The Dart transport disables redirects and rejects non-HTTPS servers except explicit loopback development.
+Clients cannot provide an arbitrary owner, partition key, Cosmos SQL expression or trusted version/cursor. Strict IDs and bounded JSON payloads constrain batch serialization and cost. Unknown JSON fields are rejected. Expected principal/scope/mode/permission headers are assertions only; the BFF derives and compares the real scope before data access. Sync cursors and consistency envelopes are purpose-separated, HMAC authenticated and principal/scope/mode/permission/epoch bound, including optional server-verified identity generation/credential metadata. A caller cannot add that binding to a legacy scope. It remains separate from the numeric data-partition policy fence; only the explicit directory factory emits that identity binding, and it does not establish cross-partition atomic revocation. HTTPS and trusted server endpoints are essential because document data and bearer tokens cross the network. The Dart transport disables redirects and rejects non-HTTPS servers except explicit loopback development.
 
 Explicit `authorization.mode=builtin` registers a durable issuer/subject account and a personal scope owned only by that account. Shared scopes have one immutable authenticated creator as owner; only that owner can assign registered accounts whole-scope reader/writer membership. Policy, membership audits and idempotency receipts persist in the same Cosmos container. Removed member generations remain as tombstones. No deployment-wide administrator, provider app-role dependency or document-specific ACL engine is introduced. [Application authorization](authorization.md) describes the management API, limits and migration. Absent/legacy mode retains server inline/file user/shared-tenant grants; distribute static changes to all replicas and advance permissionVersion. Never expose grant files or privileged Cosmos access to clients. Do not share a user's cache path with another account.
 
@@ -18,6 +18,25 @@ responses also recheck after storage work. A commit before revocation can still
 lose its acknowledgement: HTTP403 does not prove no earlier commit happened.
 The SDK's learned-revocation purge and in-flight drain prevent late responses
 from repopulating its revoked cache, but cannot retract already received data.
+
+The opt-in unpublished `authorization.mode=directory` factory adds explicit
+random-account registration/link/unlink and fresh trusted broker-binding reads.
+Dedicated proof requests independently verify API/ID signatures, purposes,
+object/tenant correlation, challenge nonce and integer authentication time.
+Only the server reader has target-tenant Graph `User.Read.All`; product clients
+receive no Graph permission or managed-identity assertion. Changed/added/removed
+broker credentials fail closed instead of silently adopting the unchanged broker
+object. A provider/broker ID token is never an ordinary sync bearer.
+
+Directory CAS consumes nonce/proof/audit/generation in one metadata partition.
+Personal-policy initialization, Graph and personal/shared data are separate
+boundaries. A write can commit between identity checks; a denied acknowledgement
+does not prove rollback. Proofs are memory-only and do not replace primary
+credentials, enter logs/caches or become replayable offline operations. The
+application drains/purges before proof acquisition and verifies the new identity
+before opening a cache. Submitted ambiguity requires fresh online sign-in.
+Actual customer freshness, hosted MI exchange and out-of-band broker behavior
+remain deployment gates; source fixtures are not those attestations.
 
 Before delivery of an outbox, the client verifies `/session` and asserts the same identity on every mutation/sync. A scope/permission or optional identity-generation/credential mismatch, or HTTP 401/403, purges local cache/outbox and pauses the client. This is intentionally conservative and may discard unsent edits on expired credentials; applications should refresh tokens before delivery. Offline revocation cannot erase data or notify disconnected devices immediately. SQLite plaintext on disk, backups, disk remanence, OS compromise and malicious apps are not solved by a logical purge. Choose device encryption and sensitive-data retention policies before production.
 

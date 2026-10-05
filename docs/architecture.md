@@ -75,12 +75,14 @@ History, receipts and tombstones have no TTL or GC. Conservative per-scope event
 | Authorization | Validated API JWTs; durable personal scopes and fixed-owner shared reader/writer membership | Provider setup/linking, invitations, owner transfer, account deletion and generic security rules are separate work; legacy grants remain opt-in |
 | Operations | Local/fault/emulator/platform tests and preparation | Approved live Azure RU/replica/backup/deployment gate |
 
-The [staged identity-directory core](identity-directory.md) is separate from active
-built-in authorization. Its bounded single-record Cosmos compare-and-swap models
-explicit linking, proof replay and session generations; no production route or
-factory enables it. Trusted upstream/fresh-auth proof and broker self-service
-enforcement, complete session/cache integration and production capacity/recovery
-remain required before activation.
+The unpublished [opt-in identity directory](identity-directory.md) is separate
+from builtin issuer/subject registration. Its explicit factory wires bounded
+Cosmos CAS, trusted broker-profile reads, dedicated fresh-proof lifecycle routes
+and identity-bound authorization/contexts/caches. Native/Web proofs do not adopt
+independent credentials. Actual customer freshness, hosted MI/Graph, broker
+self-service behavior and production capacity/recovery remain deployment gates.
+Directory, Graph and data partitions are not globally atomic; the existing
+numeric same-data-partition membership fence remains independent.
 
 The owner approved MIT, public GitHub/GHCR visibility, personal pub.dev ownership
 and the experimental `0.2.0-dev.1` preview. The foundation is merged; subsequent

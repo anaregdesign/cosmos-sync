@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cosmos_sync_example/auth/native_oidc.dart';
 import 'package:cosmos_sync_example/auth/oidc.dart';
 import 'package:flutter/foundation.dart';
@@ -87,6 +89,86 @@ void main() {
         plugin.authorization!.externalUserAgent,
         ExternalUserAgent.asWebAuthenticationSession,
       );
+    },
+  );
+
+  test(
+    'fresh proof pins server nonce and interactive auth_time without retaining refresh',
+    () async {
+      final proof = await native.freshIdentityProof(config, 'a' * 64);
+      final request = plugin.authorization!;
+      expect(request.nonce, 'a' * 64);
+      expect(request.promptValues, ['login']);
+      expect(request.additionalParameters!['max_age'], '0');
+      expect(jsonDecode(request.additionalParameters!['claims']!), {
+        'id_token': {
+          'auth_time': {'essential': true},
+        },
+      });
+      expect(request.clientId, config.clientId);
+      expect(request.redirectUrl, config.redirectUrl);
+      expect(request.scopes, config.scopes);
+      expect(request.clientSecret, null);
+      expect(request.allowInsecureConnections, false);
+      expect(proof.accessToken, 'api-access-token');
+      expect(proof.idToken, 'id-token-logout-hint');
+      expect(proof.toJson().keys, ['accessToken', 'idToken']);
+      expect(proof.toString(), isNot(contains('api-access-token')));
+      expect(plugin.tokenRequest, null);
+    },
+  );
+
+  test('invalid proof nonce never launches AppAuth', () async {
+    await expectLater(
+      native.freshIdentityProof(config, 'client-nonce'),
+      throwsA(
+        isA<AuthException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_identity_challenge',
+        ),
+      ),
+    );
+    expect(plugin.authorization, null);
+  });
+
+  test(
+    'fresh proof requires a separate ID token and usable API scope',
+    () async {
+      for (final response in [
+        AuthorizationTokenResponse(
+          'api-token',
+          'discard-refresh',
+          DateTime.now().add(const Duration(hours: 1)),
+          null,
+          'Bearer',
+          config.scopes,
+          null,
+          null,
+        ),
+        AuthorizationTokenResponse(
+          'api-token',
+          'discard-refresh',
+          DateTime.now().add(const Duration(hours: 1)),
+          'id-token',
+          'Bearer',
+          ['openid'],
+          null,
+          null,
+        ),
+      ]) {
+        plugin.authorizationResponse = response;
+        await expectLater(
+          native.freshIdentityProof(config, 'a' * 64),
+          throwsA(
+            isA<AuthException>().having(
+              (error) => error.code,
+              'code',
+              'invalid_proof_response',
+            ),
+          ),
+        );
+      }
     },
   );
 
@@ -209,6 +291,7 @@ class CapturingAppAuth extends FlutterAppAuth {
   TokenRequest? tokenRequest;
   EndSessionRequest? logout;
   Object? failure;
+  AuthorizationTokenResponse? authorizationResponse;
 
   @override
   Future<AuthorizationTokenResponse> authorizeAndExchangeCode(
@@ -218,6 +301,7 @@ class CapturingAppAuth extends FlutterAppAuth {
       throw failure!;
     }
     authorization = request;
+    if (authorizationResponse != null) return authorizationResponse!;
     return AuthorizationTokenResponse(
       'api-access-token',
       'refresh-token',

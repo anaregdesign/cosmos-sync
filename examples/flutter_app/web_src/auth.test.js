@@ -15,6 +15,8 @@ const config = {
 const encode = (value = config) => JSON.stringify(value);
 const success = (overrides = {}) => ({
   accessToken: "fixture.api.token",
+  idToken: "fixture.id.token",
+  refreshToken: "fixture.private.refresh",
   expiresOn: new Date(Date.now() + 3600000),
   tokenType: "Bearer",
   scopes: ["api://bff/Cosmos.Sync"],
@@ -36,6 +38,7 @@ function fixture({
   secureContext = true,
   initialize = async () => {},
   logout = async () => {},
+  login = async () => success(),
 } = {}) {
   const clients = [];
   let options;
@@ -44,12 +47,13 @@ function fixture({
     baseUri: "https://app.example.test/workspace/",
     createClient: (value) => {
       options = value;
+      const index = clients.length;
       const client = {
         clears: 0,
         initialize,
         loginPopup: async (request) => {
           client.loginRequest = request;
-          return success();
+          return login(request, index);
         },
         acquireTokenSilent: async (request) => {
           client.refreshRequest = request;
@@ -327,4 +331,91 @@ test("a failed provider logout still clears its temporary SDK instance", async (
   assert.deepEqual(await decode(f.auth.refresh(encode())), {
     ok: false, kind: "interactionRequired",
   });
+});
+
+test("fresh proof uses an isolated memory client and never replaces the main account", async () => {
+    const f = fixture({
+      login: async (_, index) => success(index === 0 ? {} : {
+        account: { ...success().account, homeAccountId: "independent.home" },
+      }),
+    });
+    await f.auth.signIn(encode());
+    const proof = await decode(f.auth.freshProof(encode(), "f".repeat(64)));
+    assert.equal(proof.ok, true);
+    assert.equal(proof.idToken, "fixture.id.token");
+    assert.equal("account" in proof, false);
+    assert.equal("refreshToken" in proof, false);
+    assert.equal(f.clients[0].clears, 0);
+    assert.equal(f.clients[1].clears, 1);
+    const request = f.clients[1].loginRequest;
+    assert.equal(request.nonce, "f".repeat(64));
+    assert.equal(request.prompt, "login");
+    assert.deepEqual(JSON.parse(request.claims), { id_token: { auth_time: { essential: true } } });
+    assert.deepEqual(request.extraQueryParameters, { max_age: "0" });
+    assert.equal((await decode(f.auth.refresh(encode()))).ok, true);
+    assert.equal(f.clients[0].refreshRequest.account.homeAccountId, "fixture.home");
+    await f.auth.clear();
+  });
+
+test("proof cancellation rejects late credentials without signing out the main account", async () => {
+    const pending = deferred();
+    const f = fixture({ login: async (_, index) => index === 0 ? success() : pending.promise });
+    await f.auth.signIn(encode());
+    const proof = f.auth.freshProof(encode(), "f".repeat(64));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(await decode(f.auth.refresh(encode())), { ok: false, kind: "failed" });
+    assert.equal((await decode(f.auth.cancelProof())).ok, true);
+    pending.resolve(success());
+    assert.deepEqual(await decode(proof), { ok: false, kind: "cancelled" });
+    assert.ok(f.clients[1].clears >= 2);
+    assert.equal(f.clients[0].clears, 0);
+    assert.equal((await decode(f.auth.refresh(encode()))).ok, true);
+    await f.auth.clear();
+  });
+
+test("signout invalidates an in-flight isolated proof and both private caches", async () => {
+    const pending = deferred();
+    const f = fixture({ login: async (_, index) => index === 0 ? success() : pending.promise });
+    await f.auth.signIn(encode());
+    const proof = f.auth.freshProof(encode(), "f".repeat(64));
+    await new Promise((resolve) => setImmediate(resolve));
+    await f.auth.clear();
+    pending.resolve(success());
+    assert.deepEqual(await decode(proof), { ok: false, kind: "cancelled" });
+    assert.equal(f.clients[0].clears, 1);
+    assert.ok(f.clients[1].clears >= 2);
+    assert.deepEqual(await decode(f.auth.refresh(encode())), { ok: false, kind: "interactionRequired" });
+  });
+
+test("proof rejects a client nonce, wrong configuration and missing ID proof without changing main login", async () => {
+    const f = fixture({ login: async (_, index) => success(index === 0 ? {} : { idToken: "" }) });
+    await f.auth.signIn(encode());
+    assert.deepEqual(await decode(f.auth.freshProof(encode(), "client-nonce")), { ok: false, kind: "failed" });
+    assert.equal(f.clients.length, 1);
+    assert.deepEqual(await decode(f.auth.freshProof(encode({
+      ...config, clientId: "33333333-3333-4333-8333-333333333333",
+    }), "f".repeat(64))), { ok: false, kind: "interactionRequired" });
+    assert.equal(f.clients.length, 1);
+    assert.deepEqual(await decode(f.auth.freshProof(encode(), "f".repeat(64))), { ok: false, kind: "failed" });
+    assert.equal(f.clients[1].clears, 1);
+    assert.equal(f.clients[0].clears, 0);
+    assert.equal((await decode(f.auth.refresh(encode()))).ok, true);
+    await f.auth.clear();
+  });
+
+test("proof timeout is redacted and a late MSAL result is cleared without changing main login", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const pending = deferred();
+    const f = fixture({ login: async (_, index) => index === 0 ? success() : pending.promise });
+    await f.auth.signIn(encode());
+    const proof = f.auth.freshProof(encode(), "f".repeat(64));
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(180000);
+    assert.deepEqual(await decode(proof), { ok: false, kind: "transient" });
+    pending.resolve(success());
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(f.clients[1].clears >= 2);
+    assert.equal(f.clients[0].clears, 0);
+    assert.equal((await decode(f.auth.refresh(encode()))).ok, true);
+    await f.auth.clear();
 });

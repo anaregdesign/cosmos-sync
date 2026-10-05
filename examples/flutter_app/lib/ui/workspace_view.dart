@@ -11,6 +11,7 @@ import '../auth/native_oidc.dart'
     as platform_auth;
 import '../data/workspace_repository.dart';
 import 'app_controller.dart';
+import 'identity_panel.dart';
 
 class WorkspaceView extends StatefulWidget {
   const WorkspaceView({super.key, required this.controller});
@@ -122,6 +123,23 @@ class _WorkspaceViewState extends State<WorkspaceView>
                 if (_formError != null) _notice(_formError!, error: true),
                 if (app.message != null) _notice(app.message!),
                 if (workspace.message != null) _notice(workspace.message!),
+                if (app.identityCapabilities != null)
+                  IdentityPanel(
+                    capabilities: app.identityCapabilities!,
+                    account: app.identityAccount,
+                    registrationRequired: app.registrationRequired,
+                    enabled: app.canChangeIdentity,
+                    proving: app.auth.state == AuthSessionState.provingIdentity,
+                    onRegister: () =>
+                        _changeIdentity(IdentityOperation.register),
+                    onLink: () => _changeIdentity(IdentityOperation.link),
+                    onUnlink: (id) => _changeIdentity(
+                      IdentityOperation.unlink,
+                      removeIdentityId: id,
+                    ),
+                    onRecover: _recoverIdentity,
+                    onCancel: () => unawaited(app.cancelIdentityProof()),
+                  ),
                 if (workspace.connected) ...[
                   Card(
                     child: Padding(
@@ -570,6 +588,82 @@ class _WorkspaceViewState extends State<WorkspaceView>
       ),
     );
     if (confirmed == true) await widget.controller.signOut();
+  }
+
+  Future<bool> _confirmIdentity(
+    String title,
+    String detail,
+    String key,
+  ) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(title),
+          content: Text(
+            '$detail\n\nCached documents and '
+            '${widget.controller.workspace.pending.length} pending operation(s) '
+            'will be removed after in-flight work drains. Unsent edits will be lost. '
+            'Server-owned documents are not moved or deleted.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: Key(key),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Continue and clear local data'),
+            ),
+          ],
+        ),
+      ) ==
+      true;
+
+  Future<void> _changeIdentity(
+    IdentityOperation operation, {
+    String? removeIdentityId,
+  }) async {
+    final confirmed = await _confirmIdentity(
+      switch (operation) {
+        IdentityOperation.register => 'Register a new account?',
+        IdentityOperation.link => 'Link an independent identity?',
+        IdentityOperation.unlink => 'Remove this identity?',
+      },
+      switch (operation) {
+        IdentityOperation.register =>
+          'Authenticate this credential freshly. Registration does not recover or merge an existing account.',
+        IdentityOperation.link =>
+          'Authenticate the current credential, then the independent identity. Both proofs must be approved by the BFF.',
+        IdentityOperation.unlink =>
+          'Authenticate the current credential, then a remaining linked credential. Removing the current credential requires a new sign-in.',
+      },
+      'confirm-${operation.name}',
+    );
+    if (!confirmed || !mounted) return;
+    final app = widget.controller;
+    switch (operation) {
+      case IdentityOperation.register:
+        await app.registerAccount(discardPending: true);
+      case IdentityOperation.link:
+        await app.linkIdentity(discardPending: true);
+      case IdentityOperation.unlink:
+        await app.unlinkIdentity(removeIdentityId!, discardPending: true);
+    }
+  }
+
+  Future<void> _recoverIdentity() async {
+    if (await _confirmIdentity(
+          'Use a remaining linked identity?',
+          'Sign out locally, then sign in online with an existing linked credential. '
+              'If every credential is lost, operator review is required; no email-based recovery exists.',
+          'confirm-recover',
+        ) &&
+        mounted) {
+      await widget.controller.recoverWithRemainingIdentity(
+        discardPending: true,
+      );
+    }
   }
 }
 
