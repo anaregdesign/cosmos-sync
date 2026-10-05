@@ -11,7 +11,7 @@ specified SDK scenario on real app-private SQLite. It does not prove a real
 identity provider, deployed BFF, Azure account, app-store release signing or
 background execution.
 
-## Current verification order, 2026-10-04
+## Current verification order, 2026-10-05
 
 The owner now defers real-device verification until development is complete.
 Continue with local/native/browser tests and simulators first, then run the
@@ -21,6 +21,21 @@ evidence; they do not establish unperformed OS process/relaunch, suspension or
 integrated hosted acceptance. Physical iOS remains outside the selected scope.
 Actual Google/Apple provider connections were separately cancelled as not
 planned; common OIDC, authorization and offline safety are not waived.
+
+The owner has now left the Android phone connected but cannot operate it for
+the foreseeable period. Connection alone does not authorize unattended
+provider login, physical installation or another browser-profile retry.
+The requested browser-profile reopening was clarified to be Mac, not Android;
+do not treat the uncorrelated AADSTS50020 report as an Android provider result.
+
+Clean source `3214d0d` passed both the SDK SQLite fixture and ordinary local
+signed-HTTP/SQLite/native-secure-storage application fixture on a newly owned
+Android 14/API 34 emulator. Both runs returned zero and their exact platform
+markers; the physical phone was not selected. The fixture's processes/reverse
+mappings and owned emulator/AVD were removed, and the emulator ports released.
+These debug fixtures prove neither actual CIAM authentication/Azure storage
+nor OS process death, airplane mode or suspension. Exact source and additional
+clean-checkout evidence are in [verification](verification.md#foreground-input-and-clean-source-simulator-evidence-2026-10-05).
 
 ## Current inventory and pending owner actions
 
@@ -228,7 +243,7 @@ unless separately exercised and documented.
 | Target and scope | Actual result |
 | --- | --- |
 | Pixel 9a, Android 17 / API 37, physical arm64; SDK fixture | PASS on 2026-10-03 at 22:33 JST. Flutter 3.44.6 / Dart 3.12.2; test exit `0` and exact `COSMOS_SYNC_NATIVE_PASS android` marker. Real app-private SQLite, debug app, deterministic authorized transport. |
-| Pixel 9a; usable app UI with local real HTTP BFF/OIDC fixture | Pending separate app-fixture evidence. This is distinct from the SDK fixture above and from the production identity provider. |
+| Pixel 9a; usable app UI with local real HTTP BFF/signed-auth fixture | PASS on 2026-10-03, recorded above: real HTTP/SQLite, isolated native secure storage, explicit ACK/conflict/tombstone/sign-out behavior. This is not production provider or Azure evidence. |
 | iPhone 16 Pro, iOS 26.7.1, physical device | Not run. The owner chose unsigned verification; physical installation requires signing/provisioning that is currently not authorized. |
 
 The Android SDK fixture exercised offline writes, cache close/reopen, exact

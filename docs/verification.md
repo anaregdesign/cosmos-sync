@@ -802,3 +802,66 @@ verified health signal. These reads do not establish successful request routing.
 No new BFF probe, resource/identity/network/
 image/replica change, data mutation, publication or physical operation occurred;
 the ledger remains **7/40 attempts, 33 remaining and zero accepted mutations**.
+
+## Foreground input and clean-source simulator evidence, 2026-10-05
+
+The attended harness changes are committed at
+[`e7f0f37`](https://github.com/anaregdesign/cosmos-sync/commit/e7f0f379038a122b6fbe15eed7c7d4f498f11fab)
+and
+[`3214d0d`](https://github.com/anaregdesign/cosmos-sync/commit/3214d0d7f5de0a8debf5a83a67ad0f127dd3a0cd).
+Their exact-head runs
+[37283327743](https://github.com/anaregdesign/cosmos-sync/actions/runs/37283327743)
+and
+[37288105353](https://github.com/anaregdesign/cosmos-sync/actions/runs/37288105353)
+each passed all nine CI jobs. The intervening evidence commit `ed1b67d` also
+passed all nine jobs in
+[37279188219](https://github.com/anaregdesign/cosmos-sync/actions/runs/37279188219).
+
+The initial native attempt entered AppAuth but displayed no browser; scoped
+Android diagnostics measured Background/BAL_BLOCK. The manual mode requires
+one explicit start while resumed. Its first run timed out waiting for that
+action, without requesting authentication. A subsequent physical tap was
+discarded by Flutter's integration-test binding: live device pointer events
+are disabled by default. The correction enables them only for the manual
+test target, before registration. Three real live-binding/device-source
+regressions and the existing owner/auth regressions passed (75 targeted
+Flutter cases), with clean analysis/formatting and 31 native-control Python
+cases. Production auth and Android policy are unchanged.
+
+The corrected attempt reached `browser_request_started`. This means entry
+into AppAuth, not proof that a browser displayed, returned a callback or
+issued a token. No actual selected-customer callback/API token was captured.
+The owner-reported AADSTS50020 is uncorrelated UI evidence. The owner
+subsequently clarified that the requested browser-profile reopening was
+**Mac**, not Android, and deferred attended verification. The phone remains
+connected, but the owner cannot operate it; no further device/provider or
+Mac management/customer login was started.
+
+A fresh, exclusively owned Android 14/API 34 emulator then ran the clean
+committed source `3214d0d`, without selecting the physical phone:
+
+| Check | Measured evidence and limits |
+| --- | --- |
+| Native SDK fixture | Exit 0 and exact `COSMOS_SYNC_NATIVE_PASS android`; real app-private SQLite, deterministic transport, debug app; no live BFF/OIDC/Azure |
+| Ordinary application fixture | Exit 0 and exact Android app marker; actual local signed-issuer Go HTTP, SQLite and isolated native secure storage; no actual provider or Azure |
+| Directory lifecycle repeat | Race-enabled current-source Go TLS/signed JWT/Dart HTTP/SQLite lifecycle passed in 5.838 seconds; local fixture, not hosted reader execution |
+| Clean-checkout prerequisites | A separate clean checkout of `3214d0d` passed format, locked backend-free init, validate, all 7 mock-plan cases and TFLint |
+| Clean-checkout workload | The same clean checkout passed format, locked backend-free init, validate, all 31 mock-plan cases and TFLint; existing builtin/legacy configuration only |
+| Owned cleanup | App fixture's processes and individual reverse mappings removed; owned emulator stopped, exact disposable AVD deleted and ports 5562/5563 released; physical phone unused |
+
+The simulator receipts explicitly record a clean source tree, emulator=true,
+physical_device=false, Flutter 3.44.6/Dart 3.12.2 and the exact commit. Private
+`0600` receipts are retained in ignored `artifacts/`; raw runtime logs and
+device identities are not retained in those receipts. The Terraform checks
+used mock providers and did not acquire Azure credentials or run a real
+plan/apply. They do not establish directory hosting or a deployed onboarding
+journey.
+
+Actual CIAM initial/refreshed API credentials, fresh ID nonce/integer
+`auth_time`, hosted UAMI/Graph/Cosmos, ingress/evaluated-peer/log delivery and
+final physical Android OS/relaunch/airplane/suspension are still open. The
+retained image and supplied Terraform remain builtin/legacy-only; a compatible
+directory runtime/configuration requires separate review. No additional
+people, permission/scope/secret changes, callback repair, cloud data operation,
+paid provisioning, deployment or publication occurred. The live ledger is
+unchanged at **7/40 attempts and zero accepted application mutations**.
