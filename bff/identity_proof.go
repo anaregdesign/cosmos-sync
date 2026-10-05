@@ -141,9 +141,18 @@ func (v *directoryProofVerifier) verify(ctx context.Context, raw, challenge stri
 			return invalid()
 		}
 	}
+	var brokerClaims struct {
+		ObjectID string `json:"oid"`
+		TenantID string `json:"tid"`
+		Version  string `json:"ver"`
+	}
+	if verified.Claims(&brokerClaims) != nil {
+		return invalid()
+	}
 	digest := sha256.Sum256([]byte(raw))
 	return verifiedDirectoryProof{
 		Target: v.target, Subject: verified.Subject, AuthenticatedAt: authenticated, ExpiresAt: expires,
 		ChallengeDigest: challengeDigest, ProofDigest: hex.EncodeToString(digest[:]),
+		BrokerObjectID: brokerClaims.ObjectID, BrokerTenantID: brokerClaims.TenantID, BrokerVersion: brokerClaims.Version,
 	}, nil
 }

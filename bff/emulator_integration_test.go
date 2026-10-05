@@ -277,6 +277,53 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 		// deployment; production still rejects this emulator's consistency.
 	})
 
+	t.Run("broker fingerprints survive independent SDK account lookup", func(t *testing.T) {
+		fixture := newBrokerProofFixture(t)
+		first, err := newBrokerIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{fixture.signed.target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := newBrokerIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{fixture.signed.target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		first.now = func() time.Time { return fixture.signed.now }
+		second.now = first.now
+		raw, err := first.begin(ctx, nil, "register", fixture.signed.target, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		access := fixture.access(t, nil, 0)
+		proof, err := fixture.verifier.verify(ctx, access, fixture.id(t, raw, nil, 0), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		account, err := first.register(ctx, raw, proof)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state, version, err := second.store.loadIdentityDirectory(withAuthorizationSessions(ctx))
+		if err != nil || version == "" || !validIdentityDirectory(state) {
+			t.Fatal("independent SDK reader lost broker directory state", err)
+		}
+		expected := state.Bindings[account.IdentityIDs[0]].Broker
+		if expected == nil || *expected != proof.BrokerBinding {
+			t.Fatal("real Cosmos serialization discarded exact expected broker binding")
+		}
+		resolved, session, err := fixture.verifier.resolve(ctx, access, second)
+		if err != nil || resolved.Account != account.Account || session.Generation != account.Generation ||
+			session.IdentityID != account.IdentityIDs[0] {
+			t.Fatal("independent SDK client failed exact persisted random-account resolution", err)
+		}
+		fixture.profile["identities"].([]map[string]any)[0]["issuerAssignedId"] = brokerTestOther
+		_, _, err = fixture.verifier.resolve(ctx, access, second)
+		assertCode(t, err, "identity_binding_changed")
+		after, afterVersion, err := first.store.loadIdentityDirectory(withAuthorizationSessions(ctx))
+		if err != nil || afterVersion != version || !reflect.DeepEqual(state, after) {
+			t.Fatal("changed broker credential was silently persisted/adopted by ordinary API lookup", err)
+		}
+	})
+
 	t.Run("builtin durable account membership replay and revocation fence", func(t *testing.T) {
 		first, second := newStore(), newStore()
 		identity := AccountIdentity{Issuer: "https://builtin-emulator.test", Subject: "owner"}

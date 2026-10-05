@@ -33,10 +33,11 @@ const (
 // A future caller must independently verify upstream identity, auth_time,
 // challenge binding and broker-side linking controls before creating proof values.
 type identityDirectory struct {
-	store   identityDirectoryStore
-	targets map[identityProofTarget]bool
-	now     func() time.Time
-	entropy io.Reader
+	store         identityDirectoryStore
+	targets       map[identityProofTarget]bool
+	now           func() time.Time
+	entropy       io.Reader
+	brokerTargets map[identityProofTarget]bool
 }
 
 type identityDirectoryStore interface {
@@ -67,6 +68,10 @@ type verifiedDirectoryProof struct {
 	ExpiresAt       time.Time
 	ChallengeDigest string
 	ProofDigest     string
+	BrokerObjectID  string
+	BrokerTenantID  string
+	BrokerVersion   string
+	BrokerBinding   verifiedBrokerBinding
 }
 
 func (p verifiedDirectoryProof) identity() directoryIdentity {
@@ -91,9 +96,10 @@ type directorySession struct {
 }
 
 type directoryBinding struct {
-	AccountID string            `json:"accountId"`
-	Identity  directoryIdentity `json:"identity"`
-	Active    bool              `json:"active"`
+	AccountID string                 `json:"accountId"`
+	Identity  directoryIdentity      `json:"identity"`
+	Active    bool                   `json:"active"`
+	Broker    *verifiedBrokerBinding `json:"broker,omitempty"`
 }
 
 type directoryChallenge struct {
@@ -193,10 +199,21 @@ func validIdentityDirectory(state *identityDirectoryState) bool {
 			seen[identityID] = true
 		}
 	}
+	brokerObjects := make(map[string]bool)
 	for id, binding := range state.Bindings {
 		account, exists := state.Accounts[binding.AccountID]
 		if !exists || !validDirectoryIdentity(binding.Identity) || id != binding.Identity.id() || binding.Active != slices.Contains(account.IdentityIDs, id) {
 			return false
+		}
+		if binding.Broker != nil && !validRecordedBrokerBinding(binding.Identity, *binding.Broker) {
+			return false
+		}
+		if binding.Broker != nil {
+			object := directoryBrokerObjectID(binding.Identity, binding.Broker.ObjectID)
+			if brokerObjects[object] {
+				return false
+			}
+			brokerObjects[object] = true
 		}
 	}
 	audits := make(map[string]directoryAudit)
@@ -423,6 +440,9 @@ func (d *identityDirectory) verifyProof(proof verifiedDirectoryProof, digest str
 		now.Sub(proof.AuthenticatedAt) >= identityChallengeLifetime || !proof.ExpiresAt.After(now) {
 		return protocolError(401, "identity_fresh_proof_required")
 	}
+	if (d.brokerTargets[proof.Target] || proof.BrokerBinding != (verifiedBrokerBinding{})) && !validBrokerDirectoryProof(proof) {
+		return protocolError(401, "identity_fresh_proof_required")
+	}
 	return nil
 }
 
@@ -478,6 +498,9 @@ func (d *identityDirectory) register(ctx context.Context, raw string, proof veri
 			return protocolError(401, "identity_fresh_proof_required")
 		}
 		id := proof.identity().id()
+		if err := checkDirectoryBrokerOwnership(state, proof); err != nil {
+			return err
+		}
 		if _, exists := state.Bindings[id]; exists {
 			return protocolError(409, "identity_already_assigned")
 		}
@@ -486,7 +509,7 @@ func (d *identityDirectory) register(ctx context.Context, raw string, proof veri
 		}
 		result = directoryAccount{Account: Account{AccountID: accountID, PersonalScopeID: personalScopeID(accountID)},
 			Generation: 1, IdentityIDs: []string{id}}
-		state.Bindings[id] = directoryBinding{AccountID: accountID, Identity: proof.identity(), Active: true}
+		state.Bindings[id] = bindingFromDirectoryProof(accountID, proof)
 		return consumeDirectoryChallenge(state, digest, challenge, result, id, []verifiedDirectoryProof{proof}, now)
 	})
 	if err != nil {
@@ -525,8 +548,17 @@ func (d *identityDirectory) change(ctx context.Context, session directorySession
 			(reauthentication.ProofDigest == independent.ProofDigest && (operation == "link" || reauthentication != independent)) {
 			return protocolError(401, "identity_fresh_proof_required")
 		}
+		if !matchesRecordedBrokerBinding(state.Bindings[session.IdentityID], reauthentication) {
+			return protocolError(401, "identity_binding_changed")
+		}
 		identityID := independent.identity().id()
+		if err := checkDirectoryBrokerOwnership(state, independent); err != nil {
+			return err
+		}
 		binding, exists := state.Bindings[identityID]
+		if exists && !matchesRecordedBrokerBinding(binding, independent) {
+			return protocolError(401, "identity_binding_changed")
+		}
 		if operation == "link" {
 			if exists && (binding.AccountID != account.AccountID || binding.Active) {
 				return protocolError(409, "identity_already_assigned")
@@ -535,7 +567,7 @@ func (d *identityDirectory) change(ctx context.Context, session directorySession
 				return protocolError(409, "identity_credential_limit")
 			}
 			account.IdentityIDs = append(slices.Clone(account.IdentityIDs), identityID)
-			state.Bindings[identityID] = directoryBinding{AccountID: account.AccountID, Identity: independent.identity(), Active: true}
+			state.Bindings[identityID] = bindingFromDirectoryProof(account.AccountID, independent)
 		} else {
 			if !exists || !binding.Active || binding.AccountID != account.AccountID || identityID == challenge.RemoveIdentityID ||
 				!slices.Contains(account.IdentityIDs, challenge.RemoveIdentityID) || len(account.IdentityIDs) <= 1 {

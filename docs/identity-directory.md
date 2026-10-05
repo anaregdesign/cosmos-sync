@@ -23,11 +23,11 @@ and unapproved targets. Profile/email claims are not ownership inputs. The
 directory still checks authentication against stored challenge issuance and
 consumes the proof atomically; the JWT component alone does not consume a nonce.
 
-This verifier is also inactive and is not a browser/code/PKCE adapter. A future
-production identity-proof adapter must bind that verified identity to the actual
-OAuth callback and reviewed upstream provider/client namespace. A broker ID token
-identifies the broker subject, not necessarily an upstream provider subject.
-The adapter must prove broker
+This verifier is also inactive and is not a browser/code/PKCE adapter. The
+internal broker adapter described below correlates verified API/ID tokens and
+the freshly read upstream identity; actual OAuth callback and broker issuance
+evidence remain separate. A broker ID token identifies the broker subject, not
+necessarily an upstream provider subject. Production integration must prove broker
 self-service additions/removals cannot bypass BFF approval. An unchanged broker
 subject, signed `azp`, `domain_hint`, email, refresh, `iat` or a client timestamp
 cannot supply that proof. Until those properties are established, activation
@@ -65,9 +65,11 @@ one approved workforce-federated identity in the documented source/target-tenant
 namespace and at most one generated UPN in the exact initial domain. The UPN is
 directory metadata, not an independent login proof or ownership key. Local,
 administrative, foreign, added, missing and replaced credentials fail closed.
-The expected namespaced binding fingerprint must be retained by a future account
-transaction; online revalidation never adopts a different credential merely
-because the broker object ID is unchanged.
+The broker-required directory now retains the exact object, upstream issuer/
+subject and namespaced fingerprint in the registration/link transaction.
+Online revalidation never adopts a different credential merely because the
+broker object ID is unchanged. Broker-object ownership is unique within the
+approved client/provider namespace, including inactive tombstones.
 
 The server-only credential uses the configured managed identity's assertion for
 `api://AzureADTokenExchange/.default`, a dedicated cross-tenant application and
@@ -78,12 +80,23 @@ redirects or result cache. Errors contain fixed protocol codes, not raw Graph
 messages or credentials. Configured trust is not proof of an actual hosted
 managed-identity token exchange.
 
-This reader is also **not wired into production**. A future adapter must obtain
-the broker object/tenant/client from an independently verified API JWT, correlate
-the signed ID proof's object ID despite differing API/native subjects, and bind
-the approved upstream credential and expected fingerprint into the durable
-transaction. A profile GET alone supplies neither authentication time nor the
-server challenge's signed nonce. See the
+This reader and adapter are still **not wired into production**. The internal
+adapter uses the existing API JWT signature, audience, delegated-scope and
+client-admission checks, then requires signed exact `oid`, `tid`, client and
+v2 metadata. It correlates the independently signed fresh ID proof by object/
+tenant rather than assuming API/native `sub` equality. Only the configured
+CIAM issuer and distinct API/native audiences are accepted. Ownership derives
+from the freshly read upstream issuer/object namespace, never email.
+
+The broker-required directory rejects generic ID-proof stamps without this
+correlated binding. Its existing one-partition CAS consumes the nonce/proof/
+audit and expected binding together. Link/unlink reauthentication and relinking
+must match the retained binding; neither a recreated broker object nor a replaced
+upstream credential can adopt ownership. A read-only internal API resolver
+rechecks Graph and returns only an existing active exact account/generation.
+It does not implicitly register, repair metadata, migrate ownership or consume
+an identity challenge. A profile GET alone supplies neither authentication time
+nor the server challenge's signed nonce. See the
 [authorized reader setup](external-id-setup.md#authorized-secret-free-server-reader).
 
 ## Atomic storage and deliberate limits
@@ -149,6 +162,16 @@ live Cosmos acceptance. The actual emulator contention test now verifies signed
 local proofs before racing independent SDK clients; it does not activate HTTP
 linking or establish a CIAM/provider deployment.
 
+Additional RSA/TLS/JWKS API/ID and Graph-transport fixtures verify differing
+subjects with matching signed objects, wrong signatures/claims/audiences/scopes/
+clients/nonce/authentication time before Graph, fresh uncached profile reads,
+broker-only registration, durable fingerprint corruption and duplicate-object
+denial, explicit link/unlink, generation advancement, tombstone/relink and exact
+read-only account resolution. The emulator also reloads an expected broker
+fingerprint through an independent actual SDK client and rejects a changed
+credential without adopting it. These Graph responses are local fixtures,
+not managed-identity or customer-login acceptance.
+
 Before production use, settle and verify the CIAM upstream-binding/fresh-auth
 adapter and out-of-band mutation policy; review production capacity and
 recovery; wire every account lookup, authorization management route, session,
@@ -157,3 +180,8 @@ the final Android evidence required by the active Issues. Deterministic signed
 provider fixtures remain necessary, but actual Google/Apple connection evidence
 is not part of this delivery. Do not expose linking UI or accept raw provider ID tokens at sync
 routes merely because these internal transactions pass.
+
+Identity generation must remain separate from the numeric membership
+`permissionVersion` used by the data-partition write fence. Concatenating a
+generation into that version violates the current BFF/Dart contract and cannot
+replace explicit session/cursor/cache integration.

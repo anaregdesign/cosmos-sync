@@ -188,14 +188,28 @@ func (s *Server) authorizeSelectedAt(ctx context.Context, token, mode, scopeID, 
 	return Scope{ID: derivedScopeID, PrincipalID: principal, ScopeMode: mode, PermissionVersion: match.PermissionVersion, CanRead: match.CanRead, CanWrite: match.CanWrite}, nil
 }
 
+type verifiedAccessPrincipal struct {
+	Identity  AccountIdentity
+	TenantID  string
+	ObjectID  string
+	ClientID  string
+	Version   string
+	ExpiresAt time.Time
+}
+
 func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (AccountIdentity, string, error) {
+	principal, err := s.verifyAccessPrincipal(ctx, token)
+	return principal.Identity, principal.TenantID, err
+}
+
+func (s *Server) verifyAccessPrincipal(ctx context.Context, token string) (verifiedAccessPrincipal, error) {
 	verified, err := s.verifier.Verify(ctx, token)
 	if err != nil {
-		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+		return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 	}
 	var claims map[string]json.RawMessage
 	if verified.Claims(&claims) != nil {
-		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+		return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 	}
 	claim := func(name string) string { var value string; _ = json.Unmarshal(claims[name], &value); return value }
 	// Client admission is an additional restriction on an already verified API
@@ -204,7 +218,7 @@ func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (Accoun
 	if len(s.config.OIDC.AllowedClientIDs) != 0 {
 		var clientID string
 		if json.Unmarshal(claims["azp"], &clientID) != nil {
-			return AccountIdentity{}, "", protocolError(403, "forbidden")
+			return verifiedAccessPrincipal{}, protocolError(403, "forbidden")
 		}
 		allowed := false
 		for _, configuredID := range s.config.OIDC.AllowedClientIDs {
@@ -214,21 +228,21 @@ func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (Accoun
 			}
 		}
 		if !allowed {
-			return AccountIdentity{}, "", protocolError(403, "forbidden")
+			return verifiedAccessPrincipal{}, protocolError(403, "forbidden")
 		}
 	}
 	var nbf json.Number
 	if value, ok := claims["nbf"]; ok {
 		if json.Unmarshal(value, &nbf) != nil {
-			return AccountIdentity{}, "", protocolError(401, "unauthorized")
+			return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 		}
 		seconds, err := nbf.Int64()
 		if err != nil || seconds > time.Now().Unix() {
-			return AccountIdentity{}, "", protocolError(401, "unauthorized")
+			return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 		}
 	}
 	if s.config.OIDC.TokenUse != "" && claim("token_use") != s.config.OIDC.TokenUse {
-		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+		return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 	}
 	// API-only audience plus required scope distinguish access JWTs from ID JWTs.
 	allowed := false
@@ -239,9 +253,12 @@ func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (Accoun
 	}
 	tenant, subject := claim(s.config.OIDC.TenantClaim), verified.Subject
 	if !allowed || subject == "" || len(subject) > 512 || len(verified.Issuer) > 2048 {
-		return AccountIdentity{}, "", protocolError(403, "forbidden")
+		return verifiedAccessPrincipal{}, protocolError(403, "forbidden")
 	}
-	return AccountIdentity{Issuer: verified.Issuer, Subject: subject}, tenant, nil
+	return verifiedAccessPrincipal{
+		Identity: AccountIdentity{Issuer: verified.Issuer, Subject: subject}, TenantID: tenant,
+		ObjectID: claim("oid"), ClientID: claim("azp"), Version: claim("ver"), ExpiresAt: verified.Expiry,
+	}, nil
 }
 
 type signedContext struct {

@@ -36,10 +36,10 @@ type brokerDirectoryReader struct {
 }
 
 type verifiedBrokerBinding struct {
-	ObjectID    string
-	Issuer      string
-	Subject     string
-	Fingerprint string
+	ObjectID    string `json:"objectId"`
+	Issuer      string `json:"issuer"`
+	Subject     string `json:"subject"`
+	Fingerprint string `json:"fingerprint"`
 }
 
 type brokerProfileIdentity struct {

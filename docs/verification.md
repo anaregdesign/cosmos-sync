@@ -614,10 +614,50 @@ managed-identity exchange/Graph execution from ACA and integration remain
 unverified; the old retained image has not changed. All 153 portable Python
 tests, ordinary Flutter analysis/all 72 native app tests/format and the actual package-doc
 check/release preflight also passed at this working-tree checkpoint. The earlier
-nine-job remote CI verifies committed `57f9835`, not these uncommitted changes.
+nine-job remote CI for committed `a21dd3eb7fb900fde96a458b30b056f345086af5`
+[passed all nine jobs](https://github.com/anaregdesign/cosmos-sync/actions/runs/37258933306),
+including actual Cosmos emulator, macOS Flutter and native/browser cross-stack.
+That exact-head outcome does not verify the later internal broker adapter below.
 
 No BFF request, ARM/network/image/replica/data change or package/container
 publication occurred here. The cumulative BFF ledger remains 7/40, with
 33 remaining and zero accepted application mutations. Selected-customer OIDC,
 trusted active linking/recovery/migration, hosted Cosmos/onboarding and final
 physical Android remain separate acceptance gates.
+
+## Internal correlated broker proofs and durable account lookup
+
+The next source checkpoint adds internal, inactive API/ID/Graph correlation
+and expected-binding persistence. API and native ID subjects may differ; exact
+independently signed object/tenant/client metadata, fresh signed challenge/
+authentication time and an uncached approved Graph profile supply the proof.
+No production route, authorization mode, session/cursor/cache protocol,
+publication or Azure workload is activated by this component.
+
+Signed local RSA/TLS/JWKS and strict Graph-transport tests pass registration,
+explicit link/unlink, generation advancement, retained tombstone/relink,
+generic-proof rejection, altered/recreated broker-object denial, corruption and
+duplicate-object ownership checks. The read-only resolver returns only the
+existing random account and generation, rechecks the profile on every lookup,
+and never registers, repairs or changes account/nonce/audit state. Wrong
+signatures, audiences, scopes, clients, object/tenant claims, nonce and stale
+authentication time fail before Graph. Profiles/tokens are fixtures, not live
+customer authentication.
+
+The full BFF vet/format/race/build checkpoint passed; the main race suite took
+175.969 seconds. The subsequent targeted broker race suite also passed the
+additional read-only/corruption/tombstone checks. The actual digest-pinned
+official Cosmos emulator passed all nine subtests in a fresh owned container:
+an independent SDK client reloaded the exact expected broker fingerprint,
+resolved the same random account, and rejected a changed upstream credential
+without changing the ETag/state. Only that new container/database was removed.
+This remains signed-local-provider and Eventual-emulator evidence, not hosted
+MI/Graph or production Session consistency. Exact-new-source remote outcomes
+are separate, not inferred from the earlier `a21dd3e` CI result.
+
+The existing numeric permission revision remains the data-partition write
+fence. Identity generation needs a separate coordinated BFF/Dart/session/
+cursor/cache field; it must not be concatenated into that revision. Active
+production identity/client lifecycle, actual CIAM freshness and hosted MI/
+Cosmos/onboarding, plus final physical Android, remain unfinished. The cloud
+ledger is unchanged at 7/40 attempts and zero accepted data mutations.
