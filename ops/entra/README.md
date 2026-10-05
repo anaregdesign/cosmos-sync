@@ -34,9 +34,10 @@ The separate [External ID setup](../../docs/external-id-setup.md) records the
 selected CIAM tenant's **completed** two-app/two-service-principal registration
 and one API-only administrator grant. Its placeholders in `consumer/` reproduce
 that shape for a future owner's approved tenant. They do not rerun or modify the
-current deployment. Current consumer provider configuration/user-flow association
-and real login remain pending; anonymous discovery and Flutter constructor checks
-are the available consumer runtime evidence.
+current deployment. The subsequently approved one-human workforce provider,
+password-free customer profile, sign-in-only flow and exact local Web SPA bridge
+are applied and read back; selected-customer callback/API-JWT acceptance remains
+separate. These initial two-app templates do not reproduce the entire later setup.
 
 | Step | Body | Graph v1.0 operation |
 | --- | --- | --- |
@@ -71,6 +72,15 @@ is the server `oidc` excerpt, not a complete server configuration. Replace every
 placeholder with recorded registration values and observed same-origin discovery
 metadata. The native ID differs from the API audience. Choose one issuer per
 deployment and keep consumer/workforce data namespaces separate.
+
+The extra workforce federation app is a distinct **confidential upstream
+client**, not either product app. Its approved seven-day secret was transferred
+only in memory directly to the broker. Required source/product assignment,
+Principal-only upstream identity scopes, exact source-object-ID customer
+namespace, no signup/local password/OTP and preserved administrative identities
+are recorded in the
+[current federation boundary](../../docs/external-id-setup.md#approved-one-human-workforce-federation).
+Do not add a secret or Graph `User.Read` to these API/native templates.
 
 ## Existing authorization and validation
 

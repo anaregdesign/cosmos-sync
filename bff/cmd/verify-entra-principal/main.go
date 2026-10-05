@@ -161,9 +161,16 @@ func validateConfiguration(owner ownerRecord, receipt registrationReceipt) error
 		!receipt.ConfigurationVerified {
 		return code("configuration_rejected")
 	}
-	expectedIssuer := "https://login.microsoftonline.com/" + strings.ToLower(owner.TenantID) + "/v2.0"
-	if receipt.OIDC.Issuer != expectedIssuer || !strings.EqualFold(receipt.OIDC.Audience, receipt.API.AppID) ||
+	tenant := strings.ToLower(owner.TenantID)
+	workforceIssuer := "https://login.microsoftonline.com/" + tenant + "/v2.0"
+	customerIssuer := "https://" + tenant + ".ciamlogin.com/" + tenant + "/v2.0"
+	if (receipt.OIDC.Issuer != workforceIssuer && receipt.OIDC.Issuer != customerIssuer) ||
+		!strings.EqualFold(receipt.OIDC.Audience, receipt.API.AppID) ||
 		receipt.OIDC.TenantClaim != "tid" || receipt.OIDC.RequiredScope != requiredScope || receipt.OIDC.TokenUse != "" {
+		return code("configuration_rejected")
+	}
+	if len(receipt.OIDC.AllowedClientIDs) != 0 &&
+		(len(receipt.OIDC.AllowedClientIDs) != 1 || receipt.OIDC.AllowedClientIDs[0] != receipt.Native.AppID) {
 		return code("configuration_rejected")
 	}
 	return nil
@@ -179,6 +186,7 @@ func verifyPrincipal(ctx context.Context, verifier *oidc.IDTokenVerifier, token 
 		OwnerObjectID string          `json:"oid"`
 		Version       string          `json:"ver"`
 		Delegated     string          `json:"scp"`
+		ClientID      string          `json:"azp"`
 		NotBefore     json.RawMessage `json:"nbf"`
 		IssuedAt      json.RawMessage `json:"iat"`
 	}
@@ -188,6 +196,10 @@ func verifyPrincipal(ctx context.Context, verifier *oidc.IDTokenVerifier, token 
 		!guid.MatchString(claims.OwnerObjectID) || !strings.EqualFold(claims.TenantID, owner.TenantID) ||
 		!strings.EqualFold(claims.OwnerObjectID, owner.OwnerObjectID) {
 		return identity{}, code("verified_claims_rejected")
+	}
+	if len(config.AllowedClientIDs) != 0 &&
+		(len(config.AllowedClientIDs) != 1 || claims.ClientID != config.AllowedClientIDs[0]) {
+		return identity{}, code("verified_client_rejected")
 	}
 	// Entra delegated access JWTs carry scp. Do not accept an application roles
 	// token or an ID token merely because it includes a generic scope property.

@@ -88,7 +88,10 @@ proposal, not an enabled provider deployment. The selected dedicated CIAM tenant
 two consumer app registrations and their service principals now exist, with
 API-only administrator consent and compatible public discovery/configuration
 readback. Actual Google/Apple configuration is not planned for this delivery.
-User-flow association and actual common CIAM login remain unverified; see
+The approved workforce provider, one password-free customer profile and a
+sign-in-only flow are configured and read back. Anonymous navigation confirms
+the exact native application exposes that provider; selected-customer callback
+and signed API-JWT acceptance remain separate gates. See
 [the reproducible External ID setup](external-id-setup.md).
 
 An Apple/Google or broker **ID token** proves authentication to its intended
@@ -145,9 +148,11 @@ app or BFF. No access, refresh or ID token should be pasted into an Issue.
 
 The existing workforce validation completed actual one-account macOS AppAuth
 PKCE, secure restore and provider refresh. The separate consumer CIAM setup has
-completed two apps/two service principals and API-only consent; only anonymous
-discovery and the actual Flutter constructor have passed there. It has no
-associated customer user flow or verified consumer login. Each BFF deployment
+completed two apps/two service principals, API-only consent and the approved
+one-human workforce federation/sign-in-only flow. Anonymous discovery, the
+actual Flutter constructor and exact application/provider navigation have
+passed. A native run using administrator SSO was rejected by the strict customer
+check; no verified selected-customer login is inferred from that run. Each BFF deployment
 pins one exact issuer and API audience; selecting the consumer configuration does
 not add workforce token acceptance or migrate workforce cache/data ownership.
 
@@ -274,6 +279,39 @@ write, late authorization/refresh completion after logout, config/account bindin
 provider logout failure and explicit secure-storage failure. These tests use
 injected OAuth and secure-store adapters; they are not evidence of a real provider
 login or hardware Keychain callback.
+
+The owner-assisted `tools/native_entra_auth.py` runner defaults to the original
+workforce receipts. `--input-dir <private-approved-directory>` selects a separate
+0600 owner/registration receipt without overwriting them. It accepts only the
+exact selected tenant's workforce issuer or tenant-ID-host CIAM issuer, native
+callback, separate native/API clients and API-only scope contract; the independent
+Go verifier checks the actual signed API credential and selected directory object.
+Relative input paths are made absolute before the Go subprocess changes directory.
+
+For intentional new login rather than shared browser SSO, its
+`--isolated-sign-in` flag requests `prompt=login` and the supported Apple
+ephemeral `ASWebAuthenticationSession` preference. Android keeps its ordinary
+supported user agent; no ephemeral support is inferred there. Normal production
+native defaults, secure configuration binding and refresh are unchanged.
+Isolation is a browser preference, not identity proof, recent-authentication
+attestation or provider revocation. The actual API JWT still must match the
+approved customer; a successful administrator SSO cannot substitute for it.
+
+For the currently approved one-human CIAM validation, choose
+**Cosmos Sync approved workforce owner** on the initial customer login page
+before entering an account address. Use the original workforce account only on
+the resulting Microsoft workforce page. Directly entering the administrator's
+email on the initial CIAM page can select the separate administrative route.
+The account address is not evidence of which directory object was authenticated;
+the independent signed API-JWT owner check remains mandatory.
+
+The exact native tenant-ID-host request advertises the upstream federation
+callback on that same tenant-ID hostname. It has been added to the dedicated
+source application alongside the two original friendly-host callbacks and
+freshly read back. Do not repair this difference by relaxing issuer/discovery
+origin checks or adding wildcard returns. Microsoft security-information/MFA
+registration remains an owner operation; preserve Security defaults and
+Conditional Access. Ordinary-browser passkey success is not app acceptance.
 
 Before release the owner must supply the registration/consent/BFF configuration,
 sign in through the OS browser, and allow authorized physical devices to be

@@ -9,9 +9,12 @@ Graph readback identified its tenant type as `CIAM`. Actual identifiers, domain,
 billing resource names and operator account stay in private operator evidence.
 Exactly two dedicated consumer app registrations and their two service principals
 have also been created and read back. The new native client has administrator
-consent for only the new API's `Cosmos.Sync` scope. Anonymous discovery and the
-actual Flutter configuration constructor passed; no consumer user flow is
-associated and no real consumer or Apple/Google login has passed. The published
+consent for only the new API's `Cosmos.Sync` scope. An approved workforce OIDC
+provider, one password-free customer profile and a sign-in-only flow are now
+configured and read back. The exact local Web SPA bridge is registered separately
+from the preserved native callback. Anonymous discovery and the actual Flutter
+configuration constructor passed; selected-customer native verification remains
+separate from setup. No actual Apple/Google login is claimed. The published
 `0.2.0-dev.1` artifacts remain unchanged. The workforce validation directory,
 registrations and resources are retained separately.
 
@@ -26,9 +29,12 @@ social user flow to satisfy this delivery.
 The dedicated External ID common OIDC flow remains unverified and distinct from
 the successful workforce Entra authentication. Preserve server authorization
 and linking/broker-bypass safety. Continue simulator development first; physical
-Android verification is the final gate. Cancellation does not authorize a new
-customer account, a local email/password/OTP substitute, signing, paid resources
-or new consent scopes.
+Android verification is the final gate. Cancellation itself does not authorize
+new accounts or credentials. The owner subsequently explicitly approved exactly
+one customer profile for the same existing human and the necessary dedicated
+workforce-federation app/client secret. These narrow exceptions do not authorize
+another test person, a local password/OTP substitute, privileged-user/role
+changes, signing, paid resources or unrelated consent scopes.
 
 The creation request used `Standard/A0`, following Microsoft's documented API
 example, while the successful actual GET returned **`Base/A0`** and MAU billing.
@@ -45,8 +51,8 @@ paid upgrade/free exemption. No premium SKU or paid add-on was requested.
 The application trust configuration below is applied and verified. The owner's
 authorization already covers necessary dedicated consumer tenant/API settings;
 there is no outstanding request to approve the same directory or registrations
-again. Keep the native app unassociated with a customer user flow until its exact
-configured provider and account-isolation policy are reviewed.
+again. Its subsequently reviewed customer flow has only the approved workforce
+provider and exact product client association, with public signup disabled.
 
 | Object | Verified configuration or remaining gate |
 | --- | --- |
@@ -58,6 +64,9 @@ configured provider and account-isolation policy are reviewed.
 | Native registration + service principal | Created `Cosmos Sync Consumer Native (validation)`; `signInAudience=AzureADMyOrg`, native public-client redirect, no secret, no implicit issuance; `isFallbackPublicClient=false`, `isDeviceOnlyAuthSupported=false`, `nativeAuthenticationApisEnabled=none` |
 | Native API grant | Verified `AllPrincipals` delegated consent from the new native service principal to the new API service principal, with **only** `Cosmos.Sync` and `principalId=null`; no default Graph `User.Read`, Graph data permissions, application permissions or preauthorized clients |
 | Native return | Exact existing callback `com.anaregdesign.cosmossync://auth/oauthredirect`, registered as Mobile and desktop applications; no wildcard. Defer provider logout registration until its exact callback is reviewed |
+| Browser return | Separate SPA bridge `http://localhost:8765/auth-redirect.html` for local development; protocol/host/port/path exact, native callback preserved, no implicit grant or secret |
+| Customer flow | Actual sign-in-only flow read back: `isSignUpAllowed=false`, exactly one workforce provider and exactly the product `appId` in `includeApplications`; no local email/password/OTP provider associated |
+| Customer admission | Source federation and product service principals require assignment; only the approved original human/source identity and its one new customer profile are assigned the default application sign-in role, not a directory role |
 | Discovery/configuration | Actual tenant-ID-host metadata and matching issuer/discovery origin verified anonymously; current Flutter `OidcConfig` accepts those values. This does not verify code exchange or issued API tokens |
 | Consumer login | Common CIAM OIDC/user-flow authentication remains unverified; actual Google/Apple configuration and login are excluded from this delivery |
 | Retention | Retain the reusable directory and owned resources; no automated teardown |
@@ -103,9 +112,145 @@ This is **administrative Microsoft authentication, not customer CIAM login**.
 The existing administrative record uses the `ExternalAzureAD` identity namespace,
 distinct from the documented workforce-federated customer namespace. Do not
 alter that privileged record or silently create another customer profile to
-make a user flow succeed. The one-real-owner/no-new-user limit remains a separate
-scope decision; resumed work and unavailable physical iOS do not supply customer
-login, hosted data or linking/broker-bypass evidence.
+make a user flow succeed. The later explicit one-profile exception below has
+been applied; it is not inferred from resumed work or unavailable physical iOS.
+Management login does not supply customer login, hosted data or
+linking/broker-bypass evidence.
+
+### Approved one-human workforce federation
+
+The owner separately approved
+[one same-human customer profile](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-5980142363)
+and the
+[dedicated federation configuration/client secret](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-5984752085).
+Fresh explicit-tenant Graph calls verified the original workforce caller and
+CIAM administrator before creating anything. Exactly one new password-free
+federated customer was created and uniquely read back using:
+
+```text
+signInType:       federated
+issuer:           https://login.microsoftonline.com/<SOURCE_TENANT_ID>/v2.0/<CIAM_TENANT_ID>
+issuerAssignedId: <SOURCE_WORKFORCE_USER_OBJECT_ID>
+```
+
+The source object ID is not an email, native/API `sub`, or the existing CIAM
+administrator's object ID. This directory profile does not merge application
+accounts or adopt workforce data. The existing privileged `ExternalAzureAD`
+administrative identity and both administrators' directory roles are unchanged;
+the new customer has no directory roles.
+[Official workforce federation and precreation](https://learn.microsoft.com/en-us/entra/external-id/customers/how-to-entra-id-federation-customers).
+
+The separate single-tenant **confidential upstream app** has the two original
+documented friendly-host federation HTTPS redirects and the exact measured
+tenant-ID-host federation return, an essential ID-token email claim,
+required application assignment to this one existing human, and `Principal`
+consent for only `email openid profile`. The walkthrough's additional Graph
+`User.Read` was not copied. Product API/native/Web clients remain secret-free
+and retain only `Cosmos.Sync` API consent.
+
+The actual Graph **beta** `oidcIdentityProvider` create and exact readback accepted
+the workforce issuer, this source client, `code`, `openid profile email` and
+subject mapping `sub` to the signed source `oid`. The latest workforce guide
+supports this, despite the older Graph resource reference saying
+`microsoftonline.com` issuers are unsupported. Preserve that version discrepancy;
+do not use a B2C provider type or claim v1.0/production API stability from this
+successful beta setup.
+[Provider create/schema](https://learn.microsoft.com/en-us/graph/api/identitycontainer-post-identityproviders?view=graph-rest-beta).
+
+A seven-day source secret was generated and transferred directly in memory to
+the broker. No value was written to files, Flutter/BFF configuration, logs,
+Issues or chat; only key/expiry metadata was retained. Rotate before expiry using
+existing approved operator access: generate the replacement only when ready to
+update this exact broker provider in memory, verify an actual new login, then
+remove the old source key. Keep overlap bounded, preserve an uncertain write's
+intent/readback and never recover by adding a public-client secret or new vault.
+
+The product flow is explicitly sign-in-only and includes only that provider.
+Its `includeApplications` relationship contains exactly the existing product
+**appId**, not its app/SP object ID. The current Graph
+`authenticationConditionsApplications` schema has no scalar
+`includeAllApplications` property; check the actual relationship instead of
+asserting an undocumented false default. No public signup, local password or
+OTP replacement was enabled.
+[Flow schema](https://learn.microsoft.com/en-us/graph/api/resources/authenticationconditionsapplications?view=graph-rest-1.0),
+[sign-in-only flag](https://learn.microsoft.com/en-us/graph/api/resources/oninteractiveauthflowstartexternalusersselfservicesignup?view=graph-rest-1.0).
+
+Configuration readback is not an attestation of the profile used by a subsequent
+login. The first actual native attempt completed callback, secure-controller
+restore, refresh and local signout, but shared browser SSO returned API JWTs for
+the existing administrator, not the approved customer. Independent signature,
+issuer, API audience/lifetime/scope/client checks passed; the strict customer
+object-ID check correctly rejected them. Never change the expected owner or
+privileged record to turn this into a customer pass. Explicit fresh/isolated
+native login is being verified separately; assignment metadata alone does not
+replace token identity verification or establish broker-linking safety.
+
+Anonymous system-TLS navigation for the exact native client confirmed a linked
+CIAM user flow with exactly one advertised **Cosmos Sync approved workforce
+owner** button. Its source authorize URL pins the dedicated workforce client
+and requests:
+
+```text
+https://<CIAM_TENANT_ID>.ciamlogin.com/<CIAM_TENANT_ID>/federation/oauth2
+```
+
+That measured callback was absent from the original friendly-host registration.
+One exact callback-only PATCH has now added it. Fresh complete application and
+administrator readbacks preserved the original callbacks/settings, claims,
+permission list, secret keys/expiry and roles. Graph automatically added the
+matching null-index `redirectUriSettings` entry and reordered the URI list; a
+strict semantic recovery read verified those computed changes without repeating
+the PATCH. A fresh anonymous request confirms its advertised callback is now
+registered. This is configuration/navigation evidence, not a customer login.
+
+Source management Graph initially returned 401 with a Continuous Access
+Evaluation `InteractionRequired` claims challenge even after successful owner
+browser/CLI login. A targeted silent refresh of the existing Graph `.default`
+scope with that actual challenge succeeded; Graph then returned 200 and the
+complete original owner profile matched. No new scope, consent, client, role or
+policy change was needed. Do not clear shared CLI accounts or disable MFA/CAE to
+repair a cached credential.
+
+For the customer route, select the provider button **before** entering an email,
+then use the original workforce account at the resulting Microsoft page.
+Security-information or target MFA registration can still require owner action.
+An ordinary-browser passkey success or an administrative Security defaults
+screen does not prove a selected-customer callback or API token.
+
+### Authorized secret-free server reader
+
+The owner separately approved a dedicated secret-free server identity with only
+CIAM Graph application `User.Read.All`, recorded in
+[#27](https://github.com/anaregdesign/cosmos-sync/issues/27#issuecomment-5985901179).
+Current Microsoft guidance requires the federated application's home tenant to
+equal the source managed identity's tenant. Cross-tenant resource access therefore
+uses a source-workforce-homed multitenant application, not a target-homed
+application with an unsupported cross-tenant MI subject.
+[Managed-identity federation](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity).
+
+The exact existing retained BFF UAMI was read back before configuration. Its
+source-homed app/service principal and one federated credential now pin the UAMI
+**object/principal ID**, source tenant issuer and `api://AzureADTokenExchange`
+audience. The target CIAM service principal has exactly one Graph application
+role, `User.Read.All`; the source service principal has zero application
+permission grants. Exact app ownership, marker, FIC and role readbacks passed.
+The first target-SP POST returned 400; after exact source readback and target
+deduplication found no object, a bounded repeat returned 201. Propagation is a
+possible explanation, not a measured root cause. No duplicate object was created.
+
+No secret, certificate, user-login redirect, product Graph permission, user-write
+permission, directory-role modification, new paid resource or paid M2M add-on
+was introduced. Existing privileged identities/roles are unchanged. Safe setup
+evidence is retained in
+[#27](https://github.com/anaregdesign/cosmos-sync/issues/27#issuecomment-5986382891);
+actual identifiers and runtime context stay private.
+
+The corresponding Go component performs exact, uncached, bounded user-profile
+reads and fingerprint revalidation. It is not connected to production
+account/session/link routes. The retained old BFF image has not been updated,
+and actual UAMI assertion/token exchange/Graph access from ACA is **unverified**.
+Successful FIC creation alone cannot verify that exchange. No runtime, linking,
+hosted-Cosmos or customer-authentication acceptance is inferred from configuration.
 
 Customer users cannot perform their own API permission consent in external
 tenants. An existing authorized administrator must therefore grant only the
@@ -226,9 +371,12 @@ Clear old native credentials/cache through normal sign-out before changing
 provider configuration. Never repair a failure by accepting an ID token,
 trusting an unverified JWT decode or disabling TLS/authorization.
 
-The current evidence is registration readback, anonymous metadata and actual
-Flutter constructor validation only. No consumer API JWT, callback, refresh,
-shared-account isolation or hosted consumer deployment has passed. Do not add
+The current evidence includes federation/profile/flow registration readback,
+anonymous metadata, actual Flutter constructor validation and exact
+native-provider/callback navigation. The completed administrator-SSO native
+lifecycle does not pass the selected-customer owner check. No selected-customer
+API JWT, callback/refresh, shared-account isolation or hosted consumer deployment
+has passed. Do not add
 legacy B2C `p=` parameters, `common`/`organizations`, a custom domain or an
 unreviewed logout callback as incidental setup.
 [OIDC discovery](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc#fetch-the-openid-configuration-document).
@@ -419,9 +567,11 @@ offline reopen/reconnect and purge. Record one-account limitations. This common 
 Google/Apple provider connections are not required or claimed. The owner
 deferred physical checks to the final Android gate and
 still chose unsigned iOS validation; no signed physical iPhone acceptance is
-claimed. Web requires a separate client registration, HTTPS callback and new Web
-login adapter before it can be included. Provider federation does not turn the
-native sample into a Web app. Cross-provider linking, independent actual users,
+claimed. The ordinary shared Web application now uses locally bundled MSAL5,
+memory-only credentials and the separate registered SPA bridge; its actual
+HTTP/IndexedDB/full-reload fixture passed independently. This does not establish
+live Web/customer OIDC; see [Web auth](web-auth.md).
+Cross-provider linking, independent actual users,
 provider revoke/delete recovery and operational key rotation are future
 provider-specific reference, not current #30 requirements. Server-owned linking
 and deterministic lifecycle/security work remain in
@@ -430,9 +580,9 @@ and deterministic lifecycle/security work remain in
 [#29](https://github.com/anaregdesign/cosmos-sync/issues/29).
 
 Google project/contact/test-login and Apple team/App ID inputs are no longer
-requested. Existing Azure/tenant authority does not remove the current
-no-new-user constraint or provide a verified CIAM login method; settle that
-boundary before any user-flow change. The owner completes any necessary browser
+requested. The explicit one-human profile/federation exception is now applied,
+not an unanswered owner input; it permits no additional test people or
+privileged-record changes. The owner completes any necessary browser
 login/MFA when actionable. No credential or secret belongs in a text response.
 Directory/application configuration alone does not close common OIDC, linking,
 independent-user or final physical-device acceptance.

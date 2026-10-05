@@ -33,6 +33,7 @@ void main() {
       expect(request.scopes, config.scopes);
       expect(request.clientSecret, null);
       expect(request.allowInsecureConnections, false);
+      expect(request.promptValues, null);
       expect(
         request.externalUserAgent,
         ExternalUserAgent.asWebAuthenticationSession,
@@ -40,6 +41,52 @@ void main() {
       expect(result.accessToken, 'api-access-token');
       expect(result.idToken, 'id-token-logout-hint');
       expect(result.tokenType, 'Bearer');
+    },
+  );
+
+  test(
+    'explicit fresh Apple-platform sign-in requests isolated browser and login without changing trust',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final binding = config.storageBinding;
+      final isolated = NativeOidcClient(
+        appAuth: plugin,
+        freshInteractiveSession: true,
+      );
+      await isolated.signIn(config);
+      final request = plugin.authorization!;
+      expect(request.promptValues, ['login']);
+      expect(
+        request.externalUserAgent,
+        ExternalUserAgent.ephemeralAsWebAuthenticationSession,
+      );
+      expect(request.clientId, config.clientId);
+      expect(request.redirectUrl, config.redirectUrl);
+      expect(request.discoveryUrl, config.discoveryUrl);
+      expect(request.scopes, config.scopes);
+      expect(request.clientSecret, null);
+      expect(request.allowInsecureConnections, false);
+      expect(config.storageBinding, binding);
+      await isolated.refresh(config, 'opaque-refresh-secret');
+      expect(plugin.tokenRequest!.refreshToken, 'opaque-refresh-secret');
+      expect(plugin.tokenRequest!.clientSecret, null);
+      expect(plugin.tokenRequest!.scopes, config.scopes);
+    },
+  );
+
+  test(
+    'fresh Android sign-in requests login without claiming Apple ephemeral support',
+    () async {
+      final isolated = NativeOidcClient(
+        appAuth: plugin,
+        freshInteractiveSession: true,
+      );
+      await isolated.signIn(config);
+      expect(plugin.authorization!.promptValues, ['login']);
+      expect(
+        plugin.authorization!.externalUserAgent,
+        ExternalUserAgent.asWebAuthenticationSession,
+      );
     },
   );
 

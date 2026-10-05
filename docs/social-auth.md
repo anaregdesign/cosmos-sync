@@ -47,8 +47,11 @@ new CIAM directory and linked billing resource were created successfully; its
 private readback confirms the selected domain, United States geography and CIAM
 tenant type. The dedicated consumer API/native registrations, service principals
 and API-only delegated administrator consent are complete. Anonymous discovery
-and native issuer/discovery-origin configuration checks passed. Provider settings,
-the associated user flow and actual consumer login remain unverified. Actual
+and native issuer/discovery-origin configuration checks passed. The separately
+approved workforce provider, one same-human password-free customer and
+sign-in-only flow are now configured and read back. Exact native anonymous
+navigation exposes that provider and its registered callback; selected-customer
+authentication remains unverified. Actual
 Google/Apple project/team setup and credentials are excluded from the current
 delivery. The [External ID setup record](external-id-setup.md)
 records creation status, the selected registration/callback contract, costs and

@@ -11,9 +11,12 @@ String defaultRedirectUrl() =>
     'com.anaregdesign.cosmossync://auth/oauthredirect';
 
 class NativeOidcClient implements OidcClient {
-  NativeOidcClient({FlutterAppAuth? appAuth})
-    : _appAuth = appAuth ?? const FlutterAppAuth();
+  NativeOidcClient({
+    FlutterAppAuth? appAuth,
+    this.freshInteractiveSession = false,
+  }) : _appAuth = appAuth ?? const FlutterAppAuth();
   final FlutterAppAuth _appAuth;
+  final bool freshInteractiveSession;
 
   void _checkPlatform() {
     if (kIsWeb ||
@@ -49,8 +52,16 @@ class NativeOidcClient implements OidcClient {
             additionalParameters: config.brokerProvider == null
                 ? null
                 : {'domain_hint': config.brokerProvider!.name},
+            promptValues: freshInteractiveSession ? const ['login'] : null,
             allowInsecureConnections: false,
-            externalUserAgent: ExternalUserAgent.asWebAuthenticationSession,
+            externalUserAgent:
+                freshInteractiveSession &&
+                    {
+                      TargetPlatform.iOS,
+                      TargetPlatform.macOS,
+                    }.contains(defaultTargetPlatform)
+                ? ExternalUserAgent.ephemeralAsWebAuthenticationSession
+                : ExternalUserAgent.asWebAuthenticationSession,
           ),
         ),
       ),

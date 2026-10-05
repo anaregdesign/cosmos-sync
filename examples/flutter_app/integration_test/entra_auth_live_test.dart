@@ -16,6 +16,9 @@ void main() {
     'owner-assisted Entra PKCE, secure restore, refresh and local signout',
     (tester) async {
       const endpoint = String.fromEnvironment('COSMOS_SYNC_ENTRA_CONTROL_URL');
+      const isolatedSignIn = bool.fromEnvironment(
+        'COSMOS_SYNC_ENTRA_ISOLATED_SIGN_IN',
+      );
       final control = _Control(Uri.parse(endpoint));
       await tester.pumpWidget(
         const MaterialApp(
@@ -47,7 +50,10 @@ void main() {
         try {
           // This isolated key is unrelated to ordinary app credentials.
           await store.clear();
-          current = AuthSessionController(tokenStore: store);
+          current = AuthSessionController(
+            oidc: NativeOidcClient(freshInteractiveSession: isolatedSignIn),
+            tokenStore: store,
+          );
           current.configure(config);
           await control.stage('browser_request_started');
           debugPrint('COSMOS_SYNC_ENTRA_BROWSER_REQUEST_STARTED');
@@ -61,7 +67,10 @@ void main() {
           // OS secure store, and its next token call performs provider refresh.
           // This is controller recreation, not proof of OS process restart.
           current.dispose();
-          current = AuthSessionController(tokenStore: store);
+          current = AuthSessionController(
+            oidc: NativeOidcClient(freshInteractiveSession: isolatedSignIn),
+            tokenStore: store,
+          );
           current.configure(config);
           await current.restore();
           _require(

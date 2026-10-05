@@ -57,6 +57,35 @@ sessions cannot start or commit another transaction. These generations are
 **not yet wired into production JWT/session/cursor checks or Flutter cache
 rebinding**, and therefore do not claim current preview-wide revocation.
 
+### Trusted broker-profile reader
+
+A separate internal Microsoft Graph reader now checks the configured CIAM
+customer's exact object ID, enabled state and complete credential set. It accepts
+one approved workforce-federated identity in the documented source/target-tenant
+namespace and at most one generated UPN in the exact initial domain. The UPN is
+directory metadata, not an independent login proof or ownership key. Local,
+administrative, foreign, added, missing and replaced credentials fail closed.
+The expected namespaced binding fingerprint must be retained by a future account
+transaction; online revalidation never adopts a different credential merely
+because the broker object ID is unchanged.
+
+The server-only credential uses the configured managed identity's assertion for
+`api://AzureADTokenExchange/.default`, a dedicated cross-tenant application and
+only resource-tenant Graph `User.Read.All`. Its authority is pinned to Azure
+Public Cloud, with no CLI/default-credential fallback. Graph access is one exact
+user GET, bounded to ten seconds, 64 KiB and sixteen identities, with no cookies,
+redirects or result cache. Errors contain fixed protocol codes, not raw Graph
+messages or credentials. Configured trust is not proof of an actual hosted
+managed-identity token exchange.
+
+This reader is also **not wired into production**. A future adapter must obtain
+the broker object/tenant/client from an independently verified API JWT, correlate
+the signed ID proof's object ID despite differing API/native subjects, and bind
+the approved upstream credential and expected fingerprint into the durable
+transaction. A profile GET alone supplies neither authentication time nor the
+server challenge's signed nonce. See the
+[authorized reader setup](external-id-setup.md#authorized-secret-free-server-reader).
+
 ## Atomic storage and deliberate limits
 
 One fixed, versioned Cosmos logical partition contains one bounded directory

@@ -487,6 +487,7 @@ production auth bypass or package publication was introduced.
 | Actual Chromium Web UI | Attempts 4 and 5 passed signed Go HTTP/JWT validation, real IndexedDB, separately observed full page reload, exact pending operation retention, refused offline rebind, online BFF rebind, server ACK and logout purge |
 | SDK and BFF preservation | SDK analysis/format, all 165 native and 146 actual Chromium SDK tests, full Go vet/race/build passed |
 | Portable control tools | All 146 Python tests, package-doc mirror check and prepare-only release preflight passed |
+| Exact-head portable Web checkpoint | Pushed `57f9835f332f35d6722103f4c5de68d31db550b5` passed all nine jobs in [CI 37210246196](https://github.com/anaregdesign/cosmos-sync/actions/runs/37210246196), including the actual ordinary HTTP/Chromium/full-reload Web job |
 
 Both successful Web runtime receipts identify the dirty tree based on `0cc3a8d`,
 not an exact subsequent commit. The first three failures remain preserved.
@@ -500,7 +501,8 @@ CI now includes a ninth `flutter-web` job with pinned Flutter/action sources,
 locked local MSAL dependencies, native/browser regressions, the production Web
 build and actual signed-Go-HTTP Web UI/reload fixture. The release verifier also
 requires this job. Older eight-job green runs do not validate this source.
-Exact-head remote results must be recorded separately.
+That exact remote run independently verifies the committed source; it does not
+relabel the earlier dirty local receipts.
 
 The owner explicitly approved exactly one customer profile for the same existing
 human in [#2](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-5980142363).
@@ -508,3 +510,114 @@ That resolves the unanswered permission exception; no profile/flow write or live
 customer login is inferred. Actual CIAM, trusted production linking,
 hosted Cosmos/onboarding and final physical Android remain separate open gates.
 Physical iOS and cancelled actual Google/Apple connections are not blockers.
+
+## Authorized workforce-to-CIAM preparation and strict profile check
+
+Both focused owner approvals are recorded in #2. Fresh explicit-tenant Graph
+calls verified the original workforce caller/CIAM administrator, exact product
+apps, API-only consent and no preexisting exact customer or flow. The dedicated
+source app/SP now requires the sole approved human's default sign-in assignment
+and Principal-only `email openid profile` consent; no Graph `User.Read` or
+directory role was added. Exactly one password-free customer profile was created
+and uniquely read back in the documented tenant-specific federated namespace
+using the original source **object ID**, not email/API subject/operator ID.
+
+Actual beta custom-OIDC provider creation/readback accepted the workforce issuer
+and source `oid` mapping. A seven-day source secret was transferred directly in
+memory to the broker, with only safe key/expiry metadata retained. The product
+flow has no signup/local password/OTP, exactly one provider and exactly one
+product appId relationship. Source/product assignment is required, the reviewed
+SPA bridge is registered, native/API-only contracts are preserved, the customer
+has no directory roles, and privileged administrative identity/roles are unchanged.
+Graph tag ordering and an undocumented `includeAllApplications` guard initially
+failed; exact fresh readback resolved both without repeated mutations.
+
+The first actual native run completed PKCE/callback, secure-controller restore,
+refresh and local signout, but shared SSO selected the **administrative profile**,
+not the approved customer. Both signed API tokens passed cryptographic
+issuer/audience/lifetime/scope/client checks; the strict selected-customer owner
+check rejected them. Preserve that failed wrapper and separate diagnostic proof;
+no customer pass is inferred. A relative explicit-input path bug was corrected
+before Go changes working directory. Exact tenant-ID-host CIAM/owned-client pins,
+private input validation and explicit fresh Apple-ephemeral/Android-login request
+regressions passed; ordinary native defaults/configuration binding are unchanged.
+
+Two explicitly isolated retries timed out before callback/token capture. In the
+first, the owner was still operating the login. The owner later clarified they
+had not noticed another retry while doing other work. Fixed timeout markers,
+not a provider denial, classify those failures. Their owned control listeners
+were closed; no captured initial/refreshed API JWT or customer pass is inferred.
+
+A subsequently owner-ready attempt displayed Microsoft's security-information
+registration `invalid_request` page and was stopped. That generic page does not
+establish a timeout, policy or ephemeral-browser root cause. The owner then
+reported successful ordinary-browser passkey login. A following attempt showed
+a CIAM Security defaults/MFA registration page after the owner used the admin
+address; the owner could not recall whether the customer provider button had
+been selected. Without a signed
+token, that screenshot does not identify an exact authenticated object ID.
+Security defaults, MFA and Conditional Access were not disabled.
+
+Anonymous exact-native-client navigation independently confirmed the linked
+CIAM flow, exactly one approved workforce provider button and its exact source
+client. The advertised upstream callback used the tenant-ID hostname, absent
+from the retained original friendly-host registration. Before repair, source
+Graph rejected a still-unexpired cached token with HTTP 401, CAE
+`InteractionRequired` and an actual claims challenge. Successful owner browser/
+CLI login alone did not replace that cached Graph credential. Targeted silent
+refresh of the already authorized Graph `.default` scope with the challenge
+returned a credential accepted by Graph HTTP 200; all recorded original owner
+profile fields matched, and normal CLI Graph acquisition subsequently passed.
+
+One exact upstream callback-only PATCH returned 204. Initial full comparison
+stopped on Graph's generated null-index `redirectUriSettings` entry and reordered
+callback list. Fresh recovery readback verified precisely those computed
+changes and the added callback, preserving both original returns/settings,
+claims, permissions, secret keys/expiry and administrator profile/roles.
+The PATCH was not repeated. A fresh anonymous request confirmed its advertised
+tenant-ID-host callback is registered. These observations establish routing
+configuration, not selected-customer authentication. The subsequent explicitly
+owner-ready native retry ended with the fixed app cancellation error before any
+API capture. The owner then clarified they had not noticed the browser. It is an
+uncompleted owner interaction, not a measured provider rejection or customer
+pass. Its owned helper/listener was stopped; another unchanged retry is not
+required for independent implementation work.
+
+### Authorized secret-free broker reader
+
+The separately approved source-homed multitenant app/home service principal,
+exact retained UAMI federated credential and target CIAM service principal were
+created and independently read back. Only the target has Graph application
+`User.Read.All`; source application grants remain zero. No secret/certificate,
+product Graph grant, user-write permission, directory-role change, paid resource
+or paid M2M add-on was created. The initial target service-principal 400 and
+deduplicated repeat 201 remain distinct results, not a proven replication cause.
+Configuration evidence is persisted in
+[#27](https://github.com/anaregdesign/cosmos-sync/issues/27#issuecomment-5986382891).
+
+The new internal Go reader uses that secret-free SDK credential design with a
+pinned public-cloud authority, exact user GET, ten-second/64-KiB bounds and no
+cookies, redirect or result cache. Full BFF vet/race/build passed after the
+explicit cloud-authority pin and actual Azure SDK assertion/exchange transport
+fixture; the latest repeat main-package race run completed in 172.716 seconds.
+The fixture
+uses the configured MI assertion, exact target tenant/client/Graph scope and no
+secret/default-credential fallback despite conflicting environment variables.
+MSAL's standard OIDC scope additions are distinguished from Graph application
+grants. Token caching is allowed, but two lookups execute two Graph GETs.
+Targeted regressions
+cover enabled-state, object/namespace/credential-set checks, generated-UPN
+separation, fixed private failure codes and expected-fingerprint replacement
+denial. It is not connected to production routes, signed API/ID-proof correlation,
+fresh challenge evidence or account/session/cursor/cache generations. Actual
+managed-identity exchange/Graph execution from ACA and integration remain
+unverified; the old retained image has not changed. All 153 portable Python
+tests, ordinary Flutter analysis/all 72 native app tests/format and the actual package-doc
+check/release preflight also passed at this working-tree checkpoint. The earlier
+nine-job remote CI verifies committed `57f9835`, not these uncommitted changes.
+
+No BFF request, ARM/network/image/replica/data change or package/container
+publication occurred here. The cumulative BFF ledger remains 7/40, with
+33 remaining and zero accepted application mutations. Selected-customer OIDC,
+trusted active linking/recovery/migration, hosted Cosmos/onboarding and final
+physical Android remain separate acceptance gates.

@@ -204,6 +204,33 @@ func TestConfigurationPinsSelectedAccountAndAPIAudience(t *testing.T) {
 		{"unexpected tenant host", func(_ *ownerRecord, r *registrationReceipt) {
 			r.OIDC.Issuer = "https://wrong.example/" + testTenant + "/v2.0"
 		}},
+		{"customer friendly hostname", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.Issuer = "https://friendly.ciamlogin.com/" + testTenant + "/v2.0"
+		}},
+		{"customer mismatched hostname tenant", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.Issuer = "https://" + testOther + ".ciamlogin.com/" + testTenant + "/v2.0"
+		}},
+		{"customer mismatched path tenant", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.Issuer = "https://" + testTenant + ".ciamlogin.com/" + testOther + "/v2.0"
+		}},
+		{"customer hostname suffix attack", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.Issuer = "https://" + testTenant + ".ciamlogin.com.attacker.invalid/" + testTenant + "/v2.0"
+		}},
+		{"customer common authority", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.Issuer = "https://" + testTenant + ".ciamlogin.com/common/v2.0"
+		}},
+		{"customer issuer trailing path", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.Issuer = "https://" + testTenant + ".ciamlogin.com/" + testTenant + "/v2.0/"
+		}},
+		{"customer issuer query", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.Issuer = "https://" + testTenant + ".ciamlogin.com/" + testTenant + "/v2.0?alias=1"
+		}},
+		{"client list admits another app", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.AllowedClientIDs = []string{testOther}
+		}},
+		{"client list admits extra apps", func(_ *ownerRecord, r *registrationReceipt) {
+			r.OIDC.AllowedClientIDs = []string{testNative, testOther}
+		}},
 		{"http issuer", func(_ *ownerRecord, r *registrationReceipt) {
 			r.OIDC.Issuer = "http://login.microsoftonline.com/" + testTenant + "/v2.0"
 		}},
@@ -221,6 +248,47 @@ func TestConfigurationPinsSelectedAccountAndAPIAudience(t *testing.T) {
 			tc.modify(&o, &r)
 			if validateConfiguration(o, r) == nil {
 				t.Fatal("unsafe account or resource configuration accepted")
+			}
+		})
+	}
+}
+
+func TestCustomerConfigurationPinsTenantIDHostnameAndNativeClient(t *testing.T) {
+	owner, receipt := validReceipt()
+	receipt.OIDC.Issuer = "https://" + testTenant + ".ciamlogin.com/" + testTenant + "/v2.0"
+	receipt.OIDC.AllowedClientIDs = []string{testNative}
+	if err := validateConfiguration(owner, receipt); err != nil {
+		t.Fatalf("exact customer trust configuration rejected: %v", err)
+	}
+}
+
+func TestVerifiedAPIPrincipalEnforcesConfiguredNativeClient(t *testing.T) {
+	f := fixture(t)
+	f.config.AllowedClientIDs = []string{testNative}
+	verifier, err := syncbff.NewOIDCVerifier(f.ctx, f.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := ownerRecord{testTenant, testOwner}
+	for _, tc := range []struct {
+		name   string
+		client any
+		valid  bool
+	}{
+		{"owned client", testNative, true},
+		{"missing client", nil, false},
+		{"other client", testOther, false},
+		{"client array", []string{testNative}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			token := f.token(t, map[string]any{"azp": tc.client}, nil)
+			got, err := verifyPrincipal(f.ctx, verifier, token, owner, f.config)
+			if tc.valid {
+				if err != nil || got.Subject == "" {
+					t.Fatalf("owned native API token rejected: %v", err)
+				}
+			} else if err == nil || got.Subject != "" {
+				t.Fatal("unapproved API client accepted")
 			}
 		})
 	}

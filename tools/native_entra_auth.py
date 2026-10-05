@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import signal
 import stat
@@ -23,6 +24,7 @@ from flutter_app_smoke import (
 STAGES = frozenset({"browser_request_started", "native_callback_received",
                     "secure_restore_complete", "refresh_complete", "local_signout_complete"})
 PHASES = frozenset({"initial", "refresh"})
+GUID = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
 
 
 def private_json(path, value):
@@ -43,6 +45,67 @@ def private_input(path):
     if info.st_size > 65536:
         raise ValueError("private_input_rejected")
     return json.loads(path.read_text())
+
+
+def approved_registration(directory):
+    receipt_path = directory / "registration-receipt.local.json"
+    owner_path = directory / "approved-owner.local.json"
+    receipt = private_input(receipt_path)
+    owner = private_input(owner_path)
+    if not isinstance(receipt, dict) or not isinstance(owner, dict):
+        raise ValueError("approved_registration_configuration_required")
+    tenant = owner.get("tenantId")
+    owner_id = owner.get("ownerObjectId")
+    if not all(isinstance(value, str) and GUID.fullmatch(value) for value in (tenant, owner_id)):
+        raise ValueError("approved_registration_configuration_required")
+    if (receipt.get("configurationVerified") is not True or
+            receipt.get("nativeCallbackConfigured") is not True or
+            receipt.get("tenantId") != tenant or receipt.get("ownerObjectId") != owner_id):
+        raise ValueError("approved_registration_configuration_required")
+    config = receipt.get("nativeConfig")
+    oidc = receipt.get("oidc")
+    api = receipt.get("api")
+    native = receipt.get("native")
+    if not all(isinstance(value, dict) for value in (config, oidc, api, native)):
+        raise ValueError("approved_registration_configuration_required")
+    api_id, native_id = api.get("appId"), native.get("appId")
+    if not all(isinstance(value, str) and GUID.fullmatch(value) for value in (api_id, native_id)) or api_id == native_id:
+        raise ValueError("approved_registration_configuration_required")
+    tenant = tenant.lower()
+    issuers = {
+        "https://login.microsoftonline.com/" + tenant + "/v2.0",
+        "https://" + tenant + ".ciamlogin.com/" + tenant + "/v2.0",
+    }
+    issuer = oidc.get("issuer")
+    if (issuer not in issuers or config.get("issuer") != issuer or
+            config.get("clientId") != native_id or oidc.get("audience") != api_id or
+            oidc.get("tenantClaim") != "tid" or oidc.get("requiredScope") != "Cosmos.Sync" or
+            oidc.get("tokenUse", "") != "" or
+            oidc.get("allowedClientIds", []) not in ([], [native_id])):
+        raise ValueError("approved_registration_configuration_required")
+    if config.get("redirectUrl") != "com.anaregdesign.cosmossync://auth/oauthredirect":
+        raise ValueError("approved_callback_required")
+    scopes = config.get("scopes")
+    if (not isinstance(scopes, list) or any(not isinstance(scope, str) for scope in scopes) or
+            len(set(scopes)) != len(scopes) or
+            set(scopes) != {"openid", "profile", "offline_access", "api://" + api_id + "/Cosmos.Sync"} or
+            config.get("discoveryUrl") not in (None, issuer + "/.well-known/openid-configuration")):
+        raise ValueError("approved_registration_configuration_required")
+    return receipt_path, owner_path, config
+
+
+def registration_directory(root, selected):
+    return (selected if selected is not None else root / ".cache/entra-azure").absolute()
+
+
+def native_command(flutter, target, url, isolated_sign_in=False):
+    command = [
+        flutter, "test", "integration_test/entra_auth_live_test.dart", "-d", target,
+        "--dart-define=COSMOS_SYNC_ENTRA_CONTROL_URL=" + url, "--reporter", "expanded",
+    ]
+    if isolated_sign_in:
+        command.append("--dart-define=COSMOS_SYNC_ENTRA_ISOLATED_SIGN_IN=true")
+    return command
 
 
 class NativeControl:
@@ -183,6 +246,10 @@ def main():
     parser.add_argument("--device", choices=("macos", "android", "android-emulator"), default="macos")
     parser.add_argument("--device-id-file")
     parser.add_argument("--authorize-install", action="store_true")
+    parser.add_argument("--input-dir", type=Path,
+                        help="Explicit private approved receipt/owner directory; default retains workforce setup")
+    parser.add_argument("--isolated-sign-in", action="store_true",
+                        help="Request prompt=login and supported Apple ephemeral browser, not token/account authority")
     parser.add_argument("--output")
     parser.add_argument("--flutter-bin", default=os.environ.get("FLUTTER_BIN", "flutter"))
     parser.add_argument("--go-bin", default=os.environ.get("GO_BIN", "go"))
@@ -194,16 +261,8 @@ def main():
         raise ValueError("android_evidence_output_requires_android_target")
     target = native_target(args)
     root = Path(__file__).resolve().parents[1]
-    input_directory = root / ".cache/entra-azure"
-    receipt_path = input_directory / "registration-receipt.local.json"
-    owner_path = input_directory / "approved-owner.local.json"
-    receipt = private_input(receipt_path)
-    owner = private_input(owner_path)
-    if not receipt.get("configurationVerified") or not receipt.get("nativeCallbackConfigured") or receipt.get("tenantId") != owner.get("tenantId") or receipt.get("ownerObjectId") != owner.get("ownerObjectId"):
-        raise ValueError("approved_registration_configuration_required")
-    config = receipt["nativeConfig"]
-    if config.get("redirectUrl") != "com.anaregdesign.cosmossync://auth/oauthredirect":
-        raise ValueError("approved_callback_required")
+    input_directory = registration_directory(root, args.input_dir)
+    receipt_path, owner_path, config = approved_registration(input_directory)
     run_parent = root / ".cache/entra-live-native"
     run_parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     run_parent.chmod(0o700)
@@ -225,8 +284,7 @@ def main():
         log_fd = os.open(directory / "flutter-private.log", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         print("NATIVE_ENTRA_OWNER_ASSISTED_RUN_STARTED", flush=True)
         with os.fdopen(log_fd, "w") as output:
-            command = [args.flutter_bin, "test", "integration_test/entra_auth_live_test.dart", "-d", target,
-                       "--dart-define=COSMOS_SYNC_ENTRA_CONTROL_URL=" + control.url, "--reporter", "expanded"]
+            command = native_command(args.flutter_bin, target, control.url, args.isolated_sign_in)
             flutter_process = subprocess.Popen(command, cwd=root / "examples/flutter_app", stdout=output,
                                                stderr=subprocess.STDOUT, start_new_session=os.name == "posix")
             deadline = time.monotonic() + args.timeout
@@ -268,6 +326,7 @@ def main():
         if any(before[key] != after[key] for key in ("tenantId", "ownerObjectId", "subject")):
             raise RuntimeError("refresh_principal_changed")
         report = successful_native_evidence(args.device)
+        report["isolatedInteractiveSessionRequested"] = args.isolated_sign_in
     finally:
         cleanup_native_run(flutter_process, control, reverse)
     private_json(directory / "proof.json", report)

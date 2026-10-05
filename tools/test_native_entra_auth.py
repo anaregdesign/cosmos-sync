@@ -127,6 +127,105 @@ class PrivateInputTests(unittest.TestCase):
                 private_input(link)
 
 
+class ApprovedRegistrationTests(unittest.TestCase):
+    tenant = "11111111-1111-4111-8111-111111111111"
+    owner = "22222222-2222-4222-8222-222222222222"
+    api = "33333333-3333-4333-8333-333333333333"
+    client = "44444444-4444-4444-8444-444444444444"
+
+    def receipts(self, customer=False):
+        issuer = ("https://" + self.tenant + ".ciamlogin.com/" + self.tenant + "/v2.0" if customer
+                  else "https://login.microsoftonline.com/" + self.tenant + "/v2.0")
+        owner = {"tenantId": self.tenant, "ownerObjectId": self.owner}
+        receipt = {
+            **owner, "configurationVerified": True, "nativeCallbackConfigured": True,
+            "api": {"appId": self.api}, "native": {"appId": self.client},
+            "oidc": {"issuer": issuer, "audience": self.api, "tenantClaim": "tid",
+                     "requiredScope": "Cosmos.Sync", "allowedClientIds": [self.client]},
+            "nativeConfig": {
+                "issuer": issuer, "clientId": self.client,
+                "redirectUrl": "com.anaregdesign.cosmossync://auth/oauthredirect",
+                "discoveryUrl": issuer + "/.well-known/openid-configuration",
+                "scopes": ["openid", "profile", "offline_access", "api://" + self.api + "/Cosmos.Sync"],
+            },
+        }
+        return receipt, owner
+
+    def check(self, receipt, owner):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            private_json(directory / "registration-receipt.local.json", receipt)
+            private_json(directory / "approved-owner.local.json", owner)
+            return native.approved_registration(directory)[2]
+
+    def test_exact_workforce_and_customer_pin_without_changing_legacy_inputs(self):
+        for customer in (False, True):
+            with self.subTest(customer=customer):
+                receipt, owner = self.receipts(customer)
+                self.assertEqual(self.check(receipt, owner), receipt["nativeConfig"])
+
+    def test_relative_selection_is_absolute_before_the_go_subprocess_changes_cwd(self):
+        selection = Path(".cache/separate-approved-customer")
+        directory = native.registration_directory(Path.cwd(), selection)
+        self.assertTrue(directory.is_absolute())
+        self.assertEqual(directory, Path.cwd() / selection)
+        self.assertEqual(native.registration_directory(Path.cwd(), None),
+                         Path.cwd() / ".cache/entra-azure")
+
+    def test_issuer_pin_rejects_friendly_common_other_tenant_suffix_and_http(self):
+        for issuer in (
+            "https://friendly.ciamlogin.com/" + self.tenant + "/v2.0",
+            "https://" + self.client + ".ciamlogin.com/" + self.tenant + "/v2.0",
+            "https://" + self.tenant + ".ciamlogin.com/common/v2.0",
+            "https://" + self.tenant + ".ciamlogin.com.attacker.invalid/" + self.tenant + "/v2.0",
+            "http://" + self.tenant + ".ciamlogin.com/" + self.tenant + "/v2.0",
+        ):
+            with self.subTest(issuer=issuer):
+                receipt, owner = self.receipts(True)
+                receipt["oidc"]["issuer"] = receipt["nativeConfig"]["issuer"] = issuer
+                receipt["nativeConfig"]["discoveryUrl"] = issuer + "/.well-known/openid-configuration"
+                with self.assertRaisesRegex(ValueError, "approved_registration_configuration_required"):
+                    self.check(receipt, owner)
+
+    def test_owner_receipt_config_native_client_and_discovery_mismatch_are_denied(self):
+        changes = (
+            lambda receipt: receipt.update(ownerObjectId=self.client),
+            lambda receipt: receipt.update(configurationVerified=False),
+            lambda receipt: receipt.update(nativeCallbackConfigured="true"),
+            lambda receipt: receipt["nativeConfig"].update(clientId=self.api),
+            lambda receipt: receipt["oidc"].update(audience=self.client),
+            lambda receipt: receipt["oidc"].update(tenantClaim="sub"),
+            lambda receipt: receipt["oidc"].update(allowedClientIds=[self.client, self.api]),
+            lambda receipt: receipt["nativeConfig"].update(discoveryUrl="https://attacker.invalid/config"),
+        )
+        for change in changes:
+            with self.subTest(change=change):
+                receipt, owner = self.receipts(True)
+                change(receipt)
+                with self.assertRaisesRegex(ValueError, "approved_registration_configuration_required"):
+                    self.check(receipt, owner)
+
+    def test_api_only_scope_contract_rejects_graph_raw_duplicate_and_missing_scope(self):
+        for scopes in (
+            ["openid", "profile", "offline_access"],
+            ["openid", "profile", "offline_access", "User.Read"],
+            ["openid", "profile", "offline_access", "api://" + self.client + "/Cosmos.Sync"],
+            ["openid", "profile", "offline_access", "api://" + self.api + "/Cosmos.Sync", "openid"],
+            "openid profile offline_access",
+        ):
+            with self.subTest(scopes=scopes):
+                receipt, owner = self.receipts(True)
+                receipt["nativeConfig"]["scopes"] = scopes
+                with self.assertRaisesRegex(ValueError, "approved_registration_configuration_required"):
+                    self.check(receipt, owner)
+
+    def test_exact_native_callback_is_required(self):
+        receipt, owner = self.receipts(True)
+        receipt["nativeConfig"]["redirectUrl"] = "com.unreviewed.app://callback"
+        with self.assertRaisesRegex(ValueError, "approved_callback_required"):
+            self.check(receipt, owner)
+
+
 class NativeTargetTests(unittest.TestCase):
     def arguments(self, **overrides):
         values = {"device": "macos", "flutter_bin": "flutter", "device_id_file": None,
@@ -138,6 +237,15 @@ class NativeTargetTests(unittest.TestCase):
         with patch.object(native, "android_target") as resolve:
             self.assertEqual(native_target(self.arguments()), "macos")
             resolve.assert_not_called()
+
+    def test_isolated_sign_in_is_explicit_public_flag_not_a_token_or_identity_override(self):
+        default = native.native_command("flutter", "macos", "http://127.0.0.1:1234/capability/")
+        self.assertNotIn("--dart-define=COSMOS_SYNC_ENTRA_ISOLATED_SIGN_IN=true", default)
+        isolated = native.native_command("flutter", "macos", "http://127.0.0.1:1234/capability/", True)
+        self.assertEqual(isolated[:-1], default)
+        self.assertEqual(isolated[-1], "--dart-define=COSMOS_SYNC_ENTRA_ISOLATED_SIGN_IN=true")
+        self.assertFalse(any("accessToken" in argument or "ownerObjectId" in argument
+                             for argument in isolated))
 
     def test_android_reuses_exact_physical_target_and_install_boundary(self):
         args = self.arguments(device="android", device_id_file=".cache/device.txt",
