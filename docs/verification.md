@@ -1090,3 +1090,69 @@ Azure runtime. #16 hosting/state, #24 actual customer/data and coverage decision
 failures, unperformed criteria and #30's not-planned scope are preserved.
 This documentation/Issue review adds zero BFF attempts, accepted document writes,
 Azure operations, owner logins, secret reads or physical-device actions.
+
+## Generic browser source and fresh management-state acceptance, 2026-10-06
+
+The subsequent owner-approved implementation adds explicit generic browser
+OIDC alongside the preserved Entra/MSAL default. Pinned/pushed source
+`23a24712104ec9623e50cec9839a9dd6765d648c` passed its clean exact-source
+production-browser acceptance, recorded in
+`artifacts/browser-oidc/source-23a2471.private.json`: `source_tree_dirty=false`,
+no injected API credential, no global TLS relaxation and owned cleanup passed.
+[#40](https://github.com/anaregdesign/cosmos-sync/issues/40) is completed in this
+source/standards-fixture scope, not actual provider acceptance or a new publication.
+
+| Check | Accepted scope |
+| --- | --- |
+| Generic protocol | Twenty real browser stages through production bundle/callback and normal Dart WebOidcClient: non-Entra HTTPS discovery, Code/S256, nonce, RSA/JWKS, ID/API trust denial, state/callback binding, renewal/no-new-ID, absent-refresh/no-iframe, subject-switch denial, popup/token cancellation and logout |
+| Independent issuer observation | 18 authorization requests, 16 code/S256 exchanges, 15 JWKS reads, 3 renewals; Go also denies bad PKCE, replay and foreign callback |
+| Actual Flutter cache lifecycle | Observed full document reload, signed-out/offline-rebind refusal, another subject's isolated cache, original exact outbox operation, online BFF rebind/ACK and logout purge |
+| Existing regression | 28 Node, 113 native app, 30 Chrome app, 186 native SDK, 164 Chrome SDK and 200 portable-tool cases; Go race/vet/build, ordinary nonfixture Web build and original recorded-token cache fixture passed on unchanged implementation |
+| Publication/remote CI | No new merge, package/image publication or remote CI acceptance; old main/run37433122046 remains only `36d2680` evidence |
+
+The generic adapter uses pinned oidc-client-ts3.5.0 and jose6.2.12, explicitly
+verifies signed ID trust and keeps user/state/ID/refresh credentials in memory.
+Ordinary exports remain API-only and BFF authorization establishes every cache
+owner. Generic directory fresh proof is explicitly unsupported; the preserved
+Entra isolated proof and workforce-only reader are not broadened.
+
+The approved distinct private management workspace
+`.cache/workload-management-36d2680-20261006/` now designates the six existing
+workload bindings as local authority. Official Terraform state push preserved
+the hash-bound starting snapshot and lineage; no manual state attributes or
+remote backend were created. The old validation mirror and pinned `36d2680`
+source remain unchanged. The initial normal MSAL-cache failure is retained and
+was resolved by normal exact-context ARM token acquisition without interactive
+login or new scopes.
+
+Fresh baseline has six no-ops, SHA256
+`7ef06074300a163f5483d4b104eaa9b52f57953614b925a1b5f81fee7967eae0`.
+Directory overlay has only image/runtime JSON app update and five no-ops,
+SHA256 `5eadced86d920ae78043f00efee3f9ec2e06b9b3c7f6b30e8729b7cf253d0460`,
+zero creates/deletes/replacements. All nine applicable canonical Azure Validate
+steps passed. Its independent saved plan exactly matches reviewed actions/values,
+SHA256 `195439999fbde0c1494a73e3eb19d7989ba32816cdbd28674ec878a977df5223`.
+Strict released JSON/proof targets, released build, static exact-container/named-
+secret roles and zero applicable app/inherited policies passed. Protected 0600
+recovery is hash-verified outside the removable worktree; it is restore-only,
+not another active state. Original/external-writer absence is not established;
+discovery requires stopping and reconciliation.
+
+Raw state/inputs/identifiers remain private. Source publication/main and the
+original retained builtin image/configuration are unchanged. Azure writes,
+new BFF attempts, secret-value reads, customer login and physical operations
+remain zero; actual ledger is still7/40 with33 fully reserved and no accepted
+document mutations. #16 actual activation/routing/hosted MI-Graph-Cosmos,
+#24 actual customer/data/member coverage, #32 hosted clean onboarding and final
+#20 Android remain open with epic #2. Prior reader metadata is not fresh Graph
+or actual hosted identity execution; callback registration is not empty-CORS
+Web acceptance.
+
+The five remaining English Issue bodies were reconciled after this acceptance;
+independent readback confirms unchanged titles/states and unrelated bodies.
+Current inventory is 27 completed, one NOT_PLANNED (#30) and five open
+(#2/#16/#20/#24/#32). Private before/after snapshots and exact body hashes are
+retained in
+`.cache/implementation-resume-20261006/issue-update-summary.private.json`.
+The updated restart handoff preserves historical failures and separates this
+source/state checkpoint from actual deployment and attended acceptance.

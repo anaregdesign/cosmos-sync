@@ -1,7 +1,7 @@
 # Cosmos Sync delivery and deployment plan
 
-Status: Approved
-Current scope: Implement and verify the approved generic browser path and distinct private management-state preparation; Azure apply remains separately unauthorized.
+Status: Validated
+Current scope: Generic browser source and distinct private six-binding management preparation completed; actual Azure activation and attended acceptance remain separately unauthorized.
 Previous validation: Read-only mirror/saved directory plan passed at `adbf0da`; retained as reference evidence.
 Date: 2026-10-06 JST
 Mode: MODIFY
@@ -397,6 +397,35 @@ not a passed hosted-acceptance or apply gate.
 | English Issue proof | [#16 comment 6013697503](https://github.com/anaregdesign/cosmos-sync/issues/16#issuecomment-6013697503), [#2 comment 6013697550](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-6013697550) |
 | Azure apply / hosted / customer / physical acceptance | Not executed; separately gated |
 
+### Fresh R3 Validation Proof, 2026-10-06
+
+The section15 mirror proof above remains historical. This proof belongs to the
+distinct designated local management state, not a relabelled mirror result.
+The pure-Terraform recipe uses its nested pinned module and explicit private
+JSON var-file, with no `az account set`, remote backend or cloud update.
+
+| Command/evidence | Fresh actual result |
+| --- | --- |
+| `manage.py bootstrap` | Official local state push into empty backend; exactly six verified bindings/lineage preserved; old mirror hash unchanged |
+| `manage.py retry-plans` | Initial normal MSAL-cache failure preserved; normal exact-context ARM acquisition recovered without interactive login or new scope |
+| Refreshed baseline | Six no-ops; SHA256 `7ef06074300a163f5483d4b104eaa9b52f57953614b925a1b5f81fee7967eae0` |
+| Reviewed directory plan | One image/runtime-only app update/five no-ops; SHA256 `5eadced86d920ae78043f00efee3f9ec2e06b9b3c7f6b30e8729b7cf253d0460`; zero creates/deletes/replacements |
+| `manage.py validate` / unmodified Azure script | All nine applicable canonical Terraform checks passed; AZD `main.tfvars.json` not applicable, actual private JSON parsed explicitly |
+| Independently saved canonical plan | Actions/after-values identical to reviewed directory plan; SHA256 `195439999fbde0c1494a73e3eb19d7989ba32816cdbd28674ec878a977df5223` |
+| Frozen released BFF `go build ./...` | Passed `36d2680`; saved JSON strict decoder/pure proof targets also passed, no BFF/Graph/data request |
+| Static role assignment verification | Verified assigned UAMI, six-action exact-container Cosmos role and exact named cursor Secret User; no new grant; reader FIC/target-only permission remains prior metadata, not hosted exchange |
+| Exact app/inherited policy query | Zero applicable assignments; no policy exception or edit |
+| State integrity and recovery | State/start SHA256 `605fbec4bead92e74ae450b459b3e7fb7c3021f28a33e24f7365259912a7a3e9`; protected recovery outside removable worktree, SHA256 `df5bb8a55882a308cfeab6713c39355b8e1fe3c9c580288bc1010e5011231272` |
+| Source / reference / authority | Frozen source and old mirror unchanged; unique new local authority/single-writer manifest; original/external-writer absence remains unproved and discovery stops execution |
+| Permissions / actual operations | Private directory0700/artifacts0600; zero Azure writes/BFF attempts/secret-value reads/customer logins/device operations; apply remains unapproved |
+
+**Role Assignment Verification: Verified.** Static source/plan scopes match the
+SDK's metadata/query/read/create/replace/change-feed and same-partition batch
+operations, including directory CAS. No broader service role was substituted.
+There is no local Azure data-plane functional test in this stage. Hosted MI/
+Graph/Cosmos, ingress, actual customer freshness and independent-BFF/member
+coverage are still separate #16/#24 gates.
+
 ## 8. Validation and Issue closure
 
 | Change | Smallest relevant existing validation |
@@ -439,6 +468,23 @@ No login, provider registration, backend migration or apply is permitted.
 | Applicable policies for the exact retained target | Zero applicable assignments returned by bounded read-only query |
 | Private evidence permissions and plan hashes | Passed; original state untouched, mirror remains nonauthoritative |
 | Sanitized Issue record and canonical workflow status | Proof recorded; final `UpdateStatus` step records the Validated plan |
+
+#### Fresh distinct-management-state checks (R3, not the old mirror result)
+
+| Terraform recipe validation step | Fresh R3 state |
+| --- | --- |
+| Terraform / Azure CLI installed | Passed canonical script |
+| Existing authentication and exact target already matched | Context and normal ARM-token checks passed; no interactive login or `az account set` |
+| Locked `terraform init` | Passed canonical script; frozen `36d2680` source/default local backend |
+| `terraform fmt -check`, `terraform validate` | Passed canonical script |
+| Exact private-input `terraform plan`, local `terraform state list` | Passed; independent fresh canonical actions/values exactly match the review |
+| Unresolved Go-style template scan | Passed canonical script |
+| `main.tfvars.json` syntax | Not applicable; actual private JSON inputs are parsed and passed explicitly |
+| Released-source build / strict generated configuration | Fresh pinned-source build and strict decoder/proof targets passed |
+| Static UAMI data roles / reader boundary | Verified narrow static code/plan; actual fresh Graph/hosted exchange excluded |
+| Exact app/inherited policy assignments | Fresh bounded read returned zero; no policy exception or change |
+| Old mirror / pinned source hashes and private recovery | Hashes unchanged; protected recovery verified outside removable worktree |
+| Sanitized proof / new workflow status | Fresh section7 proof recorded; new canonical workflow completed through UpdateStatus |
 
 ## 9. Provisioning inventory and decision gates
 
@@ -714,11 +760,12 @@ revalidation, not an Azure update. Original files are no longer a mandatory
 prerequisite. Keep the previously validated mirror unchanged; record the new
 active state separately and require fresh validation before an apply decision.
 
-Execution status at this review: **approved, not started**. No distinct management
+Execution status at the e3c407e review: **approved, not started**. No distinct management
 workspace/state or authority manifest has been created and no fresh validation
 for this stage has run. `.azure/validate-status.json` still records the previous
 read-only mirror workflow, not completion of this new stage. Do not request
-original files or the same adoption approval again.
+original files or the same adoption approval again. That historical status is
+superseded by the section 19 execution checkpoint below.
 
 ## 17. Delivery reconciliation, 2026-10-06
 
@@ -782,8 +829,8 @@ operation is authorized by this resumption request.
 - [x] Finalize a bounded adapter/library, fixture, regression and state-handoff plan.
 - [x] Present the implementation/preparation plan for approval.
 - [x] Implement and verify generic browser OIDC with native/Entra/cache preservation.
-- [ ] Adopt/revalidate the approved six-binding private management state.
-- [ ] Persist exact-source acceptance and update the remaining Issues/handoff.
+- [x] Adopt/revalidate the approved six-binding private management state.
+- [x] Persist exact-source acceptance and update the remaining Issues/handoff.
 - [ ] Separately authorize actual activation and attended downstream acceptance.
 
 ### R1: Explicit browser adapters and shared safety (#40)
@@ -916,3 +963,58 @@ Approval status: the owner selected the recommended complete R1/R2/R3
 implementation/verification plan. Management-state adoption itself was already
 approved and was not requested again. Functional
 verification is part of R2/R3, not an optional replacement for actual acceptance.
+
+## 19. Source acceptance and distinct-state validation checkpoint
+
+#40 completed with pinned/pushed `23a24712104ec9623e50cec9839a9dd6765d648c`.
+Its clean exact-source actual production-browser acceptance passed all 20
+protocol stages, observed document reload, another subject's cache isolation,
+exact original pending operation, BFF rebind/ACK/purge and owned-helper cleanup.
+Receipt `artifacts/browser-oidc/source-23a2471.private.json` records
+`source_tree_dirty=false`, no injected access token and no global TLS bypass.
+The existing nine-job CI remains old-main evidence, not a new-source run.
+
+R3 prepared the distinct private local workspace
+`.cache/workload-management-36d2680-20261006/` using archived pinned `36d2680`
+source and official Terraform state push into an empty default local backend.
+The hash-bound initial six-binding snapshot/lineage was preserved without
+manual state-attribute fabrication or force. The old mirror/reference hashes
+remain unchanged and its old state/plans are not active management authority.
+An explicit single-writer authority manifest now designates the adopted,
+canonically validated local state. Original/external-writer absence is not
+proved; discovery stops and requires reconciliation. No paid remote backend
+was created.
+
+Initial provider initialization could not find the existing user in its MSAL
+cache. Protected failure logs were retained; normal exact-tenant/subscription
+ARM token acquisition recovered existing access without interactive login,
+new credentials or expanded scopes. The rerun produced:
+
+| Fresh prepared boundary | Actual result |
+| --- | --- |
+| Baseline | Six no-ops, Terraform exit0; SHA256 `7ef06074300a163f5483d4b104eaa9b52f57953614b925a1b5f81fee7967eae0` |
+| Directory overlay | One in-place app update/five no-ops, zero creates/deletes/replacements; SHA256 `5eadced86d920ae78043f00efee3f9ec2e06b9b3c7f6b30e8729b7cf253d0460` |
+| Permitted app differences | Published immutable image and runtime JSON only; JSON changes only OIDC/authorization |
+| Preserved boundaries | Roles/UAMI/topology/command/probes/resources/cursor/history/data/sole Allow/min0max1/empty CORS |
+| Strict released contract | Actual saved JSON passed pinned-source strict production decoder/pure proof-target construction |
+| Reader evidence | Prior secret-free FIC/target-only permission metadata, not fresh Graph or hosted exchange |
+| Canonical validation | Nine applicable recipe steps passed; independently saved actions/values match, SHA256 `195439999fbde0c1494a73e3eb19d7989ba32816cdbd28674ec878a977df5223` |
+| Build / static roles / policy | Released build and exact-container/named-secret assignment review passed; zero fresh applicable app/inherited policies |
+| Durable recovery | Private0600 backup outside removable worktree, verified SHA256 `df5bb8a55882a308cfeab6713c39355b8e1fe3c9c580288bc1010e5011231272`; restore-only, not another active state |
+
+All fresh Azure Validate actions have been performed and recorded in section7.
+The root plan is now **Validated**; the final canonical UpdateStatus records this
+new cycle, not the old mirror acceptance. Actual deployment was explicitly
+excluded by the approved resumption plan, so do not invoke Azure Deploy/apply.
+Azure writes, BFF attempts, secret-value reads, customer login and physical
+operations remain zero; actual ledger stays7/40,33 fully reserved.
+
+The five remaining English Issue bodies (#2/#16/#20/#24/#32) now record the
+completed source/state prerequisites and preserve actual downstream gates.
+Independent readback confirms unchanged titles/states and unrelated bodies;
+#40 is closed COMPLETED and #30 remains NOT_PLANNED. The current inventory is
+27 completed, one not planned and five open. Protected before/after snapshots
+and body hashes are in
+`.cache/implementation-resume-20261006/issue-update-summary.private.json`.
+The persistent restart handoff has been updated. No new PR, merge, publication
+or deployment approval follows from this documentation checkpoint.

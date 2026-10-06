@@ -65,7 +65,7 @@ consumer's own deployment and private state.
 | --- | --- | --- |
 | Published SDK | Immutable `0.2.0-dev.1` archive from `82e937c`; no republication | Its original builtin/legacy transport is not the new typed directory SDK |
 | Published directory BFF | PR #39 merged as `36d2680`; verified immutable `adfe83a08dcd...` image | #27/#28 preparation completed; source-path SDK required; #16/#24 actual acceptance remains open |
-| Retained Azure | Original `82e937c` builtin image/configuration | New image not applied; prior read-only plan passed; new-state adoption approved but unstarted |
+| Retained Azure | Original `82e937c` builtin image/configuration | Distinct private six-binding management state adopted/canonically validated; app-only overlay reviewed, not applied; #16 actual readiness remains open |
 | Browser compatibility | Source-only explicit Entra/MSAL or generic Code/S256 + signed-ID adapter | #40 pins actual standards/browser/cache evidence; generic sign-in does not advertise the workforce-directory proof profile or live provider acceptance |
 | Reproducible onboarding | Pin the exact chosen source/package/image and authorization mode before the run | #32 follows #24; it does not depend on closing epic #2 or physical-device #20 |
 | Final device | Selected physical Android after source/cloud/onboarding and owner availability | #20; iOS and cancelled actual Google/Apple are not prerequisites |

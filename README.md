@@ -184,8 +184,10 @@ The earlier [verification-tool correction](https://github.com/anaregdesign/cosmo
 preserved the original artifacts. [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2)
 keeps actual Azure, hosted onboarding and consumer-provider gates separate.
 The retained Azure app still runs the original `82e937c` builtin image. The prior
-read-only six-resource plan passed; adoption/revalidation of a distinct management
-state is approved but not started, and actual app update remains unapproved.
+read-only six-resource mirror remains unchanged. The approved distinct private
+management state is now adopted and canonically validated: fresh baseline has
+six no-ops and the saved directory overlay updates only the app image/runtime.
+Actual app update remains unapproved; state preparation is not hosted acceptance.
 
 Dedicated Entra registration is complete. macOS browser PKCE, secure credential
 restore, refresh and local sign-out lifecycle stages were observed; independent

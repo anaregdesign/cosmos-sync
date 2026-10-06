@@ -167,8 +167,14 @@ at its original source and was not republished.
 The prior `76c1f46` image is historical and remains unchanged. The new BFF also
 supports explicit directory lifecycle; use pinned repository SDK source and
 reviewed directory configuration, never send those fields to the retained old
-image. New management-state adoption/revalidation is approved but not started;
-actual update still needs separate saved-plan approval.
+image. The approved distinct private management state is now adopted and
+canonically validated. Its fresh six-no-op baseline and app-only/five-no-op
+directory overlay preserve existing resources/roles/topology/cursor/history/
+empty CORS. The old mirror remains unchanged reference-only; a private recovery
+backup outside the removable worktree does not create another active writer.
+Original/external-writer absence is still unproved and discovery requires
+reconciliation. Actual update still needs separate saved-plan approval; see
+[the fresh validation proof](../.azure/deployment-plan.md#fresh-r3-validation-proof-2026-10-06).
 
 This newer BFF supports optional `oidc.allowed_client_ids`, an exact allowlist of
 signed `azp` client IDs in addition to issuer/API-audience/scope checks. Use the
