@@ -24,9 +24,12 @@ clean-checkout hosted onboarding is tracked in [#32](https://github.com/anaregde
 preferred consumer reference broker, with Apple/Google as possible upstream
 providers, not the only permitted generic BFF/native issuer. The public Terraform
 is for each consumer's own environment and trust configuration. The
-current Flutter application implements native OIDC/PKCE and memory-only Web MSAL
-with a dedicated API-access-token path. The Web adapter is currently Entra-specific;
-generic browser compatibility remains [#40](https://github.com/anaregdesign/cosmos-sync/issues/40).
+current source implements native OIDC/PKCE and explicit memory-only Entra/MSAL
+or generic Code/S256 Web adapters with a dedicated API-access-token path.
+[Browser setup](docs/web-auth.md) and [#40](https://github.com/anaregdesign/cosmos-sync/issues/40)
+pin the source/standards-fixture evidence; this is not a new runtime publication
+or actual provider acceptance. Generic browser sign-in does not advertise the
+optional workforce-directory proof capability.
 Published opt-in BFF lifecycle support is described below; actual Apple/Google
 login and provider acceptance are not delivered support. The [social-login design
 and roadmap](docs/social-auth.md) compares an API-token identity broker with

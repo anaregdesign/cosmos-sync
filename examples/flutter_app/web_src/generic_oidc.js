@@ -27,6 +27,11 @@ function safeFailure(error) {
   if (error?.errorCode) return { errorCode: error.errorCode };
   if (["login_required", "consent_required", "interaction_required", "invalid_grant"]
       .includes(error?.error)) return interaction();
+  if (["sub in id_token does not match current sub",
+    "auth_time in id_token does not match original auth_time",
+    "azp in id_token does not match original azp",
+    "azp not in id_token, but present in original id_token"]
+      .includes(error?.message)) return interaction();
   if (error?.name === "AbortError") return cancelled();
   if (["Popup closed by user", "Popup closed", "Popup aborted",
     "Attempted to navigate on a disposed window"].includes(error?.message)) {
@@ -228,7 +233,8 @@ export function createGenericOidcClient(config, {
     return {
       accessToken: user.access_token,
       tokenType: user.token_type,
-      scopes: user.scopes,
+      scopes: Array.isArray(user.scopes)
+        ? user.scopes.filter((scope) => config.apiScopes.includes(scope)) : undefined,
       expiresOn: new Date(user.expires_at * 1000),
       account: {
         homeAccountId: identity.subject,

@@ -11,8 +11,12 @@ providers, not an exclusive issuer for generic builtin/legacy authentication.
 `deployment.tenant_id` identifies the Azure management/UAMI tenant; the OIDC
 issuer may belong to a separate customer tenant. API JWT validation and
 server-managed authorization remain mandatory, without a provider-name blacklist.
-The supplied Web MSAL adapter is Entra-specific; generic browser work is
-[#40](https://github.com/anaregdesign/cosmos-sync/issues/40).
+Current application source supplies explicitly selected Entra/MSAL and generic
+Code/S256 browser adapters; [#40](https://github.com/anaregdesign/cosmos-sync/issues/40)
+pins their source/standards-fixture evidence. Generic browser sign-in requires a
+dedicated API JWT and does not advertise the workforce-directory proof profile.
+It does not create consumer registrations, prove live provider acceptance or
+update previously published/retained artifacts.
 
 This directory creates an ACA environment/app, a dedicated user-assigned identity
 (or uses the supplied existing identity), and narrow Cosmos/Key Vault role

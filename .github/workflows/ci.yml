@@ -156,6 +156,8 @@ jobs:
       - run: flutter build web --no-pub --no-web-resources-cdn
         working-directory: examples/flutter_app
       - run: python3 tools/flutter_web_smoke.py
+      - name: Verify actual non-Entra browser Code and PKCE with API/cache isolation
+        run: python3 tools/browser_oidc_smoke.py
   release-tools:
     runs-on: ubuntu-latest
     timeout-minutes: 15

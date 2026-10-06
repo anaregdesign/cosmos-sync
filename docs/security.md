@@ -49,3 +49,15 @@ Cosmos account operations are not provisioned here. Deployment must configure an
 Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/anaregdesign/cosmos-sync/security/advisories/new) after its activation is verified during the owner-approved public-source transition. Until then, use an established private channel to repository administrators. Never place exploit details, credentials or production data in a public issue. The [security policy](../SECURITY.md) describes the required report information; no response-time SLA is promised.
 
 Browser CORS uses explicit exact allowed origins, streamed fetch bearer headers and exposed consistency/Retry-After headers. Origin approval is not authentication. Web Locks and IndexedDB provide cooperative SDK ownership/persistence within the origin; malicious same-origin code, XSS, OS compromise and browser eviction remain application risks. Notifications revalidate access repeatedly and carry no document payload. Rotate historyEpoch with restored history/signing keys; never TTL or manually prune protocol records.
+
+The sample's explicit generic browser OIDC adapter keeps Code/S256 transactions,
+ID/refresh credentials and verified subject in private memory. It independently
+verifies signed ID issuer/client/expiry/nonce using trusted discovery/JWKS; the
+provider library's decoded profile is not JWT verification or cache ownership.
+Ordinary exports remain API-only. New refresh IDs are verified and must retain
+the subject; absence of a refresh credential requires interactive sign-in, not
+iframe or persistent-store fallback. Cancelled/late work cannot write into a
+cleared guarded store. API JWTs and every cache rebind are still verified by the
+BFF. The specialized Entra directory proof is explicitly unsupported by this
+generic browser adapter; neither a provider name nor a normal ID token enables
+account linking. See [the exact browser contract](web-auth.md).

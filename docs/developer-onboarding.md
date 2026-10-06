@@ -54,8 +54,10 @@ checklists with explicit source, tooling, hosted and final-device milestones.
 The core directory factory, typed SDK and native/Web account lifecycle are
 implemented. Directory-mode Terraform and actual fresh-proof/hosted acceptance
 tooling are now implemented as separately gated preparation. Compatible artifact
-activation, actual customer/hosted acceptance, general browser OIDC compatibility
-and coverage decisions still remain. Entra External ID is the preferred consumer
+activation, actual customer/hosted acceptance and coverage decisions still remain.
+Current source adds explicit generic browser OIDC alongside Entra/MSAL; use its
+exact #40 source/fixture evidence, not an assumed update to published main.
+Entra External ID is the preferred consumer
 reference, not a global issuer restriction. The public Terraform is for each
 consumer's own deployment and private state.
 
@@ -64,7 +66,7 @@ consumer's own deployment and private state.
 | Published SDK | Immutable `0.2.0-dev.1` archive from `82e937c`; no republication | Its original builtin/legacy transport is not the new typed directory SDK |
 | Published directory BFF | PR #39 merged as `36d2680`; verified immutable `adfe83a08dcd...` image | #27/#28 preparation completed; source-path SDK required; #16/#24 actual acceptance remains open |
 | Retained Azure | Original `82e937c` builtin image/configuration | New image not applied; prior read-only plan passed; new-state adoption approved but unstarted |
-| Browser compatibility | Supplied memory-only MSAL adapter is Entra-specific | #40 adds generic OIDC; native/BFF configurability does not prove general Web support |
+| Browser compatibility | Source-only explicit Entra/MSAL or generic Code/S256 + signed-ID adapter | #40 pins actual standards/browser/cache evidence; generic sign-in does not advertise the workforce-directory proof profile or live provider acceptance |
 | Reproducible onboarding | Pin the exact chosen source/package/image and authorization mode before the run | #32 follows #24; it does not depend on closing epic #2 or physical-device #20 |
 | Final device | Selected physical Android after source/cloud/onboarding and owner availability | #20; iOS and cancelled actual Google/Apple are not prerequisites |
 
@@ -132,8 +134,9 @@ Azure or a real provider; it does not perform provider registration or a hosted
 deployment. A physical Android target requires the separate explicitly selected
 device procedure in [physical-device validation](physical-devices.md). The sample
 targets Android API 24+, iOS 15+ and macOS 12+, and also supplies a Web target with
-memory-only MSAL and IndexedDB/Web Locks. Build its pinned local auth assets and
-register the exact SPA bridge as described in [Web authentication](web-auth.md).
+memory-only Entra/MSAL or generic OIDC and IndexedDB/Web Locks. Build its pinned
+local auth assets and register the selected exact browser bridge as described in
+[Web authentication](web-auth.md).
 Linux/Windows Flutter applications are not supplied. Chromium application,
 SDK-storage and actual provider results remain distinct evidence.
 
@@ -162,9 +165,12 @@ token does not become a Cosmos Sync credential merely by being OIDC-related.
 
 The module does not create consumer tenant/apps/user flows, upstream provider
 registrations/secrets or directory-reader Graph consent. The optional directory
-reader has a workforce-federation-specific trust contract, and the current Web
-MSAL adapter is Entra-specific. Document these real limitations rather than
-claim universal linking/Web compatibility; consume #40's exact resulting source.
+reader has a workforce-federation-specific trust contract. Current source's
+generic Web adapter requires a browser-capable Code/S256 public client and a
+dedicated API JWT; ordinary provider ID/opaque tokens are insufficient, and its
+directory proof is explicitly unsupported. Entra/MSAL retains its narrower
+authority contract. Consume #40's exact source/evidence rather than claiming
+universal social linking, all browsers or live provider compatibility.
 Do not copy this repository's private validation state into another deployment.
 
 The separate private-prerequisite module supplies the selected VNet, two backend

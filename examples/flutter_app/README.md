@@ -4,7 +4,8 @@ This is a usable Android/iOS/macOS/Web application. Ordinary `flutter run` opens
 connection and sign-in settings, then a document workspace. It uses the real
 `HttpSyncTransport` and shared UI/controllers. Native targets use app-private
 SQLite, AppAuth authorization code + PKCE and OS secure storage. Web uses
-IndexedDB/Web Locks and maintained MSAL Browser with memory-only credentials.
+IndexedDB/Web Locks and explicit Entra/MSAL or generic OIDC adapters with
+memory-only credentials.
 It is separate from the deterministic SDK-only
 [`flutter_smoke`](../flutter_smoke/README.md) fixture.
 
@@ -30,7 +31,8 @@ flutter run -d chrome --web-port=8765
 ```
 
 Register the exact SPA callback shown in the settings form, for example
-`http://localhost:8765/auth-redirect.html` for loopback development or an HTTPS
+`http://localhost:8765/auth-redirect.html` for Entra or
+`http://localhost:8765/oidc-redirect.html` for generic loopback development, or an HTTPS
 production origin. This is separate from the native custom-scheme callback.
 The BFF must allow that exact page origin. See [Web authentication](../../docs/web-auth.md)
 for popup/redirect-bridge deployment and credential/cache lifecycle.
@@ -102,11 +104,23 @@ verification. Restoring/opening offline does not refresh a token or decode JWT
 claims. The next online request refreshes an access token as needed.
 
 On Web, ordinary sign-in uses a popup and provider-managed code/PKCE. That path exports
-only the API access token; refresh credentials stay inside MSAL memory. Reloading
+only the API access token; refresh/ID credentials stay inside adapter memory. Generic
+Code/S256 uses pinned oidc-client-ts with independent jose signed-ID validation,
+the operator's HTTPS issuer/discovery and a non-UUID-capable public client.
+It needs an issuer that provides a dedicated API JWT, not an ID/opaque token.
+Renewal without a memory refresh credential requires a new sign-in, with no iframe
+or persistent-storage fallback. Reloading
 the page signs out and retains the locked IndexedDB outbox, but cannot restore
 credentials or open the cache offline. Sign in again and complete online BFF
 verification before reopening that principal's cache. Offline reopening is
 available only within the already verified document lifetime.
+
+Select `Generic OIDC (Code + PKCE)` explicitly in the Web form; old saved
+settings retain Entra/MSAL. The selection determines its exact callback and
+public configuration binding. Provider navigation hints remain Entra-specific.
+The generic adapter does not advertise or acquire the specialized workforce
+directory fresh proof; that limitation is explicit in the controller/UI, without
+builtin fallback or a provider-name blacklist.
 
 ## Opt-in account lifecycle
 
@@ -212,7 +226,7 @@ SQLite. It validates creation/edit/deletion, offline pending writes and app
 restart, reconnect ACK, both explicit conflict choices, tombstones, sign-out
 purge, and a write/read/delete of its own isolated native secure-storage key.
 The signed JWT is fetched from a disposable loopback control endpoint; only its
-URL is compiled into the test target. Ordinary `main.dart` selects native AppAuth or Web MSAL and has no test
+URL is compiled into the test target. Ordinary `main.dart` selects native AppAuth or its real browser adapter and has no test
 authentication bypass.
 
 This proves native UI/storage and BFF protocol integration. It does **not** prove
@@ -233,6 +247,21 @@ python3 tools/flutter_web_smoke.py --output artifacts/flutter-web-fixture.json
 Run from the repository root with a fresh ignored receipt path. Its OIDC adapter
 is compiled only into the integration target. It proves browser application
 lifecycle, not live MSAL login, CIAM customer identity or hosted Azure/Cosmos.
+
+The additional generic browser acceptance uses the **production** auth bundle,
+callback and normal Dart WebOidcClient against an owned HTTPS discovery/code/
+S256/nonce/signed-JWT fixture, without a supplied API token:
+
+```sh
+python3 tools/browser_oidc_smoke.py --output artifacts/browser-oidc-fixture.json
+```
+
+Run from the repository root with a fresh ignored receipt path. It exercises
+twenty actual browser protocol stages and the same UI/cache lifecycle across
+reload, including another subject's isolation and exact outbox replay. TLS trust
+is limited to the fixture's generated certificate in its fresh owned profile;
+no global TLS or production auth bypass is installed. This is not live provider,
+hosted Azure/Cosmos or physical-browser acceptance.
 
 The 2026-10-05 directory-lifecycle checkpoint passed 99 native unit/widget tests,
 24 actual Chromium tests and 19 Node/MSAL tests with clean analysis/format.

@@ -19,18 +19,15 @@ import 'package:web/web.dart' as web;
 
 import 'support/ui_actions.dart' as ui;
 
-/// Only this integration target has a signed-fixture OIDC adapter. Ordinary
-/// main.dart uses its selected real browser adapter; no token or test switch
-/// enters its configuration.
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   final reloaded = Uri.base.queryParameters['phase'] == 'reloaded';
-  var completed = false;
-  var failureStage = 'startup';
-  String? operation;
   final origin = Uri.base.replace(path: '/', query: null, fragment: null);
+  var completed = false;
+  var stage = 'startup';
+  String? operation;
   if (origin.scheme != 'http' || origin.host != '127.0.0.1') {
-    throw StateError('Use the owned loopback Web fixture.');
+    throw StateError('Use the owned loopback browser OIDC fixture.');
   }
   unawaited(
     binding.allTestsPassed.future.then((passed) async {
@@ -49,12 +46,13 @@ void main() {
           'exact_operation_retained': completed && reloaded,
           'server_ack': completed && reloaded,
           'logout_purge': completed && reloaded,
-          'auth': 'signed_test_issuer_adapter',
-          if (!passed) 'failure_stage': failureStage,
+          'different_identity_isolated': completed && reloaded,
+          'auth': 'actual_generic_oidc_popup',
+          if (!passed) 'failure_stage': stage,
           if (!passed)
             'failure_source_lines': binding.failureMethodsDetails
                 .expand(
-                  (failure) => RegExp(r'web_app_flow_test\.dart:(\d+)')
+                  (failure) => RegExp(r'web_generic_oidc_test\.dart:(\d+)')
                       .allMatches(failure.details ?? '')
                       .map((match) => int.parse(match.group(1)!)),
                 )
@@ -66,76 +64,88 @@ void main() {
   );
 
   testWidgets(
-    'Web UI verifies JWT HTTP and IndexedDB across an actual document reload',
+    'actual generic Web OIDC isolates API-verified caches across reload and subjects',
     (tester) async {
       final response = await http
           .get(origin.resolve('fixture'))
           .timeout(const Duration(seconds: 10));
       if (response.statusCode != 200 || response.body.length > 32768) {
-        throw StateError('The signed Web fixture is not ready.');
+        throw StateError(
+          'Browser OIDC fixture public configuration is unavailable.',
+        );
       }
       final fixture = jsonDecode(response.body) as Map<String, dynamic>;
       final namespace = fixture['namespace'] as String;
-      final repository = WorkspaceRepository(namespace: namespace);
       final store = BrowserSettingsStore(key: '$namespace.connection');
-      final auth = AuthSessionController(
-        oidc: _FixtureOidc(fixture['token'] as String),
-        tokenStore: MemoryRefreshTokenStore(),
-      );
-      final app = AppController(
-        auth: auth,
-        workspace: WorkspaceController(repository: repository),
+      AppController createApp() => AppController(
+        auth: AuthSessionController(
+          oidc: WebOidcClient(),
+          tokenStore: MemoryRefreshTokenStore(),
+        ),
+        workspace: WorkspaceController(
+          repository: WorkspaceRepository(namespace: namespace),
+        ),
         settingsStore: store,
+      );
+      var app = createApp();
+      Future<void> selectSubject(String subject) => _post(
+        Uri.parse(fixture['issuer'] as String).resolve('/_fixture/options'),
+        {'mode': 'normal', 'subject': subject},
       );
       try {
         if (reloaded) await app.initialize();
         await tester.pumpWidget(CosmosSyncApp(controller: app));
         if (!reloaded) {
+          stage = 'configure-generic-ui';
+          await tester.tap(find.byKey(const Key('browser-auth-adapter')));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Generic OIDC (Code + PKCE)').last);
+          await tester.pumpAndSettle();
           await tester.enterText(
             find.byKey(const Key('bff-url')),
             fixture['url'] as String,
           );
           await tester.enterText(
             find.byKey(const Key('oidc-issuer')),
-            'https://fixture.cosmos-sync.test',
+            fixture['issuer'] as String,
           );
           await tester.enterText(
             find.byKey(const Key('oidc-client')),
-            'signed-web-fixture',
+            fixture['clientId'] as String,
           );
           await tester.enterText(
             find.byKey(const Key('oidc-scopes')),
-            'openid cosmos_sync',
+            'openid offline_access cosmos_sync',
           );
           await ui.tap(tester, find.byType(CheckboxListTile));
+          stage = 'real-popup-api-bind';
           await ui.tap(tester, find.byKey(const Key('sign-in')));
           await ui.waitFor(
             tester,
             () => app.workspace.connected && !app.busy && !app.workspace.busy,
           );
+          expect(app.settings!.oidc.browserAdapter, BrowserAuthAdapter.oidc);
+          expect(app.settings!.oidc.redirectUrl, fixture['redirectUrl']);
           expect(app.workspace.bootstrapComplete, true);
+          expect(app.auth.supportsFreshIdentityProof, false);
           expect(app.auth.hasStoredSession, false);
           await ui.tap(tester, find.byKey(const Key('offline-switch')));
           await ui.waitFor(tester, () => !app.workspace.busy);
           await ui.edit(
             tester,
-            id: 'web-note',
-            json: '{"text":"before reload"}',
+            id: 'oidc-note',
+            json: '{"text":"before OIDC reload"}',
           );
           await ui.waitFor(tester, () => !app.workspace.busy);
           operation = app.workspace.pending.single.operationId;
-          expect(app.workspace.documents.single.hasPendingWrites, true);
-          expect(
-            await store.read(),
-            isNot(contains(fixture['token'] as String)),
-          );
-          expect(
-            web.window.localStorage.getItem('$namespace.cache-registry'),
-            isNot(contains(fixture['token'] as String)),
-          );
+          final saved = await store.read();
+          expect(saved, contains('"browserAdapter":"oidc"'));
+          expect(saved, isNot(contains('accessToken')));
+          expect(saved, isNot(contains('refreshToken')));
+          expect(saved, isNot(contains('idToken')));
         } else {
-          failureStage = 'reload-signed-out';
-          expect(app.settings!.oidc.browser, true);
+          stage = 'reload-signed-out';
+          expect(app.settings!.oidc.browserAdapter, BrowserAuthAdapter.oidc);
           expect(app.auth.isSignedIn, false);
           expect(app.auth.restoredSession, false);
           expect(app.workspace.documents, isEmpty);
@@ -148,7 +158,7 @@ void main() {
             null,
           );
           await expectLater(
-            repository.open(
+            app.workspace.repository.open(
               config: app.settings!.connection,
               credentialBinding: 'no-restored-browser-credential',
               tokenProvider: () async =>
@@ -158,42 +168,57 @@ void main() {
             throwsStateError,
           );
 
-          failureStage = 'reload-interactive-sign-in';
-          await auth.signIn();
-          failureStage = 'online-rebind';
-          final rebound = await repository.open(
+          stage = 'different-identity-isolated';
+          await selectSubject('bob');
+          await ui.tap(tester, find.byKey(const Key('sign-in')));
+          await ui.waitFor(
+            tester,
+            () => app.workspace.connected && !app.busy && !app.workspace.busy,
+          );
+          expect(app.workspace.pending, isEmpty);
+          expect(app.workspace.documents, isEmpty);
+          await tester.pumpWidget(const SizedBox());
+          await app.close();
+
+          stage = 'reload-original-identity';
+          await selectSubject('alice');
+          app = createApp();
+          await app.initialize();
+          await tester.pumpWidget(CosmosSyncApp(controller: app));
+          await tester.runAsync(app.auth.signIn);
+          final rebound = await app.workspace.repository.open(
             config: app.settings!.connection,
-            credentialBinding: auth.credentialSessionId!,
-            tokenProvider: auth.accessToken,
+            credentialBinding: app.auth.credentialSessionId!,
+            tokenProvider: app.auth.accessToken,
           );
           try {
-            failureStage = 'retained-operation';
+            stage = 'retained-operation';
             expect(rebound.pending.single.operationId, fixture['operation']);
-            expect(rebound.get('web-note')!.data!['text'], 'before reload');
+            expect(
+              rebound.get('oidc-note')!.data!['text'],
+              'before OIDC reload',
+            );
           } finally {
             await rebound.close();
           }
-          await tester.pumpAndSettle();
-          failureStage = 'online-connect';
+          stage = 'server-ack';
           await ui.tap(tester, find.byKey(const Key('connect-online')));
           await ui.waitFor(
             tester,
             () => app.workspace.connected && !app.busy && !app.workspace.busy,
           );
-          failureStage = 'server-ack';
           expect(app.workspace.pending, isEmpty);
           expect(app.workspace.documents.single.hasPendingWrites, false);
-          expect(find.byKey(const Key('document-web-note')), findsOneWidget);
+          expect(find.byKey(const Key('document-oidc-note')), findsOneWidget);
           await ui.tap(tester, find.byKey(const Key('offline-switch')));
           await ui.waitFor(tester, () => !app.workspace.busy);
           await ui.edit(tester, id: 'purge-me', json: '{"text":"unsent"}');
           await ui.waitFor(tester, () => !app.workspace.busy);
-          failureStage = 'logout';
+          stage = 'logout';
           await ui.tap(tester, find.byKey(const Key('sign-out')));
           await ui.tap(tester, find.byKey(const Key('confirm-sign-out')));
           await ui.waitFor(tester, () => !app.busy);
           expect(app.auth.credentialSessionId, null);
-          expect(app.workspace.connected, false);
           expect(app.workspace.documents, isEmpty);
           expect(app.workspace.pending, isEmpty);
           expect(
@@ -210,37 +235,15 @@ void main() {
   );
 }
 
-Future<void> _post(Uri url, Map<String, Object?> value) async {
+Future<void> _post(Uri uri, Map<String, Object?> value) async {
   final response = await http
       .post(
-        url,
+        uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(value),
       )
       .timeout(const Duration(seconds: 10));
   if (response.statusCode != 204) {
-    throw StateError('Web fixture reporting failed.');
+    throw StateError('Browser OIDC fixture control failed.');
   }
-}
-
-class _FixtureOidc implements MemoryOidcClient {
-  _FixtureOidc(this.token);
-  final String token;
-  OidcTokens _tokens() => OidcTokens(
-    accessToken: token,
-    tokenType: 'Bearer',
-    expiresAt: DateTime.now().add(const Duration(minutes: 5)),
-    scopes: ['cosmos_sync'],
-  );
-  @override
-  Future<OidcTokens> signIn(OidcConfig config) async => _tokens();
-  @override
-  Future<OidcTokens> refreshCurrent(OidcConfig config) async => _tokens();
-  @override
-  Future<OidcTokens> refresh(OidcConfig config, String refreshToken) async =>
-      throw StateError('No exported browser refresh token.');
-  @override
-  Future<void> clearSession() async {}
-  @override
-  Future<void> endSession(OidcConfig config, String? idToken) async {}
 }

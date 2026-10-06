@@ -22,7 +22,7 @@ Code with PKCE and validates its browser callback/state/nonce; Android uses an
 external browser/Custom Tab and Apple platforms use the native web authentication
 session. The sample sends no client secret and never uses an embedded WebView.
 The plugin does not provide Web, Linux or Windows login. The ordinary app now
-selects a separate [MSAL Browser adapter](web-auth.md) for its Web target;
+selects separate [Entra/MSAL or generic browser adapters](web-auth.md) for its Web target;
 native callbacks and secure restore are not reused in the browser.
 See [AppAuth Android](https://github.com/openid/AppAuth-Android),
 [AppAuth iOS/macOS](https://github.com/openid/AppAuth-iOS) and the
@@ -33,9 +33,11 @@ matching discovery origin, public client/callback and delegated BFF API scopes;
 it is not restricted to Microsoft hosts or Entra UUID client IDs.
 `EntraBrokerCapabilities` is only an optional, Entra-specific navigation-hint
 extension, not the generic OIDC trust contract. The default unhinted sign-in
-lets the configured broker present its enabled login methods. The supplied Web
-MSAL adapter is narrower; [#40](https://github.com/anaregdesign/cosmos-sync/issues/40)
-tracks generic browser compatibility. The optional directory Graph reader also
+lets the configured broker present its enabled login methods. The Web form now
+selects Entra/MSAL or generic Code/S256 explicitly. Its generic public client,
+callback, signed-ID validation and memory-only lifecycle are recorded in
+[#40](https://github.com/anaregdesign/cosmos-sync/issues/40); that browser path does
+not implement the specialized directory fresh proof. The optional directory Graph reader also
 has its own workforce-only profile contract, separate from native OIDC.
 
 ## Apple and Google broker navigation

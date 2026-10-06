@@ -767,8 +767,9 @@ fixtures, publication and state review do not count as actual hosted acceptance.
 
 The owner requested a fresh remaining-work implementation plan and continuation
 at 20:51 JST. Preserve the completed delivery/Issue review and all exact-source
-evidence above. Workspace inspection confirms the actual browser gap is still
-the Entra-specific MSAL authority parser, not the generic BFF/native JWT contract.
+evidence above. At resumption, the concrete browser gap was the Entra-specific
+MSAL authority parser, not the generic BFF/native JWT contract. R1/R2 below now
+implement the explicit generic adapter without loosening that old parser.
 
 Scope: generic browser OIDC #40 and the already approved distinct private
 management-state adoption/revalidation #16. Consumer-owned Terraform,
@@ -780,7 +781,7 @@ operation is authorized by this resumption request.
 - [x] Inspect the current browser auth/cache/proof/test surfaces and exact CI.
 - [x] Finalize a bounded adapter/library, fixture, regression and state-handoff plan.
 - [x] Present the implementation/preparation plan for approval.
-- [ ] Implement and verify generic browser OIDC with native/Entra/cache preservation.
+- [x] Implement and verify generic browser OIDC with native/Entra/cache preservation.
 - [ ] Adopt/revalidate the approved six-binding private management state.
 - [ ] Persist exact-source acceptance and update the remaining Issues/handoff.
 - [ ] Separately authorize actual activation and attended downstream acceptance.
@@ -852,6 +853,17 @@ guidance plus generated package mirrors if source docs change. Record English
 older failures.
 
 ### R3: Approved private management-state execution (#16)
+
+R1/R2 source and working-tree acceptance are complete: 28 Node, 113 native app,
+30 Chrome app, 186 native SDK, 164 Chrome SDK and 200 portable-tool cases passed,
+with ordinary nonfixture Web build and Go race/vet/build. The actual generic
+browser fixture passed 20 protocol stages plus observed reload/other-subject
+cache isolation/outbox rebind/ACK/purge; an independent server observed
+18 authorization requests, 16 code/S256 exchanges, 15 JWKS reads and 3 renewals.
+The original recorded-token Web cache fixture also passed. These are disposable
+local fixtures, with no live Azure/customer/device action and no ledger use.
+Keep working-tree receipts distinct; pin the next source commit and run its
+clean exact-source actual-browser acceptance before closing #40.
 
 Execute section 16's already approved scope without repeating adoption,
 subscription or region approval. Use the exact existing private target in the

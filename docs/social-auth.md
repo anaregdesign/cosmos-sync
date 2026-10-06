@@ -197,11 +197,13 @@ migration because its subject namespace can change. See the
 ## Current token contract
 
 The selected first External ID integration reuses the existing BFF verifier and
-native AppAuth or separate [Web MSAL adapter](web-auth.md). Directory creation alone does not prove that an actual
+native AppAuth or separate [browser adapters](web-auth.md). Directory creation alone does not prove that an actual
 consumer token or callback meets this contract.
-The generic BFF/native configuration is issuer-selectable. The current Web MSAL
-adapter is Entra-specific; [#40](https://github.com/anaregdesign/cosmos-sync/issues/40)
-tracks the actual general-browser compatibility gap without relaxing API trust.
+The generic BFF/native configuration is issuer-selectable. Current Web source
+explicitly selects Entra/MSAL or generic Code/S256 with signed-ID validation;
+[#40](https://github.com/anaregdesign/cosmos-sync/issues/40) records actual
+standards/browser/cache evidence without relaxing API trust. Generic browser
+authentication does not advertise the specialized workforce-directory proof.
 
 | Boundary | Current preview behavior |
 | --- | --- |
@@ -212,7 +214,7 @@ tracks the actual general-browser compatibility gap without relaxing API trust.
 | JWKS | Pinned `go-oidc` v3.16.0 retains cached keys without a TTL or proactive refresh. Cache verification failure, including an unknown `kid`, triggers one remote fetch with shared in-flight suppression. There is no cross-request fetch cooldown or automatic retry loop |
 | Native login | Pinned `flutter_appauth` 12.1.0 delegates state, nonce, S256 PKCE and system-browser callback handling to platform AppAuth; the BFF verifies the separate API JWT and receives no login nonce |
 | Native credentials | Access token remains in RAM; refresh credential and the optional logout ID-token hint use platform secure storage. The controller refreshes before the provider expiration with a 30-second margin; restore must rebind through the existing verified BFF/session policy |
-| Web login/credentials | Locally bundled MSAL Browser 5.24.0 handles popup code/PKCE through an exact same-origin SPA redirect bridge. Ordinary paths export only the API access response. An independent memory-only proof instance exports a dedicated API/ID pair without adopting its account. A new document must sign in and verify the BFF online before reopening persisted IndexedDB |
+| Web login/credentials | Explicit pinned Entra/MSAL 5.24.0 or generic oidc-client-ts3.5.0 + jose6.2.12 handles popup Code/S256 through its exact same-origin bridge. Ordinary paths export only the API access response and keep credentials/transactions in memory. Only Entra advertises its independent directory proof instance. Every new document signs in and verifies the BFF online before reopening IndexedDB |
 
 If a required discovery/key fetch or signature/claim check fails, authentication
 fails. During a JWKS outage, a token which still verifies with cached keys can
@@ -296,7 +298,7 @@ verification is Android-only and deferred until development is complete.
 | --- | --- | --- |
 | iOS | External ID browser PKCE with the registered native callback; Apple broker registration requires its own developer-team approval. Native provider SDK capabilities/signing would be a separate change. | Signed physical-device return, consent/cancel/deny, Apple private relay, refresh/re-auth, app termination/restart, offline reconnect and purge. The owner chose unsigned testing, so build/simulator evidence remains separate from physical-device acceptance. |
 | Android | External ID browser PKCE with exact native callback. The Google client for federation is a broker Web application; Android signing fingerprints apply only if a direct native Google SDK is later selected. | Pixel login/callback, browser/account switching, cancellation, reinstall, refresh/revocation and authenticated offline outbox replay. |
-| Web | The ordinary sample has a separate memory-only MSAL popup adapter, exact SPA bridge and BFF-verified IndexedDB lifecycle; no Web AppAuth or full-page login redirect. | Signed-fixture UI/reload/rebind/purge evidence does not prove live provider login, popup denial, restricted third-party storage, back navigation or mobile browsers. |
+| Web | Explicit memory-only Entra/MSAL or generic Code/S256, adapter-specific same-origin bridge and BFF-verified IndexedDB lifecycle; no Web AppAuth or full-page login redirect. Generic directory proof is unsupported. | Real standards/browser and signed-fixture reload/cache evidence is not live provider login, all popup/storage policies, back navigation or mobile-browser acceptance. |
 | macOS | Confirm selected broker/native SDK support, bundle callbacks and Keychain behavior. Firebase macOS setup calls for Keychain Sharing, unlike the present local legacy-Keychain sample. | Actual provider return, approved signing/capabilities where required, restart/restore, cancel/deny and revoke/purge. Do not infer this from current Entra success. |
 
 Firebase's Flutter guide documents Apple and Google provider flows, native versus
@@ -353,7 +355,7 @@ the dependent work:
 3. [#28: Native/Web proof and simulator tooling](https://github.com/anaregdesign/cosmos-sync/issues/28) is completed in its recorded adapter scope.
 4. [#29: Deterministic security regressions](https://github.com/anaregdesign/cosmos-sync/issues/29) are completed; fixtures are not live provider acceptance.
 5. [#30: Actual Google/Apple provider setup and acceptance](https://github.com/anaregdesign/cosmos-sync/issues/30) is cancelled by the owner as not planned; it is no longer a blocking prerequisite. Physical Android acceptance remains the separate final gate in [#20](https://github.com/anaregdesign/cosmos-sync/issues/20).
-6. [#40: Provider-neutral browser OIDC](https://github.com/anaregdesign/cosmos-sync/issues/40) addresses the current Entra-only Web adapter without reopening completed preparation or authorizing provider operations.
+6. [#40: Provider-neutral browser OIDC](https://github.com/anaregdesign/cosmos-sync/issues/40) records the explicit generic source adapter and real standards/browser/cache acceptance without reopening completed preparation or authorizing provider operations.
 
 External ID is selected and its dedicated directory has been created. The
 registration contract, current token behavior and bounded future linking design

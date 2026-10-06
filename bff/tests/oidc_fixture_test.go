@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
@@ -31,12 +32,17 @@ type oidcIssuer struct {
 
 func newOIDCIssuer(t *testing.T) *oidcIssuer {
 	t.Helper()
+	return newOIDCIssuerWithHandler(t, nil, nil)
+}
+
+func newOIDCIssuerWithHandler(t *testing.T, wrap func(*oidcIssuer, http.Handler) http.Handler, transport *tls.Config) *oidcIssuer {
+	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
 	}
 	issuer := &oidcIssuer{key: key}
-	issuer.server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
@@ -57,7 +63,13 @@ func newOIDCIssuer(t *testing.T) *oidcIssuer {
 		default:
 			http.NotFound(w, r)
 		}
-	}))
+	})
+	if wrap != nil {
+		handler = wrap(issuer, handler)
+	}
+	issuer.server = httptest.NewUnstartedServer(handler)
+	issuer.server.TLS = transport
+	issuer.server.StartTLS()
 	t.Cleanup(issuer.server.Close)
 	return issuer
 }

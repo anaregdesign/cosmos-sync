@@ -47,6 +47,7 @@ export function browserConfiguration(encoded, baseUri, secureContext) {
         redirectUri: redirect,
         postLogoutRedirectUri: config.postLogoutRedirectUrl ?? redirect,
         scopes: [...config.scopes],
+        apiScopes: [...scopes],
       },
     };
   }

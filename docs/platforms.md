@@ -117,7 +117,7 @@ storage, suspended background sync or physical-device behavior.
 ## Ordinary Flutter Web application
 
 `examples/flutter_app` now builds the same ordinary UI/controllers for Web with
-memory-only MSAL and IndexedDB/Web Locks. Native SQLite, secure storage and
+explicit memory-only Entra/MSAL or generic OIDC and IndexedDB/Web Locks. Native SQLite, secure storage and
 custom-scheme callbacks remain separate. Follow the
 [Web setup](web-auth.md), including the exact SPA redirect bridge and BFF origin.
 
@@ -139,3 +139,12 @@ native-only startup purging when browser memory credentials disappeared.
 Startup now retains locked browser storage while still requiring interactive
 auth and online BFF rebind; native missing-credential purge remains unchanged.
 Owned browser/HTTP/Go helpers were cleaned up after every attempt.
+
+Current source also supplies `tools/browser_oidc_smoke.py`. It uses the real
+generic browser bundle/callback and normal WebOidcClient against an owned
+non-Entra HTTPS Code/S256/signed-JWT issuer, not the older recorded-token adapter.
+It independently observes reload and covers another subject's cache isolation,
+locked outbox retention and online rebind/ACK/purge. The fixture's generated TLS
+certificate is trusted only by its fresh owned Chromium profile/Python context.
+This is standards-fixture evidence; actual providers, other browsers, mobile
+browser restrictions and hosted Azure remain separate gates.

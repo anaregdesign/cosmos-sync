@@ -85,9 +85,12 @@ Directory, Graph and data partitions are not globally atomic; the existing
 numeric same-data-partition membership fence remains independent.
 Generic BFF/native authentication stays issuer-configurable. Entra External ID is
 the preferred consumer broker, not a global provider restriction. The supplied
-Web MSAL adapter and workforce Graph reader are specialized adapters with explicit
-limits; generic browser compatibility remains
-[#40](https://github.com/anaregdesign/cosmos-sync/issues/40).
+Entra/MSAL adapter and workforce Graph reader remain specialized with explicit
+limits. Current source adds the separately selected generic Code/S256 browser
+adapter with signed-ID validation and API-only ordinary exports; it does not
+advertise that directory proof profile.
+[#40](https://github.com/anaregdesign/cosmos-sync/issues/40) pins its exact source
+and standards/browser cache evidence, separately from publication and live acceptance.
 
 The owner approved MIT, public GitHub/GHCR visibility, personal pub.dev ownership
 and the experimental `0.2.0-dev.1` preview. The foundation is merged; subsequent
