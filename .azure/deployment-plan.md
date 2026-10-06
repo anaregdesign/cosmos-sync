@@ -1,7 +1,7 @@
 # Cosmos Sync delivery and deployment plan
 
 Status: Approved
-Current scope: Reconcile delivery status and Issues; approved management-state adoption is pending and Azure apply is not authorized.
+Current scope: Implement and verify the approved generic browser path and distinct private management-state preparation; Azure apply remains separately unauthorized.
 Previous validation: Read-only mirror/saved directory plan passed at `adbf0da`; retained as reference evidence.
 Date: 2026-10-06 JST
 Mode: MODIFY
@@ -762,3 +762,145 @@ Original state provision is no longer mandatory, new-state adoption is already
 approved, and Azure apply/extra identities/CORS/network/replica/credential changes
 remain separate decisions. Historical failures and scope exclusions are retained;
 fixtures, publication and state review do not count as actual hosted acceptance.
+
+## 18. Remaining implementation resumption, 2026-10-06
+
+The owner requested a fresh remaining-work implementation plan and continuation
+at 20:51 JST. Preserve the completed delivery/Issue review and all exact-source
+evidence above. Workspace inspection confirms the actual browser gap is still
+the Entra-specific MSAL authority parser, not the generic BFF/native JWT contract.
+
+Scope: generic browser OIDC #40 and the already approved distinct private
+management-state adoption/revalidation #16. Consumer-owned Terraform,
+provider-neutral API JWT trust, the selected Entra adapter and the narrower
+workforce directory-profile contract remain separate. No new publication,
+Azure apply, identity/grant/secret/network/replica change, owner login or physical
+operation is authorized by this resumption request.
+
+- [x] Inspect the current browser auth/cache/proof/test surfaces and exact CI.
+- [x] Finalize a bounded adapter/library, fixture, regression and state-handoff plan.
+- [x] Present the implementation/preparation plan for approval.
+- [ ] Implement and verify generic browser OIDC with native/Entra/cache preservation.
+- [ ] Adopt/revalidate the approved six-binding private management state.
+- [ ] Persist exact-source acceptance and update the remaining Issues/handoff.
+- [ ] Separately authorize actual activation and attended downstream acceptance.
+
+### R1: Explicit browser adapters and shared safety (#40)
+
+Retain the existing Entra/MSAL default for existing saved settings and native
+behavior. Add an explicit generic OIDC browser selection with its own exact
+same-origin callback page. Persist only public adapter/settings metadata and
+include the adapter in generic credential/configuration bindings. The generic
+path accepts operator-selected HTTPS issuer/discovery and visible non-UUID
+public-client identifiers; it does not infer trust from a token or provider name.
+Keep optional Entra navigation hints confined to that adapter.
+
+Use pinned `oidc-client-ts` 3.5.0 for Authorization Code/S256 PKCE, popup state/
+nonce and memory-only user/state stores. Disable automatic renewal, session
+monitoring, user-info fetches and persistent/browser-store defaults. Ordinary
+explicit renewal uses only its private memory refresh token; absence/denial
+requires interactive sign-in rather than an invisible iframe/storage fallback.
+Requests, popup waits, cancellation and cleanup remain bounded and redacted.
+
+Use pinned `jose` 6.2.12 to verify generic ID signatures and configured issuer/
+client audience/expiry/nonce against the trusted discovery JWKS, rather than
+granting trust to oidc-client-ts's decoded profile. Allow only the supported
+asymmetric signing family. The BFF independently verifies every API JWT and
+establishes authorization/cache ownership; browser claims never replace that
+boundary. Generic ordinary exports remain API-only; ID/refresh/sub never enter
+application settings, IndexedDB, logs or normal Dart token exports.
+
+Reuse the existing browser lifecycle/generation/cleanup machinery instead of
+duplicating Entra and generic cancellation logic. Preserve main-versus-proof
+separation, late-response/signout fencing and existing online BFF cache rebind/
+Web Locks. Generic browser authentication does not advertise the specialized
+Entra directory fresh-proof capability: show an explicit unsupported capability,
+not a broken button, refresh-as-reauthentication or builtin fallback. The selected
+Entra isolated proof remains intact.
+
+Update the normal Web configuration selector, a small widget preview and
+settings/interop/controller tests. Exact callback/adapter mismatch and changing
+adapter must not renew or reopen another credential's cache. No new BFF wire
+route, credential exchange, cookie session, test switch or social-profile reader.
+
+### R2: Standards fixture and portable acceptance (#40, #32)
+
+Add a test-only non-Entra HTTPS discovery/authorization/code/token/JWKS fixture
+with ephemeral RSA JWTs, exact callbacks, one-time code and S256 verification,
+plus the actual production Go API verifier/authorization. Exercise the bundled
+production browser adapter and callback, not a pasted-token auth replacement.
+Fixture keys/identifiers never reach production code or publication.
+
+Cover successful non-UUID login/renewal, wrong API and ID issuer/audience/scope/
+signature, nonce/state/callback mismatch, code replay/PKCE, missing refresh,
+popup cancellation, timeout/late results, signout, reload and independent
+account/cache isolation. Exercise the ordinary Flutter Web controller with
+IndexedDB/Web Locks and BFF online rebind; retain the existing Entra/native/
+proof/SDK regressions. State claims and exact-server authorization remain
+distinct from data-partition guarantees. Fixture results are not live OIDC,
+Azure, provider self-service or physical acceptance.
+
+Use the existing CI reference: focused Node and Flutter/browser suites first,
+then relevant Go/Dart/auth/cache checks, normal Web build and existing ordinary
+reload smoke. Wire the real generic fixture into portable CI. Keep exact-source
+versus dirty working-tree receipts honest; do not claim previous CI passed a new
+commit or silently create/merge a PR or publish another artifact.
+
+Update directly related Web/native/onboarding/consumer-Terraform and security
+guidance plus generated package mirrors if source docs change. Record English
+#40/#2 acceptance with actual measured counts/source/limits and preserve all
+older failures.
+
+### R3: Approved private management-state execution (#16)
+
+Execute section 16's already approved scope without repeating adoption,
+subscription or region approval. Use the exact existing private target in the
+previously approved West US2 context; no context switch or provisioning occurs.
+Runtime source/image remains published `36d2680`/`adfe83a08dcd...`, independent
+of the new browser source. No source or value in the old mirror is modified.
+
+Create a distinct private local management workspace from pinned module source
+and hash-verified exact existing six-binding snapshot/inputs. Preserve original
+lineage in backups and give the new local state an explicit unique authority
+manifest, single-writer/stop-on-old-state contract and starting hashes. This is
+an authorized local handoff, not a cloud write or a claim no old writer exists.
+Do not read the main checkout or provision a paid remote backend.
+
+Refresh exact existing resources with existing credentials. Require six-no-op
+baseline and an image/runtime-JSON-only app update/five-no-op directory plan,
+zero creates/deletes/replacements and unchanged topology/roles/cursor/history/
+data/sole Allow/min0max1/empty CORS. Reject drift and do not invent provider
+metadata or use cloud updates/ignore rules to make it green. Keep all raw
+state/plans/identifiers private and persist sanitized fresh receipts.
+
+Set the root plan physically Ready for Validation, invoke Azure Validate and
+run its canonical Terraform preflight against this distinct workspace with
+locked providers and exact private variables. Compare its independently saved
+resource values/actions to the reviewed plan. Prior UpdateStatus is not proof
+of this stage. Actual Azure Deploy/apply remains stopped until separate
+concrete saved-plan approval; this request does not authorize it.
+
+### Remaining execution order and stopping gates
+
+R1/R2 are local source work; R3 is independent already-approved preparation.
+Complete both before asking for an exact actual-activation decision. #16 then
+owns ingress/evaluated-peer/log and hosted MI/Graph/Cosmos; #24 owns attended
+customer/fresh-ID/data/member coverage; #32 consumes the final pinned browser/
+SDK/image contract and reproduces onboarding; #20 remains last and attended.
+No extra BFF probe is allocated by R1/R2/R3; the actual ledger stays 7/40,
+33 remaining/fully reserved and zero accepted document mutations.
+
+Research: upstream oidc-client-ts v3.5.0 UserManager/settings/navigator/response
+validator and jose v6.2.12 remote JWKS guidance were inspected. The maintained
+OIDC library's profile decode is not cryptographic validation, hence the explicit
+jose ID boundary. Targeted advisory checks for these two versions and transitive
+`jwt-decode` 4.0.0 returned zero known vulnerabilities; no full repository audit
+or new dependency installation occurred during planning. Existing Terraform
+recipe/service references were reviewed without adopting their unrelated
+new-resource/key/registry/replica examples. Classification, cost, retained
+location and resource quantities are unchanged; planned new Azure resources: 0.
+
+Approval status: the owner selected the recommended complete R1/R2/R3
+implementation/verification plan. Management-state adoption itself was already
+approved and was not requested again. Functional
+verification is part of R2/R3, not an optional replacement for actual acceptance.
