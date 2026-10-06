@@ -76,11 +76,12 @@ preflight/data path measured 25/29 requests inside the signed TLS/Graph/Dart/SQL
 fixture; the full lifecycle uses its separate 54/80 fixture allowance. An actual
 Android emulator restart passed on the working tree with dirty-source attribution.
 Native SDK/application, Chromium/Node, Python and BFF race/vet/build checks passed.
-Neither configured local Docker socket is currently available, so current
-container and official Cosmos-emulator attempts failed before execution; exact
-portable candidate CI and clean restart repetition remain necessary. Identity
-linking, Web support and core authorization must not be reimplemented to work
-around the separate actual customer/artifact/hosting gates.
+The pre-restart local Docker attempts failed before execution. After restart,
+Docker is available and the complete official Cosmos-emulator suite passed with
+the corrected private fixture namespace. Exact portable candidate CI and clean
+restart repetition remain necessary. Identity linking, Web support and core
+authorization must not be reimplemented to work around the separate actual
+customer/artifact/hosting gates.
 
 ## 4. Recipe and architecture
 
@@ -432,3 +433,29 @@ Do not start unattended customer/management login, rotate the source secret,
 publish, apply, widen a policy, create an identity or operate the connected
 physical phone on resumption without its applicable authorization. The real
 ledger remains seven attempts and zero accepted document mutations.
+
+## 12. Restart resumption and approved CI repair, 2026-10-06
+
+The owner reported restart completion and explicitly approved the concrete
+fixture repair, candidate CI recheck and clean-source emulator restart. This
+supersedes section 11's temporary execution pause for the existing approved
+local/simulator work; all separate live-operation gates remain unchanged.
+
+Exact `f300273` CI completed with eight successful jobs and one failed
+Cosmos-emulator job. Its directory capability check correctly rejected a private
+Dart manifest that used the broker's default namespace while the BFF fixture
+configured `dart-http-emulator-v1`. Use the actual configured namespace in that
+manifest; do not relax the capability or production authorization checks.
+
+A new nondefault-namespace memory fixture reproduced the identical failure
+before the repair. Both default/nondefault signed lifecycle paths and all eleven
+official Cosmos-emulator subtests passed after it, as did the three recorded
+directory preflight cases, including wrong-namespace/account denial. The
+emulator's isolated database and newly created container were cleaned. This is
+signed local issuer/Graph fixture evidence, not actual customer, hosted Graph or
+Azure consistency evidence.
+
+Persist this repair on the existing PR branch, verify exact-head CI and repeat
+the exact-PID restart from clean source on a newly owned emulator before closing
+the applicable preparation Issues. Record the exact hashes/results in the
+existing English Issues without rewriting the failed `f300273` run as passed.

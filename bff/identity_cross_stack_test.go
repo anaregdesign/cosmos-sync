@@ -17,9 +17,19 @@ func TestDirectoryDartLifecycleCrossStack(t *testing.T) {
 	if os.Getenv("COSMOS_SYNC_IDENTITY_DART") != "1" {
 		t.Skip("explicit disposable Dart identity fixture not requested")
 	}
-	first := newIdentityHTTPFixture(t)
-	second := startIdentityHTTPFixture(t, first.broker, first.handler.store, "")
-	runDirectoryDartLifecycle(t, first, second)
+	for _, test := range []struct {
+		name      string
+		namespace string
+	}{
+		{"default namespace", ""},
+		{"configured namespace", "dart-http-configured-v1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			first := startIdentityHTTPFixture(t, newBrokerProofFixture(t), NewMemoryStore(), test.namespace)
+			second := startIdentityHTTPFixture(t, first.broker, first.handler.store, first.options.Namespace)
+			runDirectoryDartLifecycle(t, first, second)
+		})
+	}
 }
 
 // This proof issuer exists only inside go test. The production BFF never
@@ -59,7 +69,7 @@ func runDirectoryDartLifecycle(t *testing.T, first, second *identityHTTPFixture)
 		"url": first.server.URL, "replica": second.server.URL, "proofs": proofs.URL,
 		"certificate": certificate, "issuer": first.broker.signed.target.Issuer,
 		"clientId": first.broker.signed.target.ClientID, "callback": first.broker.signed.target.Callback,
-		"namespace": first.broker.signed.target.Namespace,
+		"namespace": first.options.Namespace,
 		"tokens": map[string]string{"primary": first.broker.access(t, nil, 0),
 			"secondary": first.broker.access(t, map[string]any{"oid": brokerTestOther}, 0)},
 	})

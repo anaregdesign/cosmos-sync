@@ -918,3 +918,31 @@ hosted UAMI/Graph/Cosmos, ingress/evaluated peer/log delivery, ordinary hosted U
 independent credentials/members/two real BFFs and final physical Android remain
 their distinct open acceptance gates. No additional identity, grant, secret,
 network policy, replica change, paid provisioning, rollout or release is implied.
+
+### Restart resumption and directory fixture correction
+
+After the owner restarted and approved continuation, implementation source
+`f300273` had eight successful jobs and one failed Cosmos-emulator job in
+[CI 37426148153](https://github.com/anaregdesign/cosmos-sync/actions/runs/37426148153).
+The signed HTTP/Dart lifecycle was the only failed emulator subtest: its private
+manifest used the broker's default namespace rather than the configured
+`dart-http-emulator-v1`. The shared preflight correctly rejected that mismatch.
+
+The manifest now takes its namespace from the actual fixture configuration.
+Default and nondefault namespaces have independent signed memory-backed
+lifecycle cases; the nondefault case reproduced the CI failure before the fix
+and passed afterward. The recorded wrong-namespace/account rejection cases
+remain unchanged and pass. No production verification, audience, nonce,
+freshness, authorization or consistency guard was weakened.
+
+Docker became available after restart. All eleven official Cosmos-emulator
+subtests passed locally, including the same signed TLS/Dart/SQLite lifecycle
+with two independent Cosmos clients. It measured the unchanged 54/80 complete
+fixture and 25/29 recorded directory path; its isolated database and owned
+container were cleaned. These are actual local emulator operations, not live
+Azure/customer/hosted Graph acceptance. The earlier Docker failures and failed
+`f300273` CI remain historical failures.
+
+Clean committed-candidate restart repetition, nonpublishing image checks and
+portable CI are subsequent evidence, pinned in #27/#28/#24. This checkpoint does
+not claim them complete or waive the separate live and physical criteria.
