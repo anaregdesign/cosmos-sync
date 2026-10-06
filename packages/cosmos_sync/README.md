@@ -7,13 +7,17 @@ operations. The BFF alone holds Cosmos credentials. This is a finite document AP
 with [Firestore differences](doc/query.md). Essential protocol, query and security
 documentation is included in this package; using it does not require repository access.
 
-Apple and Google are the intended end-user login providers. The SDK accepts a
+Authentication remains provider-neutral OIDC; Entra External ID is the preferred
+consumer broker, with Apple/Google as possible upstream providers. The SDK accepts a
 dedicated BFF API access token through `tokenProvider`; it does not implement a
 provider login or turn a provider ID token into API authorization. The native
 sample currently validates Entra OIDC/PKCE; its separate Web target uses
 memory-only MSAL and BFF-verified IndexedDB ownership. Actual Google/Apple
-connections are cancelled for this delivery, not passed. Explicit account
-linking has unpublished opt-in transport/application source, tracked in the
+connections are outside this delivery, not denied by provider name or passed.
+The supplied Web adapter is Entra-specific; generic browser compatibility remains
+[#40](https://github.com/anaregdesign/cosmos-sync/issues/40). Explicit account
+linking has opt-in repository transport/application source and a published BFF
+from `36d2680`, tracked in the
 [social-login roadmap](https://github.com/anaregdesign/cosmos-sync/blob/main/docs/social-auth.md).
 The published `0.2.0-dev.1` archive is unchanged; current-source APIs below are not
 claims about that archive or a deployed directory service.

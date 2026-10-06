@@ -246,12 +246,15 @@ evidence is retained in
 actual identifiers and runtime context stay private.
 
 The corresponding Go component performs exact, uncached, bounded user-profile
-reads and fingerprint revalidation. The unpublished explicit directory factory
-now connects it to account/session/link routes, matching typed transport and
+reads and fingerprint revalidation. The explicit directory factory, published in
+the BFF from `36d2680`, connects it to account/session/link routes, matching typed
+transport and
 isolated native/Web fresh-proof UI. The retained old BFF image has not been updated,
 and actual UAMI assertion/token exchange/Graph access from ACA is **unverified**.
 Successful FIC creation alone cannot verify that exchange. No runtime, linking,
 hosted-Cosmos or customer-authentication acceptance is inferred from configuration.
+This reader's reviewed credential shape is workforce federation. It is not
+universal social linking or a provider-name restriction on generic OIDC.
 
 Customer users cannot perform their own API permission consent in external
 tenants. An existing authorized administrator must therefore grant only the

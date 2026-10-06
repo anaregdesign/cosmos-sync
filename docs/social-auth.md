@@ -1,6 +1,10 @@
 # Apple and Google end-user authentication
 
-Apple and Google are the intended consumer login options for Cosmos Sync.
+Cosmos Sync keeps provider-neutral OIDC authentication. Entra External ID is the
+preferred consumer reference broker, with Apple and Google as possible upstream
+providers, not an exclusive issuer or provider allowlist for generic BFF/native
+authentication. Consumers deploy the public Terraform into their own environment
+with their own configured trust.
 The Go BFF and Dart SDK remain the data and authorization boundary. This is a
 development roadmap, not a claim that the current preview implements either
 provider. The existing native OIDC adapter and verified Microsoft Entra API-token
@@ -18,8 +22,10 @@ credential operations and their manual live-provider acceptance. Issue
 not passed. Google/Apple project/team access, test logins, keys and provider
 rotation are no longer prerequisites for this delivery. The provider-specific
 setup and matrix below are future reference, not instructions to perform them.
-Keep both capability flags disabled; preserve typed local adapters and
-deterministic identity/security regressions.
+The current reference environment has no configured/verified social navigation
+capabilities; preserve its truthful advertisement and local security regressions.
+This operational exclusion is not a provider blacklist. A correctly configured
+OIDC flow is not rejected merely because its upstream provider is Apple or Google.
 
 The owner subsequently moved physical verification to the final Android-only
 gate. Continue native/browser and simulator development first. Actual External
@@ -30,14 +36,17 @@ or broker self-service enforcement. Simulation cannot establish those facts.
 
 Use an identity broker for consumer login, then require a credential specifically
 accepted by the Cosmos Sync API. Keep authorization and stable data ownership in
-the BFF. **Do not configure the existing sync endpoints to accept Apple or Google
-ID tokens by removing the API audience/scope checks.** A Google API access token,
-an Apple provider access token, or a client-decoded identity claim is also not a
-Cosmos Sync credential.
+the BFF. **Do not remove API audience/scope or signature checks to admit a
+client-audience ID token or a token for another API.** This applies to every
+provider, not just Apple/Google. A trusted issuer can be used when it supplies
+the dedicated API access-JWT contract; OIDC alone does not guarantee that its
+access tokens are JWTs or intended for this BFF. A new exchange/introspection
+adapter is not implemented merely by changing an issuer field.
 
 The owner selected **Microsoft Entra External ID in a separate external tenant**,
 federating Apple and Google through browser-delegated login.
-This preserves the current Authorization Code/PKCE public-client model and a
+This is the preferred deployment, not a restriction on generic OIDC. It
+preserves the current Authorization Code/PKCE public-client model and a
 dedicated BFF access-token audience/scope. Microsoft documents both social
 providers, and explicitly limits their use to browser-delegated authentication;
 its native authentication feature currently supports local accounts. The
@@ -111,7 +120,7 @@ reviewable operation. Unlink requires recent authentication, session invalidatio
 and a remaining usable login/recovery method. Do not migrate documents or lose
 the account ID when switching providers.
 
-### Selected linking contract (unpublished opt-in source)
+### Selected linking contract (published opt-in BFF)
 
 The contract for the dedicated directory link/unlink boundary is:
 
@@ -140,7 +149,11 @@ wires a bounded single-record Cosmos adapter, correlated signed API/ID proof and
 uncached trusted Graph reader through explicit `authorization.mode=directory`.
 Its dedicated HTTP routes, identity-bound sessions/contexts, typed transport and
 native/Web lifecycle UI are source-tested, not deployed/live acceptance. The
-retained image and published archive are unchanged. Actual upstream fresh-auth
+directory-capable BFF is published from `36d2680`; the retained Azure image and
+old SDK archive are unchanged. The production Graph reader currently supports
+the reviewed workforce-federated credential shape, not arbitrary Google/Apple
+or other broker credential profiles. That optional adapter restriction is not
+a global OIDC-provider ban. Actual upstream fresh-auth
 issuance, hosted MI/Graph, out-of-band broker behavior and production capacity/
 recovery remain gates. No Graph write grant, custom BFF refresh family, automatic
 account migration or broker-wide linking control is introduced.
@@ -162,7 +175,7 @@ SDK mutation attacks. A safe BFF button alone does not enforce that boundary.
 The legacy BFF mode derives its personal partition from verified issuer, tenant
 and subject. The opt-in [built-in authorization mode](authorization.md) now
 provides a durable account directory keyed by verified issuer/subject, personal
-self-access and fixed-owner shared membership. The unpublished directory extension
+self-access and fixed-owner shared membership. The published BFF directory extension
 adds explicit trusted identity lifecycle; actual cross-provider deployment and
 legacy-data migration remain **unverified/unimplemented**, respectively. Migration requires an explicit
 mapping of old scope IDs, retained journal and receipt integrity,
@@ -186,6 +199,9 @@ migration because its subject namespace can change. See the
 The selected first External ID integration reuses the existing BFF verifier and
 native AppAuth or separate [Web MSAL adapter](web-auth.md). Directory creation alone does not prove that an actual
 consumer token or callback meets this contract.
+The generic BFF/native configuration is issuer-selectable. The current Web MSAL
+adapter is Entra-specific; [#40](https://github.com/anaregdesign/cosmos-sync/issues/40)
+tracks the actual general-browser compatibility gap without relaxing API trust.
 
 | Boundary | Current preview behavior |
 | --- | --- |
@@ -333,10 +349,11 @@ The [publication epic](https://github.com/anaregdesign/cosmos-sync/issues/2) tra
 the dependent work:
 
 1. [#26: Choose the broker and token trust boundary](https://github.com/anaregdesign/cosmos-sync/issues/26).
-2. [#27: Implement stable accounts, explicit linking and BFF session/authorization mapping](https://github.com/anaregdesign/cosmos-sync/issues/27), after the design decision.
-3. [#28: Implement and validate Flutter provider/platform adapters](https://github.com/anaregdesign/cosmos-sync/issues/28), against that server contract.
-4. [#29: Add automated security regression evidence](https://github.com/anaregdesign/cosmos-sync/issues/29), alongside server/client implementation.
+2. [#27: Directory implementation/deployment preparation](https://github.com/anaregdesign/cosmos-sync/issues/27) is completed; actual customer/hosting evidence remains #24/#16.
+3. [#28: Native/Web proof and simulator tooling](https://github.com/anaregdesign/cosmos-sync/issues/28) is completed in its recorded adapter scope.
+4. [#29: Deterministic security regressions](https://github.com/anaregdesign/cosmos-sync/issues/29) are completed; fixtures are not live provider acceptance.
 5. [#30: Actual Google/Apple provider setup and acceptance](https://github.com/anaregdesign/cosmos-sync/issues/30) is cancelled by the owner as not planned; it is no longer a blocking prerequisite. Physical Android acceptance remains the separate final gate in [#20](https://github.com/anaregdesign/cosmos-sync/issues/20).
+6. [#40: Provider-neutral browser OIDC](https://github.com/anaregdesign/cosmos-sync/issues/40) addresses the current Entra-only Web adapter without reopening completed preparation or authorizing provider operations.
 
 External ID is selected and its dedicated directory has been created. The
 registration contract, current token behavior and bounded future linking design

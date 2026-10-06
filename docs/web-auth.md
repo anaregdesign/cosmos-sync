@@ -4,7 +4,25 @@ The ordinary `examples/flutter_app` Web target shares the native application's
 UI, auth controller, BFF transport and cache-ownership policy. It uses pinned
 `@azure/msal-browser` 5.24.0, bundled locally with esbuild 0.28.2. Native AppAuth,
 secure credential restore and SQLite behavior remain separate and unchanged.
-Actual Google/Apple connections are cancelled; their navigation flags stay off.
+Actual Google/Apple connections are outside this delivery; the current reference
+does not advertise unconfigured navigation capabilities. This is not a global
+provider-name denylist.
+
+## Actual OIDC compatibility boundary
+
+The BFF/SDK and native OIDC configuration remain provider-neutral, with Entra
+External ID as the preferred consumer broker. This supplied **Web adapter is
+Entra-specific**: its parser requires Microsoft/CIAM hosts, a UUID tenant/v2.0
+path and UUID client, then constructs an MSAL authority. It is not yet a generic
+browser OIDC client. [#40](https://github.com/anaregdesign/cosmos-sync/issues/40)
+tracks that source-level gap; removing only the host checks would not implement
+a safe generic protocol flow.
+
+Apple/Google can be upstream methods of the configured Entra broker without a
+provider-name API denial. Every deployment still needs the dedicated API JWT
+issuer/audience/scope and current server authorization. Neither that generic API
+contract nor the Web adapter establishes arbitrary social credential linking
+through the separate workforce-only directory reader.
 
 ## Public-client setup and build
 

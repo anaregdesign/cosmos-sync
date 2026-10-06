@@ -54,12 +54,17 @@ checklists with explicit source, tooling, hosted and final-device milestones.
 The core directory factory, typed SDK and native/Web account lifecycle are
 implemented. Directory-mode Terraform and actual fresh-proof/hosted acceptance
 tooling are now implemented as separately gated preparation. Compatible artifact
-activation, actual customer/hosted acceptance and coverage decisions still remain.
+activation, actual customer/hosted acceptance, general browser OIDC compatibility
+and coverage decisions still remain. Entra External ID is the preferred consumer
+reference, not a global issuer restriction. The public Terraform is for each
+consumer's own deployment and private state.
 
 | Path | Actual version boundary | Acceptance |
 | --- | --- | --- |
-| Published preview | SDK `0.2.0-dev.1` from `82e937c`, public BFF from `76c1f46`; retained Azure still uses the original image | Builtin/legacy only; publication is not hosted CRUD evidence |
-| Directory candidate | Unpublished source in open PR #39; existing package/image cannot be relabeled as directory-enabled | #27 configuration, #28 proof/restart tooling, #16 hosting, #24 actual integration |
+| Published SDK | Immutable `0.2.0-dev.1` archive from `82e937c`; no republication | Its original builtin/legacy transport is not the new typed directory SDK |
+| Published directory BFF | PR #39 merged as `36d2680`; verified immutable `adfe83a08dcd...` image | #27/#28 preparation completed; source-path SDK required; #16/#24 actual acceptance remains open |
+| Retained Azure | Original `82e937c` builtin image/configuration | New image not applied; prior read-only plan passed; new-state adoption approved but unstarted |
+| Browser compatibility | Supplied memory-only MSAL adapter is Entra-specific | #40 adds generic OIDC; native/BFF configurability does not prove general Web support |
 | Reproducible onboarding | Pin the exact chosen source/package/image and authorization mode before the run | #32 follows #24; it does not depend on closing epic #2 or physical-device #20 |
 | Final device | Selected physical Android after source/cloud/onboarding and owner availability | #20; iOS and cancelled actual Google/Apple are not prerequisites |
 
@@ -88,11 +93,14 @@ actual package publication and image digest there before using registry artifact
 a dry run or planned package URL does not establish availability. The source
 checkout remains usable for local preparation while those gates are open.
 
-The current verified public BFF is built from `76c1f46`, while the unchanged
+The current verified public BFF is built from `36d2680`, while the unchanged
 `cosmos_sync 0.2.0-dev.1` archive comes from `82e937c`. The actual Azure startup
 checkpoint still uses that original BFF image; new-image publication is not a
 hosted CRUD result. Use the [recorded immutable digests](release.md) and select
 one explicitly in the reviewed deployment plan.
+For directory APIs, use the explicitly pinned repository SDK path rather than
+the old pub.dev archive, even though the source package still has the same
+preview version. Record source and package provenance separately.
 
 HTTP diagnostics are configured in a retained workspace with 30-day retention,
 0.023-GB/day cap and HTTP-only categories. Actual table/schema creation passed,
@@ -144,6 +152,21 @@ The Terraform task is tracked in [#31](https://github.com/anaregdesign/cosmos-sy
 | Reviewed public GHCR image pinned by digest | Actual published digest and validated configuration; private pulls need separately approved credentials |
 | BFF OIDC/CORS/configuration inputs | Trusted issuer, dedicated API audience/scope, registered native public client/redirect and tested provider consent |
 
+Consumers supply **their own** subscription/resources, private Terraform state,
+OIDC issuer/API/public-client configuration and exact callback/origin policy.
+The Azure management/UAMI tenant is not necessarily the OIDC customer tenant.
+Entra External ID is the preferred broker and may federate Apple/Google upstream;
+the generic BFF/native path has no provider-name blacklist. It still requires a
+validated, API-specific JWT: a client-audience ID token or unrelated/opaque API
+token does not become a Cosmos Sync credential merely by being OIDC-related.
+
+The module does not create consumer tenant/apps/user flows, upstream provider
+registrations/secrets or directory-reader Graph consent. The optional directory
+reader has a workforce-federation-specific trust contract, and the current Web
+MSAL adapter is Entra-specific. Document these real limitations rather than
+claim universal linking/Web compatibility; consume #40's exact resulting source.
+Do not copy this repository's private validation state into another deployment.
+
 The separate private-prerequisite module supplies the selected VNet, two backend
 Private Endpoints/DNS and private RBAC Vault. The public
 [cursor bootstrap tool](../tools/bootstrap_cursor_key.py) supplies an offline local
@@ -186,7 +209,7 @@ actual immutable image and intended new namespace. The example leaves that
 assertion false, so it cannot silently deploy an unverified policy image. This
 assertion does not approve a cloud apply or migrate a legacy deployment.
 
-The unpublished `directory` extension is selectable only with explicit
+The published BFF's `directory` extension is selectable only with explicit
 `authorization_mode="directory"`, typed `directory` settings and reviewed
 `directory_image_verification`. Its source configuration is
 [`config.directory.example.json`](../bff/config.directory.example.json), with a
@@ -319,10 +342,12 @@ document membership. This is opt-in and requires the newer verified BFF image;
 the original retained cloud image does not support the setting. See the
 [Container Apps inputs](../infra/terraform/azure-container-apps/README.md).
 
-Apple/Google raw ID tokens and unrelated Google/Graph API access tokens are not
-Cosmos Sync API credentials. The [social-auth roadmap](social-auth.md) defines the
-broker/API-token or backend-exchange boundary; entering another provider's issuer
-in the current form does not implement it. New provider registrations, credentials,
+Client-audience ID tokens and access tokens for unrelated APIs are not
+Cosmos Sync API credentials, irrespective of provider name. The
+[OIDC/broker boundary](social-auth.md) defines the dedicated API-JWT or separately
+reviewed exchange contract; changing an issuer does not implement a missing
+exchange, generic Web adapter or trusted directory reader. New provider
+registrations, credentials,
 consent and Apple signing/capabilities require their concrete owner approval.
 
 The recommended configuration selects `authorization: {"mode": "builtin"}`.

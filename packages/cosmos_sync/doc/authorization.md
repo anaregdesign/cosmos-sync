@@ -46,7 +46,7 @@ field ACLs, policy language, account deletion or owner-transfer flows.
 
 ## Opt-in broker-aware directory accounts
 
-The unpublished `authorization.mode:"directory"` source extension uses an
+The published BFF's `authorization.mode:"directory"` extension uses an
 explicitly registered random account rather than deriving ownership from a broker
 API `sub`. Independently verified API/ID proofs, fresh server nonce/authentication
 time and uncached trusted Graph credential-set reads establish its binding.
@@ -56,7 +56,11 @@ separate `identityGeneration`; `identityId` identifies the current active
 credential. The numeric same-data-partition membership version is unchanged.
 
 Only an exact approved CIAM issuer/public-client namespace and preconfigured
-secret-free reader are supported by this factory. Legacy/builtin configuration
+secret-free reader are supported by this factory. These optional adapter
+restrictions are not a global issuer/provider blacklist: generic legacy/builtin
+authentication remains issuer-configurable OIDC. The current reader supports
+reviewed workforce federation, not arbitrary social credential sets.
+Legacy/builtin configuration
 does not expose the capability or lifecycle routes. Ordinary directory lookup is
 read-only; it cannot register, repair, adopt a changed broker credential or migrate
 an old hash-derived account. Directory registration and personal account/policy

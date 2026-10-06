@@ -75,7 +75,7 @@ History, receipts and tombstones have no TTL or GC. Conservative per-scope event
 | Authorization | Validated API JWTs; durable personal scopes and fixed-owner shared reader/writer membership | Provider setup/linking, invitations, owner transfer, account deletion and generic security rules are separate work; legacy grants remain opt-in |
 | Operations | Local/fault/emulator/platform tests and preparation | Approved live Azure RU/replica/backup/deployment gate |
 
-The unpublished [opt-in identity directory](identity-directory.md) is separate
+The published BFF's [opt-in identity directory](identity-directory.md) is separate
 from builtin issuer/subject registration. Its explicit factory wires bounded
 Cosmos CAS, trusted broker-profile reads, dedicated fresh-proof lifecycle routes
 and identity-bound authorization/contexts/caches. Native/Web proofs do not adopt
@@ -83,6 +83,11 @@ independent credentials. Actual customer freshness, hosted MI/Graph, broker
 self-service behavior and production capacity/recovery remain deployment gates.
 Directory, Graph and data partitions are not globally atomic; the existing
 numeric same-data-partition membership fence remains independent.
+Generic BFF/native authentication stays issuer-configurable. Entra External ID is
+the preferred consumer broker, not a global provider restriction. The supplied
+Web MSAL adapter and workforce Graph reader are specialized adapters with explicit
+limits; generic browser compatibility remains
+[#40](https://github.com/anaregdesign/cosmos-sync/issues/40).
 
 The owner approved MIT, public GitHub/GHCR visibility, personal pub.dev ownership
 and the experimental `0.2.0-dev.1` preview. The foundation is merged; subsequent

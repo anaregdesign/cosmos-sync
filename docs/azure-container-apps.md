@@ -38,6 +38,18 @@ actual Google/Apple configuration and connections for this delivery; common
 External ID OIDC and hosted data acceptance remain separate requirements.
 Use simulators during development and physical Android only at the final gate.
 
+## Current activation stage, 2026-10-06
+
+PR #39 is merged and the directory-capable BFF from `36d2680` is
+[published and verified](release.md). The retained app still uses the original
+builtin image. The prior six-resource read-only mirror/saved-plan validation
+passed; it is not an active deployment state. The owner has approved adopting
+and revalidating a **distinct** private management state on the
+original-artifacts-unavailable assumption, but that stage has not started.
+Original-file provision or the same adoption approval must not be requested
+again. Fresh management-state validation and separate concrete app-update
+approval remain required; no actual update is authorized or executed here.
+
 ## Provisioned resources and prerequisites
 
 The [Terraform directory](../infra/terraform/azure-container-apps/README.md)
@@ -54,6 +66,17 @@ cloud-acceptance receipt; a real plan must match the operator's authorized targe
 | Key Vault Secrets User assignments at named cursor/optional metrics/registry secrets | Existing RBAC-enabled Key Vault, secret versions and permitted network path |
 | HTTPS ingress, startup/readiness/liveness probes, bounded HTTP scaling | Published BFF digest, OIDC API issuer/audience/scope, provider apps and consent |
 | No new log workspace, database, network, secret or provider application | Explicit end-user authorization choice/configuration and deployment approval |
+
+This is reusable Terraform for consumers' own environments and state. Generic
+OIDC trust is deployment-selected; Entra External ID is the preferred broker,
+with Apple/Google as possible upstream providers, not a mandatory BFF/native
+issuer. The Azure management/UAMI tenant and OIDC customer issuer may differ.
+There is no provider-name blacklist or automatic acceptance of arbitrary JWTs:
+the configured API issuer/audience/scope and server policy remain authoritative.
+The current Web adapter and optional workforce Graph reader have narrower,
+explicit contracts; see [Web compatibility](web-auth.md) and
+[directory capabilities](identity-directory.md). Provider apps/user flows,
+federation secrets and Graph permissions are not implicitly provisioned.
 
 The new-deployment reference selects `authorization.mode=builtin`: the selected
 contract gives a verified API principal its own personal scope; a shared-scope
@@ -88,8 +111,11 @@ original private state is intentionally absent from the isolated worktree.
 This mirror neither replaces original state nor authorizes deployment. Preserve
 the retained cursor/history and private state; reject unexpected baseline drift,
 creates, replacements, role/network changes or replica expansion. Keep raw
-state/plans and resource identifiers private. Actual apply requires a separate
-concrete plan approval and state-authority/handback decision.
+state/plans and resource identifiers private. The separately approved new-state
+handoff must preserve this old mirror read-only and require fresh baseline/app-only
+plans, an authority manifest and one active writer. Actual apply still requires
+separate concrete saved-plan approval after that stage; the approval is not pending
+for the already authorized local adoption itself.
 
 Only six Cosmos data actions are included: metadata read, item read/create/replace,
 query and the SDK-required readChangeFeed permission. They allow the BFF's atomic

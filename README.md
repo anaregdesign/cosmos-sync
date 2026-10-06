@@ -7,7 +7,7 @@ Native SQLite and Chromium IndexedDB store confirmed documents and a durable out
 Development is tracked by [epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). [Verification](docs/verification.md) reports actual results; owner-controlled distribution and live-cloud gates remain explicit.
 
 The [2026-10-06 delivery plan](.azure/deployment-plan.md) separates completed
-directory source from remaining deployment/tooling work and actual acceptance.
+directory source/tooling from remaining compatibility, activation and acceptance.
 It is a planning document, not approval to publish, deploy or operate a device.
 
 The product goal is a Firestore-like developer experience for the supported
@@ -20,20 +20,27 @@ resources, operator configuration and remaining acceptance work. Container Apps
 Terraform and its runbook are tracked in [#31](https://github.com/anaregdesign/cosmos-sync/issues/31);
 clean-checkout hosted onboarding is tracked in [#32](https://github.com/anaregdesign/cosmos-sync/issues/32).
 
-**Apple and Google remain intended future end-user login providers.** The
+**Authentication remains provider-neutral OIDC.** Entra External ID is the
+preferred consumer reference broker, with Apple/Google as possible upstream
+providers, not the only permitted generic BFF/native issuer. The public Terraform
+is for each consumer's own environment and trust configuration. The
 current Flutter application implements native OIDC/PKCE and memory-only Web MSAL
-with a dedicated API-access-token path. Unpublished opt-in account lifecycle
-source is described below; actual Apple/Google login and provider acceptance are
-not delivered support. The [social-login design
+with a dedicated API-access-token path. The Web adapter is currently Entra-specific;
+generic browser compatibility remains [#40](https://github.com/anaregdesign/cosmos-sync/issues/40).
+Published opt-in BFF lifecycle support is described below; actual Apple/Google
+login and provider acceptance are not delivered support. The [social-login design
 and roadmap](docs/social-auth.md) compares an API-token identity broker with
-native provider login followed by a backend session exchange. Raw Apple/Google
-ID tokens are not Cosmos Sync API credentials. BFF account and membership policy controls
+native provider login followed by a backend session exchange. Client-audience ID
+tokens and access tokens for unrelated APIs are not Cosmos Sync API credentials,
+regardless of provider name. BFF account and membership policy controls
 document access, and matching email addresses must never automatically merge
 accounts.
 
 On 2026-10-04 the owner removed actual Google/Apple connections, provider
-configuration and live-provider acceptance from this delivery. Development
-continues with simulators; physical Android verification is the final gate.
+configuration and live-provider acceptance from this delivery. That scope
+cancellation is not an Apple/Google denylist or a change to OIDC trust.
+Development continues with simulators; physical Android verification is the
+final gate.
 Actual External ID fresh OIDC, hosted reader/Cosmos and final device acceptance
 remain separate unfinished work, not inferred from workforce login or fixtures.
 
@@ -128,16 +135,18 @@ Existing deployments can retain `config.example.json` and explicit legacy
 grants. That mode requires atomic grant distribution to every replica and is
 not automatically migrated to built-in ownership.
 
-The unpublished [directory extension](docs/identity-directory.md) is explicitly
+The published BFF's [directory extension](docs/identity-directory.md) is explicitly
 selected with [`config.directory.example.json`](bff/config.directory.example.json).
 It wires a secret-free trusted broker reader, explicit fresh-proof registration/
 link/unlink, stable random ownership, identity-bound sessions/cursors/caches and
 confirmation/recovery UI. Proofs never replace the main credentials; email and
-provider navigation never link accounts. The original published package/image and
-retained Azure deployment are unchanged. Actual customer nonce/authentication-time,
+provider navigation never link accounts. Its current trusted Graph reader is
+workforce-federation-specific, not universal social linking. The old SDK archive,
+original image tags and retained Azure deployment are unchanged. Actual customer nonce/authentication-time,
 MI/Graph and production capacity/recovery checks are required before deployment.
-The current Terraform workload template still selects builtin or legacy mode;
-directory activation needs a separately reviewed compatible image/configuration,
+The Terraform workload supports explicit directory opt-in while preserving
+builtin/legacy defaults. The compatible image is now published; activation still
+needs current management-state validation and a separately approved saved plan,
 not an unreviewed template apply.
 
 ```sh
@@ -158,11 +167,11 @@ is published from that original source, with archive/source and clean pub.dev
 consumer verification. Its archive is unchanged; no SDK republication was performed.
 GitHub source is public and private vulnerability reporting is enabled.
 The current [public BFF image](https://github.com/anaregdesign/cosmos-sync/pkgs/container/cosmos-sync-bff)
-is released from `76c1f46876b3dfd13f4bd7d4dd144cdf74efa5c0`, after all eight
-[main checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37175675742)
+is released from `36d2680e5f88d31acfafa4473d0d4996f1de0ff7`, after all nine
+[main checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37433122046)
 passed. Pin its immutable index digest
-`sha256:2651a4bca6df6f751b7f5e46d317ea9f6e4ca83081374badae142d57cdfc812a`.
-The [successful release verification](https://github.com/anaregdesign/cosmos-sync/actions/runs/37176169762)
+`sha256:adfe83a08dcd8754f85652641a85138e9a90993c1766ce70c86953365b9a6102`.
+The [successful release verification](https://github.com/anaregdesign/cosmos-sync/actions/runs/37438116005)
 confirmed public manifest access, amd64/arm64 content, MIT/nonroot metadata and
 bound SBOM/BuildKit provenance; see [release](docs/release.md).
 Exact registry access/verification evidence is recorded in
@@ -171,6 +180,9 @@ Exact registry access/verification evidence is recorded in
 The earlier [verification-tool correction](https://github.com/anaregdesign/cosmos-sync/issues/34)
 preserved the original artifacts. [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2)
 keeps actual Azure, hosted onboarding and consumer-provider gates separate.
+The retained Azure app still runs the original `82e937c` builtin image. The prior
+read-only six-resource plan passed; adoption/revalidation of a distinct management
+state is approved but not started, and actual app update remains unapproved.
 
 Dedicated Entra registration is complete. macOS browser PKCE, secure credential
 restore, refresh and local sign-out lifecycle stages were observed; independent

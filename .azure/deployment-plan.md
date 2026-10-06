@@ -1,7 +1,8 @@
 # Cosmos Sync delivery and deployment plan
 
-Status: Validated
-Validation scope: Read-only local mirror and saved directory plan; Azure apply is not authorized.
+Status: Approved
+Current scope: Reconcile delivery status and Issues; approved management-state adoption is pending and Azure apply is not authorized.
+Previous validation: Read-only mirror/saved directory plan passed at `adbf0da`; retained as reference evidence.
 Date: 2026-10-06 JST
 Mode: MODIFY
 Runtime preparation candidate: `36f502fe5040f81164a9304992f6819b9d382c5a`
@@ -29,7 +30,10 @@ authentication bypass or exposed Cosmos credentials. Atomic writes stop at one
 logical partition; Graph, directory metadata and application data are separate.
 
 Actual Google/Apple setup and connections are cancelled (#30, not planned).
-Keep their navigation disabled and existing deterministic security coverage.
+This excludes live provider operations, not providers from the OIDC contract.
+Keep authentication provider-neutral and preserve deterministic security coverage.
+The current unconfigured reference environment does not advertise social
+navigation; that is not a global Apple/Google denylist.
 Physical iOS, Apple signing and new people are not prerequisites. Do not create
 another customer or credential under the existing same-human exception.
 
@@ -122,6 +126,20 @@ The candidate keeps the existing topology:
 - Existing Key Vault reference for the shared cursor key; no client credentials
   in Terraform runtime JSON, SDK configuration or public evidence.
 
+The public Terraform is reusable deployment code for consumers' **own**
+environments, not a bundle of this validation environment or its private state.
+The Azure management/UAMI tenant and configured OIDC issuer are separate inputs.
+Entra External ID is the preferred consumer reference broker and can federate
+Apple/Google upstream; it is not a mandatory issuer for generic BFF/native OIDC.
+API admission depends on configured trust, not provider names. Dedicated API
+JWT, issuer/audience/scope and server-authorization checks remain mandatory.
+
+The supplied Web MSAL adapter currently restricts authorities to Entra/CIAM;
+generic browser compatibility is new source work in #40. The optional production
+directory Graph reader is workforce-federation-specific, not a generic social
+credential reader. Its narrower trusted profile contract must not be confused
+with generic OIDC authentication or loosened to adopt unknown credentials.
+
 API and ID proofs have distinct audiences and correlate exact signed `oid`/`tid`.
 Do not require API/ID `sub` equality. The trusted upstream namespace/fingerprint,
 not a mutable email or broker UID alone, selects immutable random account
@@ -140,11 +158,12 @@ collection nor account deletion/legacy migration endpoints.
 
 | Issue | Revised responsibility | Required predecessors |
 | --- | --- | --- |
-| #27 | Complete directory-mode IaC/runtime/image compatibility and activation runbook; core identity implementation already complete | Completed #26/#29 evidence |
-| #28 | Complete fresh-proof validation control, failure receipts and simulator restart tooling; auth adapters/UI already complete | Completed #18/#29 and existing lifecycle protocol |
-| #16 | Resolve retained ingress/log diagnostics and verify compatible hosted identity readiness | #27 deployment contract; concrete artifact/apply review |
-| #24 | Implement directory-aware bounded acceptance, then measure actual customer/API/ID/Flutter/BFF/Cosmos integration | #27/#28 contracts and #16 hosting checkpoint |
-| #32 | Version-pin and reproduce the clean-checkout hosted onboarding journey | #24 integrated evidence and a reviewed candidate/artifact choice |
+| #27 | Completed directory-mode IaC/runtime/image compatibility and activation preparation | Accepted #26/#29 evidence; live criteria remain #16/#24 |
+| #28 | Completed fresh-proof/failure receipts and clean emulator process-restart tooling | Accepted #18/#29 and lifecycle protocol; live criteria remain #24/#20 |
+| #40 | Add provider-neutral browser OIDC while preserving the tested Entra path and trust/cache boundaries | Completed #28/#29 contracts; independent of Azure activation |
+| #16 | Adopt/revalidate the approved management state, resolve ingress/log diagnostics and verify hosted identity readiness | Completed #27/artifact review; fresh state validation and separate apply approval |
+| #24 | Measure actual customer/API/ID/Flutter/BFF/Cosmos integration; directory driver preparation is complete | Completed #27/#28 contracts and #16 hosting checkpoint |
+| #32 | Reproduce consumer-owned, version-pinned hosted onboarding with honest OIDC/adapter coverage | #24 integrated evidence, #40 browser compatibility and exact artifact/source choice |
 | #20 | Final selected Android actual login/cloud/OS/airplane/suspension evidence | #24/#32, completed simulator tooling and owner availability |
 | #2 | Track candidate, evidence, decisions and final acceptance; publication already completed in its original scope | All applicable leaves |
 
@@ -170,6 +189,10 @@ No Issue is closed by this review. #29 stays completed; #30 stays not planned.
 Completed builtin Terraform #31 is not reopened or relabeled as directory work.
 
 ## 6. Implementation work packages
+
+P1/P2/P3 are completed preparation, not remaining implementation requests.
+Their original accepted boundaries are retained below. P4/P5/P6 remain
+execution/acceptance work; the newly identified browser source gap is #40.
 
 ### P1: Directory deployment contract (#27)
 
@@ -307,11 +330,12 @@ Deterministic #29 coverage remains required in either case.
 ### P6: Onboarding then final Android (#32, #20)
 
 Pin the candidate commit, package source/version, image digest, authorization
-mode and existing target in the clean-checkout instructions. The published
-`0.2.0-dev.1` package and existing images do not contain the directory extension.
-A source-local candidate journey is not a published-consumer result; decide the
-candidate/artifact path before execution. Do not silently republish or migrate
-the original artifacts to finish #32.
+mode and consumer-owned target in the clean-checkout instructions. The unchanged
+`0.2.0-dev.1` SDK archive is from `82e937c`; typed directory APIs require the
+explicitly pinned repository SDK source. The BFF from `36d2680` is published and
+directory-capable. A source-path SDK journey is not acceptance of the old
+published SDK archive. No SDK republication is necessary to verify that
+explicit source path; do not silently republish or overwrite original artifacts.
 
 Reproduce #24's ordinary app/SDK journey from that exact checkout without a
 custom gateway or undocumented local file. Reuse an exact matching hosted
@@ -331,16 +355,19 @@ flowchart TD
     P2["P2: #28 proof and emulator restart tooling"] --> P3
     P1 --> Host["P4: #16 reviewed compatible hosting"]
     Diag["P4: #16 read-only ingress diagnosis"] --> Host
-    Approval["Exact artifact/apply approval"] --> Host
+    Artifact["Completed immutable BFF release"] --> Host
+    State["Approved state adoption + fresh validation"] --> Apply["Separate actual app-update approval"]
+    Apply --> Host
     Host --> Live["P5: #24 attended CIAM and actual stack"]
     P3 --> Live
     Owner["Owner available; coverage decision"] --> Live
     Live --> Clean["P6: #32 version-pinned clean checkout"]
+    Browser["#40: provider-neutral browser OIDC"] --> Clean
     Clean --> Android["P6: #20 final physical Android"]
     Android --> Epic["#2 delivery completion"]
 ```
 
-P1 and P2 are independent development work. P3 follows their tested contracts.
+P1/P2/P3 preparation is complete. #40 is independent local source work.
 Read-only P4 diagnosis can be independent, but hosted activation is separately
 gated. P5 needs actual owner/hosting readiness. P6 puts physical work last.
 No calendar deadline is promised while those external gates remain unresolved.
@@ -388,8 +415,8 @@ new runtime execution.
 
 Do not close an Issue because another issue or the container is green. Close
 each leaf only when its revised scoped criteria and evidence pass; moved live
-criteria remain mandatory in their named owner Issue. Future PR merge is
-separate from source/CI completion; no further merge is authorized by validation.
+criteria remain mandatory in their named owner Issue. PR #39 is already merged. Further merges remain separate from source/CI
+completion; no new merge is authorized by this review or prior validation.
 
 ### All validation checks pass (validation-only)
 
@@ -426,7 +453,9 @@ have costs.
 
 | Gate | Required decision/evidence |
 | --- | --- |
-| Implementation | Approved by the owner on 2026-10-06; execute and verify P1/P2/P3, then persist measured evidence |
+| Implementation | Approved P1/P2/P3 preparation completed with exact-source evidence; #40 is the newly tracked browser source gap |
+| Management state | Adoption/revalidation approved; distinct workspace, authority manifest and fresh validation not yet executed |
+| Browser compatibility | #40 tracks the concrete Entra-only Web restriction; generic BFF/native OIDC is not a universal Web/profile guarantee |
 | Candidate distribution/hosting | Exact compatible immutable artifact and reviewed saved plan; no development publication or retained-image overwrite |
 | Namespace/data | Explicit new directory provenance; no automatic builtin/legacy ownership migration |
 | Real credential/member coverage | Owner decision on incompatible one-customer versus independent-credential/member criteria; no silent waiver or extra identity |
@@ -451,6 +480,11 @@ not proof of current customer issuance or hosted execution.
 - [x] Implement and locally verify source/proof/recorded-driver work and initial emulator OS restart.
 - [x] Persist runtime candidate `36f502f`, repeat restart cleanly and complete nonpublishing container/Cosmos-emulator checks and all nine exact-candidate CI jobs.
 - [x] Review the concrete artifact/read-only plan and complete canonical Azure validation; actual activation remains unapproved.
+- [x] Merge PR #39 and publish/verify the separately approved exact-main BFF.
+- [x] Record approval to adopt/revalidate a distinct management state on the original-artifacts-unavailable assumption.
+- [x] Reconcile current Issues and identify the provider-neutral Web compatibility gap.
+- [ ] Execute approved new-state adoption and fresh canonical validation; old mirror validation does not satisfy this stage.
+- [ ] Complete #40's browser compatibility implementation and exact-source evidence.
 - [ ] Execute separately authorized deployment and attended acceptance.
 - [ ] Reproduce onboarding, final Android and close scoped leaves with evidence.
 
@@ -631,3 +665,100 @@ two-independent-BFF/member coverage and final physical acceptance remain open.
 The mirror remains validation-only and must not be applied or silently become
 authoritative. Original-state handback/reconciliation and any actual update
 require a separate concrete owner decision.
+
+## 16. Approved original-state-unavailable management handoff
+
+The owner does not know the original state/input location and asked to proceed
+on the assumption that original Terraform artifacts are unavailable. This
+supersedes requiring owner-provided original files as the only way forward.
+It is an availability assumption, not evidence that original state was deleted
+or that no other writer exists. Do not search/read the main checkout.
+
+The workload Terraform source is already in this repository and in published
+runtime source `36d2680`. The validated mirror reconstructs six exact existing
+workload bindings from Azure; new infrastructure is not needed. Keep the previous
+mirror and its plans as immutable validation references, not an apply workspace.
+
+The owner explicitly selected **approve new management-state adoption and
+revalidation**. The approved bounded handoff is:
+
+1. Prepare a distinct private local management workspace from the pinned source
+   and the verified existing-resource bindings/inputs. Retain a backed-up,
+   hash-bound starting snapshot and an explicit authority manifest. Designate
+   only this new workspace as the active workload state; the old validation
+   mirror remains read-only. Do not create a paid remote backend.
+2. Refresh the six existing bindings and require a baseline with six no-ops.
+   Verify current targets, no competing observed writes and unchanged configured
+   values. Do not invent state attributes, broaden ignore rules or clear actual
+   drift through an update. Unexpected drift stops the handoff for review.
+3. Review a fresh directory plan with only the same app image/runtime JSON
+   update, five no-ops and zero creates/deletes/replacements. Preserve topology,
+   roles, cursor/history/data, sole Allow, min0/max1, exact client/callback trust
+   and empty CORS. Keep the new namespace explicit; no builtin data adoption.
+4. Complete Azure Validate for this management workspace and persist sanitized
+   evidence and private state/backup pointers. Adoption does not authorize
+   `terraform apply`, resource changes, new probes, login or physical operations.
+5. Before an actual update, obtain separate concrete saved-plan approval and
+   use Azure Deploy. Keep one active writer; if original state or another
+   deployment writer is later discovered, stop and reconcile rather than
+   applying both states or silently overwriting either one.
+
+Managed scope remains only the existing app, environment, UAMI, custom Cosmos
+role/assignment and named cursor-secret assignment. Cosmos account/data,
+Vault/secret values, private network/endpoints/DNS and log workspace stay outside
+this workload state. No resource, permission, region, subscription, replica or
+backend expansion is proposed.
+
+The separate adoption decision authorizes private local state preparation and
+revalidation, not an Azure update. Original files are no longer a mandatory
+prerequisite. Keep the previously validated mirror unchanged; record the new
+active state separately and require fresh validation before an apply decision.
+
+Execution status at this review: **approved, not started**. No distinct management
+workspace/state or authority manifest has been created and no fresh validation
+for this stage has run. `.azure/validate-status.json` still records the previous
+read-only mirror workflow, not completion of this new stage. Do not request
+original files or the same adoption approval again.
+
+## 17. Delivery reconciliation, 2026-10-06
+
+Live GitHub review found 26 Issues completed, #30 closed **not planned**, and five
+existing open delivery Issues. The newly identified browser compatibility Issue
+#40 makes six open Issues; no existing Issue is closed or reopened by this review.
+PR #39 is merged, main remains `36d2680`, and its completed main CI and BFF-only
+release remain the exact runtime/distribution evidence. This review changes
+documentation and Issue scope, not runtime, release artifacts or Azure.
+
+| Completed area | Accepted scope |
+| --- | --- |
+| BFF and SDK data plane | Cosmos NoSQL adapter, durable SQLite/IndexedDB outbox, replay/ACK, conflicts, tombstones, cached queries/watches, hints/polling and bounded recovery |
+| Server authorization | Durable personal/shared accounts and membership; explicit directory transactions, stable ownership and distinct identity-generation/policy fences |
+| App and tooling | Native AppAuth, Entra Web MSAL, isolated fresh proofs/lifecycle UI, bounded directory driver and clean emulator process-death/replay |
+| Deployment source | Builtin/legacy module plus opt-in directory contract; 61 workload mock plans and strict generated-JSON/factory evidence |
+| Distribution | MIT/public SDK archive from `82e937c`; compatible BFF from `36d2680`, immutable `adfe83a08dcd...`, without SDK reupload or old-tag replacement |
+| Retained-plan review | Prior read-only six-no-op baseline and one-app-update/five-no-op saved plan; no apply or hosted/customer execution |
+
+| Remaining owner | Concrete next work |
+| --- | --- |
+| #40 | Implement/test generic browser OIDC without weakening the API, memory credentials, proof or cache contract |
+| #16 | Execute approved private state handoff; obtain fresh plans/validation and separate actual update approval; resolve routing/logs, hosted MI/Graph/Cosmos and private two-BFF reachability |
+| #24 | Owner-attended selected-customer API/fresh-ID and actual app/data journey; resolve exact SPA origins and controlled credential/member coverage |
+| #32 | Reproduce the exact source-path SDK/image/configuration journey from a clean checkout; document consumer-owned prerequisites and actual adapter compatibility |
+| #20 | Final owner-operated physical Android callback/cloud, process death/relaunch, airplane and suspension observations |
+| #2 | Close only after applicable leaves and explicit coverage decisions are resolved |
+
+Public OIDC compatibility and optional directory-profile capabilities are
+different contracts. The current directory reader admits one reviewed workforce
+credential shape; it does not establish Google/Apple or arbitrary broker linking.
+Do not widen it, silently fall back to builtin, or claim an unchanged broker
+subject proves safe self-service linking. Consumer deployments remain configurable
+without a provider-name blacklist, while every selected adapter must truthfully
+state and enforce its supported trust/capability contract.
+
+The actual ledger remains 7/40 attempts, 33 remaining and zero accepted document
+mutations. Native four plus SDK 29 already reserve all remaining attempts.
+Any additional BFF probe needs an explicit allocation review, not a new ledger.
+Original state provision is no longer mandatory, new-state adoption is already
+approved, and Azure apply/extra identities/CORS/network/replica/credential changes
+remain separate decisions. Historical failures and scope exclusions are retained;
+fixtures, publication and state review do not count as actual hosted acceptance.

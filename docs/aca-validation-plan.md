@@ -152,18 +152,23 @@ plan and verify actual revision command/args before accepting startup.
 [ACA container command/arguments](https://learn.microsoft.com/en-us/azure/container-apps/containers#configuration)
 
 For a new deployment or reviewed upgrade, the current verified public BFF release
-is from `76c1f46876b3dfd13f4bd7d4dd144cdf74efa5c0`:
+is from `36d2680e5f88d31acfafa4473d0d4996f1de0ff7`:
 
 ```text
-ghcr.io/anaregdesign/cosmos-sync-bff@sha256:2651a4bca6df6f751b7f5e46d317ea9f6e4ca83081374badae142d57cdfc812a
+ghcr.io/anaregdesign/cosmos-sync-bff@sha256:adfe83a08dcd8754f85652641a85138e9a90993c1766ce70c86953365b9a6102
 ```
 
-All eight [main CI checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37175675742)
-and its [public release verification](https://github.com/anaregdesign/cosmos-sync/actions/runs/37176169762)
+All nine [main CI checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37433122046)
+and its [public release verification](https://github.com/anaregdesign/cosmos-sync/actions/runs/37438116005)
 passed, including public manifest access, both architectures, MIT/nonroot and
 bound SBOM/BuildKit provenance. This publication did not update the retained
 cloud image or prove the new image's hosted SDK contract. The SDK archive remains
 at its original source and was not republished.
+The prior `76c1f46` image is historical and remains unchanged. The new BFF also
+supports explicit directory lifecycle; use pinned repository SDK source and
+reviewed directory configuration, never send those fields to the retained old
+image. New management-state adoption/revalidation is approved but not started;
+actual update still needs separate saved-plan approval.
 
 This newer BFF supports optional `oidc.allowed_client_ids`, an exact allowlist of
 signed `azp` client IDs in addition to issuer/API-audience/scope checks. Use the

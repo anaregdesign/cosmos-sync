@@ -1059,3 +1059,34 @@ Empty `allowedOrigins` was deliberately preserved: a registered loopback SPA
 callback does not permit cross-origin Web acceptance. Original-state handback,
 concrete update approval, Web origin arrangements, actual routing/log delivery,
 hosted UAMI/Graph/Cosmos execution and #24/#32/#20 acceptance remain open.
+
+## Delivery status and Issue reconciliation, 2026-10-06
+
+This review adds no runtime/cloud/provider/device acceptance result. Live GitHub
+readback confirms PR #39 merged, main `36d2680`, completed main CI and the completed
+exact-main BFF-only release. There are 26 completed Issues, #30 closed not planned
+and six open Issues after the new browser compatibility task. Completed source/
+tooling #27/#28/#29 and original publication/IaC scopes are not reopened.
+
+The owner has approved adoption and revalidation of a distinct local management
+state on the original-artifacts-unavailable assumption. Original-file provision
+is no longer mandatory. No new management workspace/state/authority manifest or
+fresh validation exists yet; the previous mirror and `UpdateStatus` marker remain
+prior read-only evidence. Azure apply is still unapproved and the old mirror must
+not be applied.
+
+The owner clarified consumer-owned public Terraform and provider-neutral OIDC:
+Entra External ID is the preferred broker and Apple/Google may be upstream
+providers, without a provider-name blacklist. Code review found that the current
+Web MSAL parser still requires Microsoft/CIAM hosts and UUID tenant/client values;
+#40 tracks the actual generic-browser gap. The optional directory Graph reader
+is workforce-federation-specific, not universal social linking. No trust/profile
+check was loosened and no actual social provider was configured.
+
+Issue bodies and current runbooks distinguish the published `36d2680` BFF,
+unchanged `82e937c` SDK archive, source-path directory SDK and retained original
+Azure runtime. #16 hosting/state, #24 actual customer/data and coverage decisions,
+#32 pinned onboarding, #20 final Android and epic #2 remain open. Historical
+failures, unperformed criteria and #30's not-planned scope are preserved.
+This documentation/Issue review adds zero BFF attempts, accepted document writes,
+Azure operations, owner logins, secret reads or physical-device actions.

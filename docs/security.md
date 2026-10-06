@@ -19,14 +19,16 @@ lose its acknowledgement: HTTP403 does not prove no earlier commit happened.
 The SDK's learned-revocation purge and in-flight drain prevent late responses
 from repopulating its revoked cache, but cannot retract already received data.
 
-The opt-in unpublished `authorization.mode=directory` factory adds explicit
+The published BFF's opt-in `authorization.mode=directory` factory adds explicit
 random-account registration/link/unlink and fresh trusted broker-binding reads.
 Dedicated proof requests independently verify API/ID signatures, purposes,
 object/tenant correlation, challenge nonce and integer authentication time.
 Only the server reader has target-tenant Graph `User.Read.All`; product clients
 receive no Graph permission or managed-identity assertion. Changed/added/removed
 broker credentials fail closed instead of silently adopting the unchanged broker
-object. A provider/broker ID token is never an ordinary sync bearer.
+object. Its current Graph reader is workforce-federation-specific, not a global
+OIDC-provider allowlist or a generic social credential reader. A provider/broker
+ID token is never an ordinary sync bearer.
 
 Directory CAS consumes nonce/proof/audit/generation in one metadata partition.
 Personal-policy initialization, Graph and personal/shared data are separate

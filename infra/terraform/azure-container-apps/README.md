@@ -4,6 +4,16 @@ Terraform reference for the published Cosmos Sync BFF. Start with the
 [deployment runbook](../../../docs/azure-container-apps.md) and
 [developer onboarding acceptance](../../../docs/developer-onboarding.md).
 
+The module is for consumers deploying into **their own** Azure environment with
+their own private state and configured OIDC trust. Entra External ID is the
+preferred consumer reference broker, with Apple/Google as possible upstream
+providers, not an exclusive issuer for generic builtin/legacy authentication.
+`deployment.tenant_id` identifies the Azure management/UAMI tenant; the OIDC
+issuer may belong to a separate customer tenant. API JWT validation and
+server-managed authorization remain mandatory, without a provider-name blacklist.
+The supplied Web MSAL adapter is Entra-specific; generic browser work is
+[#40](https://github.com/anaregdesign/cosmos-sync/issues/40).
+
 This directory creates an ACA environment/app, a dedicated user-assigned identity
 (or uses the supplied existing identity), and narrow Cosmos/Key Vault role
 assignments. It references an **existing** resource group, Cosmos NoSQL
@@ -24,6 +34,10 @@ callbacks/domain/source tenants and namespace. It derives
 `managedIdentityClientId` from the BFF's actual assigned UAMI, not another
 client-supplied setting. The reader application must have a different client ID.
 See [the server-only directory contract](../../../docs/identity-directory.md).
+These additional CIAM/GUID/profile restrictions belong only to that optional
+directory adapter. Its production reader currently supports reviewed workforce
+federation, not arbitrary social profiles; do not apply those restrictions to
+generic OIDC or loosen profile verification to claim broader linking support.
 
 The verification record must name the **same immutable image** as `image`, a
 full source commit and `verified=true` after reviewing its source/build evidence.
@@ -41,7 +55,11 @@ worktree. Imports are control-plane reads with local bindings, not authorization
 to apply, migrate/replace original state, or create a second authoritative state.
 Keep mirror directories/state/saved plans private; review baseline drift first.
 Actual activation still needs Azure validation, separate concrete apply approval
-and an explicit state-authority/handback decision.
+and an explicit state-authority/handback decision. For the retained reference,
+the owner has since approved a distinct local management-state adoption and fresh
+validation on the original-artifacts-unavailable assumption. It is not started;
+the old mirror remains reference-only and no apply is approved. Other consumers
+must use their own state/authority decisions, not this private mirror.
 
 Before activation, preserve the existing state/cursor key, pin the compatible
 candidate and verify the retained UAMI/FIC, target-only Graph `User.Read.All`,

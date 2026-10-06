@@ -3,14 +3,22 @@
 The Go BFF now wires bounded registration, explicit link/unlink transactions,
 trusted broker-profile reads and identity-bound authorization through explicit
 `authorization.mode:"directory"`. The Dart transport and native/Web application
-include matching ephemeral fresh-proof and account-lifecycle paths. **This is an
-unpublished, opt-in source implementation, not a deployed or live-accepted CIAM
-service.** Legacy/builtin modes retain their issuer/subject behavior and omit
+include matching ephemeral fresh-proof and account-lifecycle paths. **This is a
+published, opt-in BFF from source `36d2680`, not a deployed or live-accepted CIAM
+service.** Typed SDK/app lifecycle is available from explicitly pinned repository
+source; the old published SDK archive is unchanged. Legacy/builtin modes retain their issuer/subject behavior and omit
 directory lifecycle routes. No existing personal partition or data owner is
 migrated. The retained Azure image has not been updated. The owner
 cancelled actual Google/Apple connections in #30 as not planned on 2026-10-04;
 trusted linking/authorization requirements remain. Use simulators during
 development and defer physical Android checks until the final gate.
+
+The restrictions below apply to the **optional Entra/Graph directory adapter**,
+not generic BFF/native OIDC. Ordinary authentication remains issuer-configurable
+and has no Apple/Google provider-name blacklist. This reader currently supports
+one reviewed workforce-federated credential shape; it is not universal social
+identity linking. Broader profiles require a reviewed trusted-reader contract,
+not weakened freshness, complete-profile checks or an implicit mode fallback.
 
 ## Explicit server configuration
 

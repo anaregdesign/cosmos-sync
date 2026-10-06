@@ -1,4 +1,5 @@
 # These are placeholders, not an approved deployment or a working image digest.
+# The management/UAMI tenant below need not be the OIDC customer tenant.
 deployment = {
   subscription_id     = "00000000-0000-0000-0000-000000000001"
   tenant_id           = "00000000-0000-0000-0000-000000000002"
@@ -13,6 +14,8 @@ cosmos = {
   container  = "sync"
 }
 oidc = {
+  # Historical workforce example, not an issuer restriction. Use your own trusted
+  # issuer/API; Entra External ID is the preferred consumer broker (see README).
   issuer         = "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000002/v2.0"
   audience       = "00000000-0000-0000-0000-000000000003"
   required_scope = "Cosmos.Sync"

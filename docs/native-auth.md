@@ -1,16 +1,19 @@
 # Native end-user authentication
 
-Apple and Google are the intended practical end-user login providers. This page
-describes the implemented native OIDC API-access-token adapter and its opt-in
+Authentication remains provider-neutral OIDC. Entra External ID is the preferred
+consumer broker, with Apple/Google as possible upstream providers. This page
+describes the implemented native OIDC API-access-token adapter and its optional
 External ID provider navigation; the dedicated workforce Entra validation does
 not establish an actual Apple/Google login. The
 [social-login design](social-auth.md) covers their additional trust boundary,
 identity linking, platform requirements and acceptance work.
 
 The owner removed actual Google/Apple provider setup and live connections from
-this delivery on 2026-10-04. Their buttons remain disabled; typed local adapter
-and security tests stay in scope. Development now uses simulators, with physical
-Android verification last. Actual CIAM/common OIDC and linking safety remain
+this delivery on 2026-10-04. The current reference does not advertise unconfigured
+social navigation; typed local adapter and security tests stay in scope.
+Development now uses simulators, with physical
+Android verification last. This excludes live operations, not provider names
+from otherwise valid OIDC. Actual CIAM/common OIDC and linking safety remain
 separate from the successful workforce Entra login.
 
 The runnable sample is `examples/flutter_app`. Its native login adapter uses
@@ -24,6 +27,16 @@ native callbacks and secure restore are not reused in the browser.
 See [AppAuth Android](https://github.com/openid/AppAuth-Android),
 [AppAuth iOS/macOS](https://github.com/openid/AppAuth-iOS) and the
 [Flutter adapter](https://pub.dev/packages/flutter_appauth).
+
+The generic native configuration accepts an operator-selected HTTPS issuer,
+matching discovery origin, public client/callback and delegated BFF API scopes;
+it is not restricted to Microsoft hosts or Entra UUID client IDs.
+`EntraBrokerCapabilities` is only an optional, Entra-specific navigation-hint
+extension, not the generic OIDC trust contract. The default unhinted sign-in
+lets the configured broker present its enabled login methods. The supplied Web
+MSAL adapter is narrower; [#40](https://github.com/anaregdesign/cosmos-sync/issues/40)
+tracks generic browser compatibility. The optional directory Graph reader also
+has its own workforce-only profile contract, separate from native OIDC.
 
 ## Apple and Google broker navigation
 
@@ -72,8 +85,10 @@ BFF-verified owner before cache access. Buttons do not enforce which identity
 provider the broker ultimately used. There is no direct Google/Apple SDK, custom
 token exchange or provider-ID-token admission in the ordinary navigation flow.
 Explicit directory account actions use the separate fresh-proof path below.
-The current consumer deployment has not yet configured or verified either
-provider, so its capability flags must remain disabled.
+The current consumer deployment has not configured or verified these navigation
+capabilities, so it does not advertise them. This is not a global provider ban:
+the generic flow remains available, and other consumer deployments can configure
+their own broker methods while preserving the selected API/profile trust.
 
 ## Isolated fresh identity proofs
 

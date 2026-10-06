@@ -73,8 +73,10 @@ Only explicit `authorization.mode=directory` exposes these routes. Every request
 still needs a valid API access JWT; raw provider/broker ID tokens never become
 bearer credentials for ordinary account/session/data routes. The trusted server
 configuration and bounded metadata store are described in
-[the identity directory](identity-directory.md). These are unpublished source
-interfaces, not a claim about the retained hosted image or actual CIAM issuance.
+[the identity directory](identity-directory.md). These interfaces are implemented
+by the published BFF from `36d2680` and the explicitly pinned repository SDK;
+the old SDK archive and retained hosted image are unchanged. Publication does
+not prove actual CIAM issuance or hosted directory acceptance.
 
 | Request | Body or result |
 | --- | --- |
