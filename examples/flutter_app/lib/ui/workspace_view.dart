@@ -11,6 +11,7 @@ import '../auth/native_oidc.dart'
     as platform_auth;
 import '../data/workspace_repository.dart';
 import 'app_controller.dart';
+import 'browser_auth_selector.dart';
 import 'identity_panel.dart';
 
 class WorkspaceView extends StatefulWidget {
@@ -31,6 +32,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
     text: platform_auth.defaultRedirectUrl(),
   );
   final _scopes = TextEditingController(text: 'openid offline_access');
+  BrowserAuthAdapter _browserAdapter = BrowserAuthAdapter.entra;
   SyncScopeMode _scope = SyncScopeMode.user;
   String? _sharedScopeId;
   bool _localHttp = false;
@@ -50,6 +52,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
       _clientId.text = settings.oidc.clientId;
       _redirect.text = settings.oidc.redirectUrl;
       _scopes.text = settings.oidc.scopes.join(' ');
+      _browserAdapter = settings.oidc.browserAdapter;
     }
     _sharedScopeId = widget.controller.sharedScopeId ?? _sharedScopeId;
     if (_sharedScopeId != null) _scope = SyncScopeMode.shared;
@@ -62,6 +65,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
   List<BrokerProvider> get _brokerProviders {
     final capabilities = widget.controller.brokerCapabilities;
     return capabilities != null &&
+            (!kIsWeb || _browserAdapter == BrowserAuthAdapter.entra) &&
             capabilities.matches(
               issuer: _issuer.text.trim(),
               clientId: _clientId.text.trim(),
@@ -123,6 +127,15 @@ class _WorkspaceViewState extends State<WorkspaceView>
                 if (_formError != null) _notice(_formError!, error: true),
                 if (app.message != null) _notice(app.message!),
                 if (workspace.message != null) _notice(workspace.message!),
+                if (app.identityCapabilities != null &&
+                    app.settings?.oidc.browser == true &&
+                    !app.auth.supportsFreshIdentityProof)
+                  _notice(
+                    'This browser adapter cannot perform the Entra directory '
+                    'proof required for account registration or linking. Use '
+                    'the reviewed Entra adapter; ordinary API authentication '
+                    'does not authorize a directory fallback.',
+                  ),
                 if (app.identityCapabilities != null)
                   IdentityPanel(
                     capabilities: app.identityCapabilities!,
@@ -257,7 +270,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
                 const Text(
                   kIsWeb
                       ? 'Browser sample for Cosmos DB for NoSQL via the BFF. '
-                            'MSAL credentials stay in memory. Reload requires a '
+                            'Authentication credentials stay in memory. Reload requires a '
                             'new sign-in and online BFF verification before '
                             'reopening IndexedDB. Cached documents are not '
                             'encrypted. Cosmos credentials are never accepted.'
@@ -286,13 +299,25 @@ class _WorkspaceViewState extends State<WorkspaceView>
         const SizedBox(height: 8),
         const Text(
           kIsWeb
-              ? 'Configure an HTTPS BFF and a public Entra SPA client with an '
+              ? 'Configure an HTTPS BFF and a browser-capable public OIDC client with an '
                     'API scope and this exact same-origin redirect bridge. '
-                    'MSAL opens a popup using authorization code and PKCE.'
+                    'The selected adapter opens a popup using authorization code and PKCE.'
               : 'Configure an HTTPS BFF and a public native OIDC client with an API '
                     'scope. Sign-in opens the provider in a system browser using PKCE.',
         ),
         const SizedBox(height: 16),
+        if (kIsWeb)
+          BrowserAuthSelector(
+            value: _browserAdapter,
+            onChanged: working || widget.controller.auth.isSignedIn
+                ? null
+                : (value) => setState(() {
+                    _browserAdapter = value;
+                    _redirect.text = platform_auth.defaultRedirectUrl(
+                      adapter: value,
+                    );
+                  }),
+          ),
         _field(_bff, 'BFF URL', 'bff-url', enabled: !working),
         _field(_issuer, 'OIDC issuer URL', 'oidc-issuer', enabled: !working),
         _field(_clientId, 'Public client ID', 'oidc-client', enabled: !working),
@@ -497,7 +522,8 @@ class _WorkspaceViewState extends State<WorkspaceView>
     if (!_form.currentState!.validate()) return;
     try {
       if (kIsWeb
-          ? _redirect.text.trim() != platform_auth.defaultRedirectUrl()
+          ? _redirect.text.trim() !=
+                platform_auth.defaultRedirectUrl(adapter: _browserAdapter)
           : Uri.parse(_redirect.text.trim()).scheme !=
                 'com.anaregdesign.cosmossync') {
         throw const FormatException('Callback does not match this build.');
@@ -515,6 +541,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
           redirectUrl: _redirect.text.trim(),
           scopes: _scopes.text.trim().split(RegExp(r'\s+')),
           browser: kIsWeb,
+          browserAdapter: _browserAdapter,
         ),
       );
       setState(() => _formError = null);
@@ -523,7 +550,7 @@ class _WorkspaceViewState extends State<WorkspaceView>
       setState(
         () => _formError =
             'Use valid HTTPS issuer/BFF URLs and an API scope. '
-            'The callback must match the registered native scheme.',
+            '${kIsWeb ? 'The callback must match the selected same-origin browser bridge.' : 'The callback must match the registered native scheme.'}',
       );
     }
   }

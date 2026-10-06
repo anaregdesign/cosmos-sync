@@ -3,11 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:auth": "esbuild web_src/auth.js web_src/auth-redirect.js --bundle --format=iife --target=es2022 --outdir=web --legal-comments=external",
-    "test": "node --test web_src/auth.test.js"
+    "build:auth": "esbuild web_src/auth.js web_src/auth-redirect.js web_src/oidc-redirect.js --bundle --format=iife --target=es2022 --outdir=web --legal-comments=external",
+    "test": "node --test web_src/*.test.js"
   },
   "dependencies": {
-    "@azure/msal-browser": "5.24.0"
+    "@azure/msal-browser": "5.24.0",
+    "jose": "6.2.12",
+    "oidc-client-ts": "3.5.0"
   },
   "devDependencies": {
     "esbuild": "0.28.2"

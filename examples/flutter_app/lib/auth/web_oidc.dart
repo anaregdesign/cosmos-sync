@@ -19,7 +19,15 @@ external JSPromise<JSString> _freshProof(JSString config, JSString nonce);
 @JS('cosmosSyncAuth.cancelProof')
 external JSPromise<JSString> _cancelProof();
 
-class WebOidcClient implements MemoryOidcClient, CancellableFreshOidcClient {
+class WebOidcClient
+    implements
+        MemoryOidcClient,
+        CancellableFreshOidcClient,
+        ConfiguredFreshOidcClient {
+  @override
+  bool supportsFreshIdentityProof(OidcConfig config) =>
+      config.browser && config.browserAdapter == BrowserAuthAdapter.entra;
+
   @override
   Future<OidcTokens> signIn(OidcConfig config) =>
       _tokens(() => _signIn(_encoded(config)).toDart);
@@ -32,7 +40,7 @@ class WebOidcClient implements MemoryOidcClient, CancellableFreshOidcClient {
   Future<OidcTokens> refresh(OidcConfig config, String refreshToken) async {
     throw const AuthException(
       'unsupported_refresh',
-      'Browser refresh credentials must remain inside MSAL memory.',
+      'Browser refresh credentials must remain inside the authentication adapter.',
     );
   }
 
@@ -51,6 +59,12 @@ class WebOidcClient implements MemoryOidcClient, CancellableFreshOidcClient {
     OidcConfig config,
     String nonce,
   ) async {
+    if (!supportsFreshIdentityProof(config)) {
+      throw const AuthException(
+        'identity_proof_unavailable',
+        'Generic browser sign-in does not support this Entra directory proof profile.',
+      );
+    }
     validateIdentityNonce(nonce);
     final response = await _response(
       () => _freshProof(_encoded(config), nonce.toJS).toDart,
@@ -92,6 +106,7 @@ class WebOidcClient implements MemoryOidcClient, CancellableFreshOidcClient {
       'scopes': config.scopes,
       'discoveryUrl': config.discoveryUrl,
       'postLogoutRedirectUrl': config.postLogoutRedirectUrl,
+      'browserAdapter': config.browserAdapter.name,
       if (config.brokerProvider != null)
         'provider': config.brokerProvider!.name,
     }).toJS;
@@ -159,5 +174,12 @@ class MemoryRefreshTokenStore implements RefreshTokenStore {
 
 OidcClient createOidcClient() => WebOidcClient();
 RefreshTokenStore createTokenStore() => MemoryRefreshTokenStore();
-String defaultRedirectUrl() =>
-    Uri.parse(web.document.baseURI).resolve('auth-redirect.html').toString();
+String defaultRedirectUrl({
+  BrowserAuthAdapter adapter = BrowserAuthAdapter.entra,
+}) => Uri.parse(web.document.baseURI)
+    .resolve(
+      adapter == BrowserAuthAdapter.entra
+          ? 'auth-redirect.html'
+          : 'oidc-redirect.html',
+    )
+    .toString();

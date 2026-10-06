@@ -5,6 +5,9 @@ import 'package:cosmos_sync/cosmos_sync.dart';
 /// A browser navigation preference, never proof of a provider identity.
 enum BrokerProvider { google, apple }
 
+/// An explicit browser protocol adapter, not a provider or authorization policy.
+enum BrowserAuthAdapter { entra, oidc }
+
 /// Build-selected, public External ID provider configuration. The operator must
 /// first enable these providers on the native client's associated user flow.
 class EntraBrokerCapabilities {
@@ -92,6 +95,7 @@ class OidcConfig {
     String? postLogoutRedirectUrl,
     EntraBrokerCapabilities? brokerCapabilities,
     bool browser = false,
+    BrowserAuthAdapter browserAdapter = BrowserAuthAdapter.entra,
   }) {
     final issuerUri = _httpsUri(issuer);
     final discovery =
@@ -101,6 +105,10 @@ class OidcConfig {
     if (issuerUri.origin != discoveryUri.origin ||
         clientId.trim().isEmpty ||
         clientId != clientId.trim() ||
+        (!browser && browserAdapter != BrowserAuthAdapter.entra) ||
+        (browser &&
+            browserAdapter == BrowserAuthAdapter.oidc &&
+            brokerCapabilities != null) ||
         (brokerCapabilities != null &&
             !brokerCapabilities.matches(issuer: issuer, clientId: clientId))) {
       throw const AuthException(
@@ -108,10 +116,12 @@ class OidcConfig {
         'Check the provider and client configuration.',
       );
     }
-    browser ? _browserCallbackUri(redirectUrl) : _callbackUri(redirectUrl);
+    browser
+        ? _browserCallbackUri(redirectUrl, browserAdapter)
+        : _callbackUri(redirectUrl);
     if (postLogoutRedirectUrl != null) {
       browser
-          ? _browserCallbackUri(postLogoutRedirectUrl)
+          ? _browserCallbackUri(postLogoutRedirectUrl, browserAdapter)
           : _callbackUri(postLogoutRedirectUrl);
     }
     final copiedScopes = List<String>.unmodifiable(scopes);
@@ -136,6 +146,7 @@ class OidcConfig {
       brokerCapabilities,
       null,
       browser,
+      browserAdapter,
     );
   }
 
@@ -149,6 +160,7 @@ class OidcConfig {
     this.brokerCapabilities,
     this.brokerProvider,
     this.browser,
+    this.browserAdapter,
   );
 
   final String issuer;
@@ -163,6 +175,10 @@ class OidcConfig {
   /// bindings and never forwarded to refresh, logout or BFF requests.
   final BrokerProvider? brokerProvider;
   final bool browser;
+  final BrowserAuthAdapter browserAdapter;
+
+  bool get supportsEntraNavigation =>
+      !browser || browserAdapter == BrowserAuthAdapter.entra;
 
   OidcConfig withBrokerCapabilities(EntraBrokerCapabilities? capabilities) =>
       OidcConfig(
@@ -174,6 +190,7 @@ class OidcConfig {
         postLogoutRedirectUrl: postLogoutRedirectUrl,
         brokerCapabilities: capabilities,
         browser: browser,
+        browserAdapter: browserAdapter,
       );
 
   OidcConfig forBrokerProvider(BrokerProvider provider) {
@@ -193,6 +210,7 @@ class OidcConfig {
       brokerCapabilities,
       provider,
       browser,
+      browserAdapter,
     );
   }
 
@@ -209,6 +227,8 @@ class OidcConfig {
     discoveryUrl,
     postLogoutRedirectUrl,
     if (browser) 'browser',
+    if (browser && browserAdapter != BrowserAuthAdapter.entra)
+      browserAdapter.name,
   ]);
 
   static const _identityScopes = {
@@ -254,15 +274,18 @@ class OidcConfig {
     }
   }
 
-  static void _browserCallbackUri(String value) {
+  static void _browserCallbackUri(String value, BrowserAuthAdapter adapter) {
     final uri = Uri.tryParse(value);
+    final page = adapter == BrowserAuthAdapter.entra
+        ? 'auth-redirect.html'
+        : 'oidc-redirect.html';
     if (uri == null ||
         uri.host.isEmpty ||
         uri.userInfo.isNotEmpty ||
         uri.hasQuery ||
         uri.hasFragment ||
         RegExp(r'\s').hasMatch(value) ||
-        !uri.path.endsWith('/auth-redirect.html') ||
+        !uri.path.endsWith('/$page') ||
         (uri.scheme != 'https' &&
             !(uri.scheme == 'http' &&
                 {'localhost', '127.0.0.1', '::1'}.contains(uri.host)))) {
@@ -325,6 +348,11 @@ abstract interface class FreshOidcClient implements OidcClient {
     OidcConfig config,
     String nonce,
   );
+}
+
+/// Adapters whose proof capability depends on the explicitly selected profile.
+abstract interface class ConfiguredFreshOidcClient implements FreshOidcClient {
+  bool supportsFreshIdentityProof(OidcConfig config);
 }
 
 /// Browser clients can additionally clear an isolated proof's private cache.

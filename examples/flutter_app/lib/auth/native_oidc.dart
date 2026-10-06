@@ -10,8 +10,17 @@ import 'oidc.dart';
 /// AppAuth owns state, nonce, PKCE verifier and the external browser callback.
 OidcClient createOidcClient() => NativeOidcClient();
 RefreshTokenStore createTokenStore() => NativeRefreshTokenStore();
-String defaultRedirectUrl() =>
-    'com.anaregdesign.cosmossync://auth/oauthredirect';
+String defaultRedirectUrl({
+  BrowserAuthAdapter adapter = BrowserAuthAdapter.entra,
+}) {
+  if (adapter != BrowserAuthAdapter.entra) {
+    throw const AuthException(
+      'invalid_config',
+      'Browser adapter selection does not change the registered native callback.',
+    );
+  }
+  return 'com.anaregdesign.cosmossync://auth/oauthredirect';
+}
 
 class NativeOidcClient implements FreshOidcClient {
   NativeOidcClient({

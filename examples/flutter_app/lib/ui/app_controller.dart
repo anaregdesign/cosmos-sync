@@ -24,6 +24,8 @@ class AppSettings {
       'discoveryUrl': oidc.discoveryUrl,
       'postLogoutRedirectUrl': oidc.postLogoutRedirectUrl,
       if (oidc.browser) 'browser': true,
+      if (oidc.browser && oidc.browserAdapter != BrowserAuthAdapter.entra)
+        'browserAdapter': oidc.browserAdapter.name,
     },
   };
 
@@ -41,6 +43,9 @@ class AppSettings {
         discoveryUrl: oidc['discoveryUrl'] as String?,
         postLogoutRedirectUrl: oidc['postLogoutRedirectUrl'] as String?,
         browser: oidc['browser'] as bool? ?? false,
+        browserAdapter: BrowserAuthAdapter.values.byName(
+          oidc['browserAdapter'] as String? ?? 'entra',
+        ),
       ),
     );
   }
@@ -146,6 +151,7 @@ class AppController extends ChangeNotifier {
     final capabilities = brokerCapabilities;
     final oidc = value.oidc.withBrokerCapabilities(
       capabilities != null &&
+              value.oidc.supportsEntraNavigation &&
               capabilities.matches(
                 issuer: value.oidc.issuer,
                 clientId: value.oidc.clientId,

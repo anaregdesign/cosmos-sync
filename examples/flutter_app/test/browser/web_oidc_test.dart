@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
-import 'package:cosmos_sync_example/auth/oidc.dart';
+import 'package:cosmos_sync_example/auth/auth_session_controller.dart';
 import 'package:cosmos_sync_example/auth/web_oidc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -82,6 +82,48 @@ void main() {
     client = WebOidcClient();
   });
   tearDown(() => globalThis.setProperty('cosmosSyncAuth'.toJS, previous));
+
+  test(
+    'generic selection is encoded and cannot advertise or call Entra proof',
+    () async {
+      final generic = OidcConfig(
+        issuer: 'https://issuer.example.test/realm',
+        clientId: 'non-uuid-browser-client',
+        redirectUrl: 'https://app.example.test/oidc-redirect.html',
+        scopes: ['openid', 'cosmos_sync'],
+        browser: true,
+        browserAdapter: BrowserAuthAdapter.oidc,
+      );
+      final auth = AuthSessionController(
+        oidc: client,
+        tokenStore: MemoryRefreshTokenStore(),
+      );
+      try {
+        auth.configure(generic);
+        expect(auth.supportsFreshIdentityProof, false);
+        final tokens = await client.signIn(generic);
+        expect(lastConfig['browserAdapter'], 'oidc');
+        expect(lastConfig['clientId'], 'non-uuid-browser-client');
+        expect(tokens.idToken, null);
+        expect(tokens.refreshToken, null);
+        await expectLater(
+          client.freshIdentityProof(generic, 'f' * 64),
+          throwsA(
+            isA<AuthException>().having(
+              (error) => error.code,
+              'code',
+              'identity_proof_unavailable',
+            ),
+          ),
+        );
+        expect(proofNonce, null);
+        auth.configure(config);
+        expect(auth.supportsFreshIdentityProof, true);
+      } finally {
+        await auth.close();
+      }
+    },
+  );
 
   test(
     'only explicit isolated proof interop exports ID proof and server nonce',

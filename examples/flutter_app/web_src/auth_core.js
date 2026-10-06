@@ -1,13 +1,12 @@
-const identityScopes = new Set([
-  "openid", "profile", "email", "offline_access", "address", "phone",
-]);
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { browserConfiguration } from "./auth_config.js";
+
 const failed = () => ({ errorCode: "invalid_configuration" });
 const cancelled = () => ({ errorCode: "user_cancelled" });
 const interaction = () => ({ errorCode: "interaction_required" });
 
-export function createBrowserAuth({ createClient, baseUri, secureContext }) {
-  const redirect = new URL("auth-redirect.html", baseUri).href;
+export function createBrowserAuth({
+  createClient, createGenericClient, baseUri, secureContext,
+}) {
   let generation = 0;
   let current = null;
   let busy = false;
@@ -15,58 +14,13 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
   let proofCandidate = null;
 
   function configuration(encoded) {
-    if (!secureContext || typeof encoded !== "string" || encoded.length > 65536) {
-      throw failed();
-    }
-    const config = JSON.parse(encoded);
-    const issuer = new URL(config.issuer);
-    const tenant = issuer.pathname.split("/")[1];
-    if (issuer.protocol !== "https:" || issuer.port || issuer.username ||
-        issuer.password || issuer.search || issuer.hash ||
-        !(issuer.hostname === "login.microsoftonline.com" ||
-          /^[a-z0-9-]+\.ciamlogin\.com$/.test(issuer.hostname)) ||
-        !uuid.test(tenant) || issuer.pathname !== `/${tenant}/v2.0` ||
-        !uuid.test(config.clientId) || config.redirectUrl !== redirect ||
-        config.discoveryUrl !== `${config.issuer}/.well-known/openid-configuration` ||
-        (config.postLogoutRedirectUrl != null &&
-          config.postLogoutRedirectUrl !== redirect) ||
-        (config.provider != null && !["google", "apple"].includes(config.provider)) ||
-        !Array.isArray(config.scopes) || !config.scopes.includes("openid") ||
-        new Set(config.scopes).size !== config.scopes.length ||
-        config.scopes.some((scope) =>
-          typeof scope !== "string" || !scope || scope.length > 2048 || /\s/.test(scope))) {
-      throw failed();
-    }
-    const scopes = config.scopes.filter((scope) => !identityScopes.has(scope));
-    if (!scopes.length) throw failed();
-    const key = JSON.stringify([
-      config.issuer, config.clientId, redirect, scopes,
-    ]);
-    return {
-      key, scopes, provider: config.provider,
-      options: {
-        auth: {
-          clientId: config.clientId,
-          authority: `${issuer.origin}/${tenant}`,
-          knownAuthorities: [issuer.hostname],
-          redirectUri: redirect,
-        },
-        cache: {
-          cacheLocation: "memoryStorage",
-        },
-        system: {
-          allowPlatformBroker: false,
-          popupBridgeTimeout: 180000,
-          iframeBridgeTimeout: 10000,
-          serverTelemetryEnabled: false,
-          loggerOptions: {
-            piiLoggingEnabled: false,
-            logLevel: 0,
-            loggerCallback: () => {},
-          },
-        },
-      },
-    };
+    return browserConfiguration(encoded, baseUri, secureContext);
+  }
+
+  function clientFor(config) {
+    const factory = config.adapter === "oidc" ? createGenericClient : createClient;
+    if (typeof factory !== "function") throw failed();
+    return factory(config.options);
   }
 
   function kind(error) {
@@ -97,13 +51,7 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
     try {
       await cancelProof();
     } finally {
-      if (previous) {
-        try {
-          await previous.ready;
-        } finally {
-          await bounded(previous.client.clearCache(), 10000);
-        }
-      }
+      if (previous) await clearCandidate(previous);
     }
   }
 
@@ -111,12 +59,20 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
     proofGeneration++;
     const candidate = proofCandidate;
     proofCandidate = null;
-    if (candidate) {
-      try {
-        await candidate.ready;
-      } finally {
-        await bounded(candidate.client.clearCache(), 10000);
-      }
+    if (candidate) await clearCandidate(candidate);
+  }
+
+  async function clearCandidate(candidate) {
+    // A generic client's guarded stores reject late token writes after abort.
+    if (typeof candidate.client.cancel === "function") {
+      candidate.client.cancel();
+      await bounded(candidate.client.clearCache(), 10000);
+      return;
+    }
+    try {
+      await candidate.ready;
+    } finally {
+      await bounded(candidate.client.clearCache(), 10000);
     }
   }
 
@@ -192,7 +148,7 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
       try {
         await clear();
         const expectedGeneration = generation;
-        const client = createClient(config.options);
+        const client = clientFor(config);
         candidate = {
           client, key: config.key, ready: bounded(client.initialize(), 10000),
         };
@@ -203,7 +159,7 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
         }
         return await bounded(accepted(client.loginPopup({
           scopes: config.scopes,
-          redirectUri: redirect,
+          redirectUri: config.redirect,
           prompt: "select_account",
           ...(config.provider
             ? { extraQueryParameters: { domain_hint: config.provider } } : {}),
@@ -226,7 +182,7 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
         return await bounded(accepted(candidate.client.acquireTokenSilent({
           scopes: config.scopes,
           account: candidate.account,
-          redirectUri: redirect,
+          redirectUri: config.redirect,
           forceRefresh: true,
         }), candidate, expectedGeneration, config.scopes), 20000);
       } catch (error) {
@@ -244,6 +200,7 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
         throw failed();
       }
       const config = configuration(encoded);
+      if (config.adapter !== "entra") throw failed();
       const main = current;
       if (!main?.account || main.key !== config.key) throw interaction();
       const expectedGeneration = generation;
@@ -251,7 +208,7 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
       busy = true;
       let candidate;
       try {
-        const client = createClient(config.options);
+        const client = clientFor(config);
         candidate = { client, ready: bounded(client.initialize(), 10000) };
         proofCandidate = candidate;
         await candidate.ready;
@@ -261,7 +218,7 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
         }
         return await bounded(acceptedProof(client.loginPopup({
           scopes: config.scopes,
-          redirectUri: redirect,
+          redirectUri: config.redirect,
           nonce,
           prompt: "login",
           claims: JSON.stringify({ id_token: { auth_time: { essential: true } } }),
@@ -285,11 +242,11 @@ export function createBrowserAuth({ createClient, baseUri, secureContext }) {
       busy = true;
       try {
         await clear();
-        const client = createClient(config.options);
+        const client = clientFor(config);
         await bounded(client.initialize(), 10000);
         try {
           await bounded(client.logoutPopup({
-            postLogoutRedirectUri: redirect,
+            postLogoutRedirectUri: config.redirect,
           }), 180000);
         } finally {
           await bounded(client.clearCache(), 10000);

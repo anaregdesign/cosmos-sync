@@ -64,7 +64,13 @@ class AuthSessionController extends ChangeNotifier {
   bool get restoredSession => _restoredSession;
   bool get supportsCredentialRestore => _oidc is! MemoryOidcClient;
   String? get credentialSessionId => _credentialSessionId;
-  bool get supportsFreshIdentityProof => _oidc is FreshOidcClient;
+  bool get supportsFreshIdentityProof {
+    final client = _oidc;
+    final config = _config;
+    return client is FreshOidcClient &&
+        (client is! ConfiguredFreshOidcClient ||
+            config != null && client.supportsFreshIdentityProof(config));
+  }
 
   void configure(OidcConfig config) {
     _checkDisposed();
@@ -355,7 +361,7 @@ class AuthSessionController extends ChangeNotifier {
   Future<FreshIdentityProof> freshIdentityProof(IdentityChallenge challenge) {
     final config = _requireConfig();
     final client = _oidc;
-    if (client is! FreshOidcClient) {
+    if (client is! FreshOidcClient || !supportsFreshIdentityProof) {
       return Future.error(
         const AuthException(
           'identity_proof_unavailable',
