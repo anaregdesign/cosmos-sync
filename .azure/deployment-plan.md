@@ -1,9 +1,11 @@
 # Cosmos Sync delivery and deployment plan
 
-Status: Approved
+Status: Validated
+Validation scope: Read-only local mirror and saved directory plan; Azure apply is not authorized.
 Date: 2026-10-06 JST
 Mode: MODIFY
 Runtime preparation candidate: `36f502fe5040f81164a9304992f6819b9d382c5a`
+Published runtime source: `36d2680e5f88d31acfafa4473d0d4996f1de0ff7`
 
 ## 1. Goal and authorization
 
@@ -42,7 +44,7 @@ another customer or credential under the existing same-human exception.
 | Location | Previously approved West US 2 environment; no region change proposed |
 | Identity | One original human and the specifically approved nonadministrative customer profile |
 | Platforms | Native and Web development/fixtures first; final physical Android last |
-| Distribution | Existing published artifacts unchanged; candidate publication requires explicit review |
+| Distribution | Owner-approved directory BFF published; SDK archive unchanged; actual activation remains separately gated |
 
 Do not ask the owner to approve the same subscription/region again. Before an
 actual resource operation, verify that the private target and live metadata
@@ -51,7 +53,11 @@ or establish current cloud health.
 
 ## 3. Verified baseline and implementation progress
 
-[PR #39](https://github.com/anaregdesign/cosmos-sync/pull/39) is open and unmerged.
+[PR #39](https://github.com/anaregdesign/cosmos-sync/pull/39) was separately
+owner-approved and merged as `36d2680e5f88d31acfafa4473d0d4996f1de0ff7`.
+All nine exact main-push jobs passed in
+[CI 37433122046](https://github.com/anaregdesign/cosmos-sync/actions/runs/37433122046).
+The original source/tooling evidence below remains attributed to its candidate.
 All nine candidate jobs passed at `36f502f` in
 [CI 37428407923](https://github.com/anaregdesign/cosmos-sync/actions/runs/37428407923).
 Exact clean-source Android process-death/replay and local nonpublishing
@@ -68,10 +74,10 @@ remain distinguishable.
 
 | Component | Reviewed source | Completed scope | Concrete remaining work |
 | --- | --- | --- | --- |
-| Go BFF | `bff/identity_runtime.go`, `identity_http.go`, `broker_proof.go`, `broker_directory.go` | Opt-in directory factory, exact API/ID correlation, uncached trusted profile, register/link/unlink, stable ownership, generation fences | Reviewed hosting artifact and actual hosted identity execution |
+| Go BFF | `bff/identity_runtime.go`, `identity_http.go`, `broker_proof.go`, `broker_directory.go` | Opt-in directory factory, exact API/ID correlation, uncached trusted profile, register/link/unlink, stable ownership, generation fences | State-authority/apply decision and actual hosted identity execution |
 | Dart SDK | `packages/cosmos_sync/`, `tool/identity_probe.dart` | Typed lifecycle transport, identity-aware SQLite/IndexedDB fencing, shared recorded directory driver and signed local/emulator evidence | Actual approved hosted directory acceptance |
 | Native/Web app | `examples/flutter_app/lib/auth/`, account lifecycle UI | Isolated fresh proofs, pending consent, cancellation/recovery, cache-open verification and clean emulator process-death/replay | Actual customer proof and final physical acceptance |
-| ACA Terraform | `infra/terraform/azure-container-apps/` | Typed directory opt-in/image guard, assigned UAMI binding, 61 mock plans, strict generated-JSON/Go contract and clean nonpublishing image/CI; old modes preserved | Separate concrete artifact/activation review |
+| ACA Terraform | `infra/terraform/azure-container-apps/` | Typed directory opt-in/image guard, assigned UAMI binding, 61 mock plans, strict generated-JSON/Go contract, published compatible image and read-only saved-plan validation; old modes preserved | Authoritative-state handback, separate apply approval and actual activation |
 | Native live runner | `tools/native_entra_auth.py`, `entra_auth_live_test.dart` | API-only mode retained; transient directory-proof v2, provided/server nonce distinction, source-bound fresh failure receipts and foreground gate implemented | Actual attended customer evidence |
 | Hosted SDK runner | `tools/directory_azure_live.py`, `test/directory_azure_live.dart` | Explicit recorded-directory preflight/data journey, immutable runtime/native-proof pinning, shared ledger, partial/unknown-outcome receipts and official Cosmos-emulator/candidate CI | Actual approved hosting/customer journey |
 | Local cloud/UI runners | `tools/live_azure_contract.py`, `tools/flutter_azure_live.py`, `azure_live_ui_test.dart` | Separate legacy grants-file and recorded-token contracts | Cannot stand for directory authorization, hosted MI or actual fresh ordinary login |
@@ -317,7 +323,7 @@ device login/cloud, OS death/relaunch, airplane mode and suspension are separate
 observations. Retain current physical-input gating; connected alone is not
 execution permission. Physical iOS and actual Google/Apple remain outside scope.
 
-## 7. Dependencies and execution order
+## 7. Dependencies, execution order and Validation Proof
 
 ```mermaid
 flowchart TD
@@ -339,6 +345,31 @@ Read-only P4 diagnosis can be independent, but hosted activation is separately
 gated. P5 needs actual owner/hosting readiness. P6 puts physical work last.
 No calendar deadline is promised while those external gates remain unresolved.
 
+### Validation Proof
+
+Validation covers exact released source `36d2680`, the private local mirror and
+its saved one-app directory plan. It does not authorize or execute deployment,
+replace original state, prove current ingress/hosted identity or permit Web CORS.
+The canonical Azure Validate checks and proof recording below passed; this is
+not a passed hosted-acceptance or apply gate.
+
+| Evidence | Current result |
+| --- | --- |
+| Exact-source locked module | Terraform configuration validation passed; source checkout unchanged |
+| Retained mirror baseline | Fresh provider reads, six no-ops, exit 0; hash in section 15 |
+| Saved directory plan | One app update/five no-ops; exact image and runtime-only delta reviewed |
+| Actual generated runtime JSON | Go overlay test passed through released strict decoder and pure directory factory; no network |
+| Terraform recipe preflight | Unmodified `validate-terraform.sh <private-module>` passed nine applicable steps; AZD `main.tfvars.json` check skipped as not applicable |
+| Exact inputs and locked providers | `TF_CLI_ARGS_init=-lockfile=readonly` and exact private `TF_CLI_ARGS_plan=-var-file=...`; selected subscription already matched, no `az account set` |
+| Preflight saved plan | Fresh plan has identical reviewed resource actions/values; SHA256 `173c2425b7ac6b931b875013fbb46e0c5ab89294d452900ade27b10a57125593` |
+| Released BFF build | `go build ./...` passed in exact-source checkout; tracked source unchanged |
+| Static roles | Six-action custom Cosmos container role and named cursor Secret User assigned to the retained UAMI; no grants/network changes |
+| Reader/FIC review | Prior retained metadata matches secret-free multitenant reader, UAMI principal FIC and target-only `User.Read.All`; not fresh Graph or hosted exchange |
+| Applicable policy | Exact app-scope assignment query including inherited assignments returned zero; no policy definition or exception was changed |
+| Private evidence | Directory 0700, artifacts 0600; initial failed plans and state backups retained; sanitized review at `2026-10-06T09:47:31Z` |
+| English Issue proof | [#16 comment 6013697503](https://github.com/anaregdesign/cosmos-sync/issues/16#issuecomment-6013697503), [#2 comment 6013697550](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-6013697550) |
+| Azure apply / hosted / customer / physical acceptance | Not executed; separately gated |
+
 ## 8. Validation and Issue closure
 
 | Change | Smallest relevant existing validation |
@@ -357,16 +388,41 @@ new runtime execution.
 
 Do not close an Issue because another issue or the container is green. Close
 each leaf only when its revised scoped criteria and evidence pass; moved live
-criteria remain mandatory in their named owner Issue. PR merge is separate from
-source/CI completion and no merge is authorized here.
+criteria remain mandatory in their named owner Issue. Future PR merge is
+separate from source/CI completion; no further merge is authorized by validation.
+
+### All validation checks pass (validation-only)
+
+The Terraform recipe's checks below use the existing nested workload module and
+owned local backend, not new root infrastructure or a remote backend. Run its
+unmodified preflight script with locked-init and exact private var-file options;
+omit subscription mutation because the selected subscription already matches.
+No login, provider registration, backend migration or apply is permitted.
+
+| Terraform recipe validation step | State |
+| --- | --- |
+| Terraform and Azure CLI installed | Passed canonical script |
+| Existing Azure authentication and selected target match | Passed; no login or subscription mutation |
+| Locked `terraform init`, format check and configuration validation | Passed canonical script |
+| Exact-input `terraform plan` and local `terraform state list` | Passed canonical script; reviewed app-only actions unchanged |
+| Unresolved Go-style environment template scan | Passed canonical script |
+| AZD `main.tfvars.json` JSON syntax | Not applicable: pure Terraform/private JSON var-file is parsed explicitly |
+| Released BFF build and exact generated JSON contract | Passed; no BFF/network requests |
+| Static narrow Cosmos/Key Vault assignments and reader/FIC contract | Passed code/recorded-metadata review; hosted execution remains unverified |
+| Applicable policies for the exact retained target | Zero applicable assignments returned by bounded read-only query |
+| Private evidence permissions and plan hashes | Passed; original state untouched, mirror remains nonauthoritative |
+| Sanitized Issue record and canonical workflow status | Proof recorded; final `UpdateStatus` step records the Validated plan |
 
 ## 9. Provisioning inventory and decision gates
 
-This preparation deploys **zero** resources and executes **zero** Azure plans/
-applies. No subscription quota or replica allocation is changed or claimed
-validated. Live quota/capacity checks are not applicable to this zero-operation
-review; they must be completed for an explicitly approved execution plan if its
-inventory changes. The retained environment continues to have costs.
+The initial local preparation deployed **zero** resources and executed **zero**
+live plans/applies. The separately approved section 14 now permits current
+resource GET/import and read-only Terraform plans into a validation-only mirror;
+**zero applies** remain authorized/executed. No quota or replica allocation is
+changed or claimed validated. Live quota/capacity checks are not applicable to
+this zero-allocation review; they must be completed for an explicitly approved
+execution plan if its inventory changes. The retained environment continues to
+have costs.
 
 | Gate | Required decision/evidence |
 | --- | --- |
@@ -394,7 +450,7 @@ not proof of current customer issuance or hosted execution.
 - [x] Owner approves implementation plan (2026-10-06).
 - [x] Implement and locally verify source/proof/recorded-driver work and initial emulator OS restart.
 - [x] Persist runtime candidate `36f502f`, repeat restart cleanly and complete nonpublishing container/Cosmos-emulator checks and all nine exact-candidate CI jobs.
-- [ ] Review a concrete activation artifact/plan and complete Azure validation.
+- [x] Review the concrete artifact/read-only plan and complete canonical Azure validation; actual activation remains unapproved.
 - [ ] Execute separately authorized deployment and attended acceptance.
 - [ ] Reproduce onboarding, final Android and close scoped leaves with evidence.
 
@@ -470,6 +526,10 @@ are in the existing English Issues; failed `f300273` remains a historical failur
 
 ## 13. Retained hosting read-only checkpoint, 2026-10-06
 
+This historical checkpoint precedes the separately approved release and plan
+validation in sections 14–15. Its retained Azure observations remain unchanged;
+its former artifact/validation blockers are superseded below.
+
 Existing credentials still permit the specifically approved metadata reads; no
 new management login was opened. App/environment/workspace read back Succeeded.
 The sole ingress allow rule, assigned UAMI, executable-only command, original
@@ -498,3 +558,76 @@ development package, weaken this release gate or overwrite retained artifacts
 to sidestep them. The SDK can remain pinned source until separately reviewed
 distribution. Attended customer, controlled identity/member coverage, private
 two-BFF reachability, onboarding and final Android retain their existing gates.
+
+## 14. Approved artifact and validation-only state mirror
+
+The owner separately approved BFF-only public release of exact main `36d2680`.
+[Release 37438116005](https://github.com/anaregdesign/cosmos-sync/actions/runs/37438116005)
+published and verified
+`ghcr.io/anaregdesign/cosmos-sync-bff@sha256:adfe83a08dcd8754f85652641a85138e9a90993c1766ce70c86953365b9a6102`,
+version `0.2.0-dev.1`, MIT/public. Both platform authenticated pulls, metadata,
+subject-bound BuildKit provenance/SPDX and anonymous access passed. Existing
+artifacts/visibility/license and the SDK archive are unchanged. Publication did
+not change the retained Azure app.
+
+The original private deployment state is intentionally absent from this
+isolated worktree. The owner approved exact-existing-resource GET/import into
+an owned validation-only local state mirror and saved-plan verification.
+Previously selected subscription and West US 2 reuse were confirmed; no region,
+subscription, resource, role, network or replica expansion is proposed. Do not
+read/copy the main checkout, migrate/replace original state, or treat this mirror
+as a second authoritative deployment state.
+
+Reconstruct only the retained workload resources using locked providers with
+registration disabled. Use private 0700 directories/0600 files, versioned secret
+URIs only, and no Cosmos keys, Vault values or end-user proofs. Compare baseline
+with current ARM metadata before the proposed directory overlay. Require the
+saved plan to show only the intended app image/runtime JSON update, preserving
+cursor/history, data, UAMI, environment, grants, sole Allow and min0/max1.
+
+The concrete read-only preparation below passed Azure Validate. Any actual apply,
+state-authority/handback decision, new BFF probe, authentication or physical
+operation remains separately gated; this approval is read-only preparation.
+
+## 15. Concrete validation-only plan
+
+Six exact existing resources were imported into the owned local mirror. Initial
+imports exposed provider-local reconstruction differences: a newer/default API,
+resource-type casing, unconfigured RP defaults, exported-output projection and
+the cursor assignment's client-only AAD-check flag. Preserve the initial plans.
+Both AzAPI bindings were reimported at the module's documented `2025-07-01` API.
+Backed-up, guarded local metadata reconstruction preserved all configured cloud
+values and the exact existing infrastructure group; no provider update/apply was
+performed. This is not recovery/replacement of original authoritative state.
+
+Fresh baseline plan SHA256:
+`654e044e8ce72e06a4bf4f702f035733a2dbacb75687c15d814bc399323607a7`.
+Terraform exit 0; **all six resources no-op**, after current provider GETs.
+Proposed saved directory plan SHA256:
+`01e4fb81fe4af80073220f6a79214595724582b102dca8ec6a00de77590a851e`.
+It contains **one in-place app update, five no-ops, zero creates/deletes/
+replacements**. Actual input/state/plan/readback/backup files remain private.
+
+The app update changes only the immutable image and `COSMOS_SYNC_CONFIG_JSON`.
+Runtime JSON changes only OIDC trust and authorization mode/directory trust.
+Cosmos endpoint/database/container, shared cursor/versioned URI, history epoch,
+events/snapshots/limits/retention, grants, other environment variables, UAMI,
+command/probes/resources, sole Allow, scale0/1 and the environment/roles remain
+unchanged. The image exactly matches release37438116005/source36d2680.
+
+Directory scope uses the existing approved customer tenant/API, sole public
+client, assigned UAMI, distinct reader app, one approved workforce source and
+exact previously registered native/SPA callbacks. The proposed new server
+namespace is `cosmos-sync-ciam-directory-v1`; builtin documents are not adopted.
+The loopback SPA callback is registered, but preserved empty `allowedOrigins`
+does **not** permit cross-origin Web acceptance. Review exact local HTTPS/same-
+origin/CORS arrangements separately; do not widen origins under this plan.
+
+Validation must inspect this exact saved plan/configuration through the strict
+production Go decoder/pure directory factory, review existing FIC/target-only
+permission metadata separately from actual hosted exchange, and retain a
+sanitized result. Actual routing, hosted reader execution, customer freshness,
+two-independent-BFF/member coverage and final physical acceptance remain open.
+The mirror remains validation-only and must not be applied or silently become
+authoritative. Original-state handback/reconciliation and any actual update
+require a separate concrete owner decision.

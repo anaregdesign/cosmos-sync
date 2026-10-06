@@ -14,7 +14,8 @@ explicit compatible-image/new-namespace verification assertion. Explicit legacy
 mode contains empty grants and denies all end users. Neither mode adopts legacy
 data or provisions identity-provider accounts automatically.
 
-The unpublished directory lifecycle extension is an explicit opt-in:
+The directory lifecycle extension published from exact source `36d2680` is an
+explicit opt-in:
 `authorization_mode="directory"` requires the typed `directory` input and
 `directory_image_verification`. The overlay in `directory.tfvars.example` is
 deliberately unverified and must not be used unchanged. The module checks exact
@@ -31,6 +32,16 @@ verified. This does not inspect a registry, publish a candidate or authorize an
 apply. No Graph grant, federated credential, user or legacy ownership migration
 is implicitly created here. Builtin/legacy omit `authorization.directory` and
 retain their previous generated configuration.
+
+The [verified public release](../../../docs/release.md) now supplies a compatible
+immutable directory image. It has not changed the retained Azure app. A
+validation-only local state mirror may reconstruct only explicitly approved
+existing resources when original private state is not available in an isolated
+worktree. Imports are control-plane reads with local bindings, not authorization
+to apply, migrate/replace original state, or create a second authoritative state.
+Keep mirror directories/state/saved plans private; review baseline drift first.
+Actual activation still needs Azure validation, separate concrete apply approval
+and an explicit state-authority/handback decision.
 
 Before activation, preserve the existing state/cursor key, pin the compatible
 candidate and verify the retained UAMI/FIC, target-only Graph `User.Read.All`,
@@ -59,8 +70,9 @@ portable checks are distinguished in [verification](../../../docs/verification.m
 checks. It defaults to `[]`; empty/omitted values omit `allowedClientIds` from
 runtime JSON so already published strict-decoder images retain compatibility.
 Before opting in, pin an updated source-addressed image that implements this
-setting. The [verified image from `76c1f46`](../../../docs/release.md) implements
-it. The original public `0.2.0-dev.1` image from commit `82e937c` does not support
+setting. The [verified images from `76c1f46` and `36d2680`](../../../docs/release.md)
+implement it; directory mode requires the latter's lifecycle contract.
+The original public `0.2.0-dev.1` image from commit `82e937c` does not support
 this field and rejects it at startup. Use registered native public client
 IDs, with at most 32 distinct visible ASCII
 values of 1–256 bytes, and configure every replica consistently. This restriction

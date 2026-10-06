@@ -26,6 +26,26 @@ source-SHA tag distinguishes it from the first BFF image while retaining version
 runtime and consumer-provider acceptance remain separate gates in
 [verification](verification.md).
 
+The directory-capable BFF was separately owner-approved and published from
+`36d2680e5f88d31acfafa4473d0d4996f1de0ff7` on 2026-10-06 after all nine exact
+[main checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37433122046)
+passed. [Release and verification 37438116005](https://github.com/anaregdesign/cosmos-sync/actions/runs/37438116005)
+completed with `distribution_verified`:
+
+```text
+ghcr.io/anaregdesign/cosmos-sync-bff@sha256:adfe83a08dcd8754f85652641a85138e9a90993c1766ce70c86953365b9a6102
+```
+
+Both Linux platforms passed authenticated pulls, source/version/MIT/nonroot and
+entrypoint inspection, checksummed subject-bound BuildKit provenance/SPDX and
+public anonymous access. BuildKit provenance is not a signed GitHub attestation.
+The existing public package required no visibility transition. Version remains
+`0.2.0-dev.1`; the new source-SHA tag did not overwrite old tags, republish the SDK
+or alter its archive. This source includes directory authorization and coordinated
+identity lifecycle; published-image proof is not Azure activation or customer
+authentication evidence. The retained Azure app still runs the original image
+with matching builtin configuration.
+
 On 2026-10-03 the owner explicitly approved
 **MIT**, copyright 2026 anaregdesign, **public GitHub source and public GHCR**, and
 the initial prerelease **0.2.0-dev.1**. The chosen pub.dev Google account is kept

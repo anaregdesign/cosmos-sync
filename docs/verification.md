@@ -992,3 +992,70 @@ nullable readback proves actual delivery or a root cause. No logging/network
 change or new BFF probe was made; the historical ledger remains seven requests
 and zero accepted application mutations. Exact retained routing/identity and
 compatible activation remain #16, before actual #24/#32/#20 acceptance.
+
+## Published directory artifact and read-only activation-plan validation, 2026-10-06
+
+The owner separately approved normal code-only merge of
+[PR #39](https://github.com/anaregdesign/cosmos-sync/pull/39). Exact merged main
+`36d2680e5f88d31acfafa4473d0d4996f1de0ff7` passed all nine
+[main-push CI jobs](https://github.com/anaregdesign/cosmos-sync/actions/runs/37433122046).
+The merge message retains literal backslash-n separators before its coauthor
+text; the source tree is unchanged and the original contributing commits have
+canonical trailers. No amend, history rewrite or force push was authorized or
+performed.
+
+A distinct BFF-only approval authorized
+[release 37438116005](https://github.com/anaregdesign/cosmos-sync/actions/runs/37438116005),
+which finished `distribution_verified` at
+`ghcr.io/anaregdesign/cosmos-sync-bff@sha256:adfe83a08dcd8754f85652641a85138e9a90993c1766ce70c86953365b9a6102`.
+Both platform pulls, metadata, checksummed subject-bound BuildKit
+provenance/SPDX and public anonymous access passed. BuildKit provenance is not a
+signed GitHub attestation. Version/MIT/public visibility and the immutable SDK
+archive are unchanged; old tags were not overwritten. The early pushed/pending
+receipt is historical, superseded by final distribution verification.
+
+The original private Terraform state was intentionally not brought into the
+isolated worktree. The owner approved exact existing-resource GET/import and
+saved-plan verification in a new **validation-only**, nonauthoritative local
+mirror, not Azure apply or original-state migration/replacement. Six existing
+workload resources were imported from a clean exact-main checkout with locked
+providers, registration disabled and no secret values or Cosmos keys read.
+
+Initial import plans showed provider reconstruction metadata/defaults rather
+than a baseline no-op. Those plans were preserved. Reimporting the two AzAPI
+bindings at the documented `2025-07-01` API and guarded, backed-up mirror-local
+metadata reconstruction preserved all configured ARM values and the exact
+existing infrastructure group. No cloud resource update was used to clear drift.
+A new provider-refreshed baseline returned exit 0 with all six resources no-op,
+SHA256 `654e044e8ce72e06a4bf4f702f035733a2dbacb75687c15d814bc399323607a7`.
+
+The reviewed directory plan is SHA256
+`01e4fb81fe4af80073220f6a79214595724582b102dca8ec6a00de77590a851e`:
+one in-place app update, five no-ops, zero creates/deletes/replacements. Only its
+image and `COSMOS_SYNC_CONFIG_JSON` change; runtime JSON changes only OIDC and
+authorization/directory trust. Cosmos, UAMI, roles, environment, network/sole
+Allow, min0/max1, command/probes/resources, cursor/versioned reference, history,
+events/snapshots/limits/retention and other environment variables are unchanged.
+The new namespace `cosmos-sync-ciam-directory-v1` does not adopt builtin data.
+
+The canonical Azure Validate Terraform preflight passed all nine applicable
+steps, using the exact private inputs and locked init. AZD's `main.tfvars.json`
+check is not applicable. Its independently saved plan has the same resource
+actions/values, SHA256
+`173c2425b7ac6b931b875013fbb46e0c5ab89294d452900ade27b10a57125593`.
+The exact generated JSON passed the released strict Go decoder/pure directory
+factory through a private test overlay; the released BFF build passed without
+source changes or network execution. Static custom Cosmos/container and cursor
+Secret User scope review passed. Existing reader/FIC/target-only `User.Read.All`
+metadata matches the configuration, but is not fresh Graph or hosted exchange
+evidence. The applicable inherited app-policy query returned zero assignments.
+Private mirror directories/files use 0700/0600; raw plans/state/identifiers are
+not public evidence.
+
+The retained Azure app is still on its original builtin image/configuration.
+No Azure write, BFF probe, owner login or physical operation occurred, and the
+real ledger remains 7/40 attempts with zero accepted application mutations.
+Empty `allowedOrigins` was deliberately preserved: a registered loopback SPA
+callback does not permit cross-origin Web acceptance. Original-state handback,
+concrete update approval, Web origin arrangements, actual routing/log delivery,
+hosted UAMI/Graph/Cosmos execution and #24/#32/#20 acceptance remain open.

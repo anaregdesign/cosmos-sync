@@ -69,8 +69,8 @@ all end users. Neither mode imports legacy partitions automatically; migration
 must be reviewed separately. Never solve onboarding with a wildcard grant, trust
 in email/client roles, or an auth bypass.
 
-The unpublished directory candidate adds an opt-in
-`authorization_mode="directory"` with typed server-only `directory` settings.
+The separately published directory-capable BFF from exact source `36d2680` adds
+an opt-in `authorization_mode="directory"` with typed server-only `directory` settings.
 The module derives the reader's managed identity from the actual assigned BFF
 UAMI and requires exact CIAM/API/public-client trust and callbacks.
 `directory_image_verification` pins the same image and full reviewed source
@@ -80,6 +80,16 @@ procedure](../infra/terraform/azure-container-apps/README.md) preserve existing
 state, roles, private networking and replica limits. No profile, Graph grant,
 federated credential or published candidate is created by this option.
 Offline mock/configuration checks are not hosted execution evidence.
+
+Its [verified immutable release](release.md) is available, but has not been
+applied to the retained app. The owner approved read-only reconstruction of a
+validation-only local Terraform mirror from exact existing resources because the
+original private state is intentionally absent from the isolated worktree.
+This mirror neither replaces original state nor authorizes deployment. Preserve
+the retained cursor/history and private state; reject unexpected baseline drift,
+creates, replacements, role/network changes or replica expansion. Keep raw
+state/plans and resource identifiers private. Actual apply requires a separate
+concrete plan approval and state-authority/handback decision.
 
 Only six Cosmos data actions are included: metadata read, item read/create/replace,
 query and the SDK-required readChangeFeed permission. They allow the BFF's atomic
@@ -133,9 +143,10 @@ actual Healthy/listening startup; no image rebuild, key rotation or configuratio
 file mount was needed. [ACA command/arguments](https://learn.microsoft.com/en-us/azure/container-apps/containers#configuration).
 
 The retained Azure checkpoint uses the original image from source `82e937c`.
-The newer [verified public BFF release](release.md), from `76c1f46`, is available
-for a reviewed new deployment/upgrade; its digest is recorded in the
-[image/source split](aca-validation-plan.md#traffic-and-cursor-key-bootstrap).
+The latest [verified public BFF release](release.md), from `36d2680`, supports
+directory lifecycle and optional client admission. The earlier `76c1f46` release
+supports client admission but not the directory activation contract; its digest
+remains in the [historical image/source split](aca-validation-plan.md#traffic-and-cursor-key-bootstrap).
 Its optional `oidc.allowed_client_ids` checks exact signed `azp` client IDs in
 addition to issuer/API audience/scope. Select the registered native public client
 ID there when restricting API admission; shared membership remains server-managed.
