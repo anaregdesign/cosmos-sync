@@ -121,6 +121,146 @@ http.StreamedResponse _sse(String text, {String type = 'text/event-stream'}) =>
 String _hint(String id) => 'id: $id\nevent: change\ndata: {"cursor":"$id"}\n\n';
 
 void main() {
+  group('identity-bound transport', () {
+    final identity = 'a' * 64;
+    Map<String, Object?> session(int generation) => {
+      'scopeId': 'scope',
+      'principalId': 'principal',
+      'permissionVersion': '2',
+      'scopeMode': 'user',
+      'identityGeneration': generation,
+      'identityId': identity,
+    };
+
+    test(
+      'binds mutation, sync and snapshot without composing permission',
+      () async {
+        final transport = _transport((request) async {
+          if (request.url.path == '/v1/session') return _json(session(10000));
+          expect(request.headers['X-Cosmos-Sync-Permission'], '2');
+          expect(request.headers['X-Cosmos-Sync-Identity-Generation'], '10000');
+          expect(request.headers['X-Cosmos-Sync-Identity'], identity);
+          return switch (request.url.path) {
+            '/v1/mutations' => _json({'document': _document}),
+            '/v1/snapshot' => _json({
+              'documents': [_document],
+              'cursor': 'snapshot',
+              'syncCursor': 'sync',
+              'cutoverSequence': 7,
+              'hasMore': false,
+            }),
+            _ => _json({
+              'changes': <Object?>[],
+              'cursor': 'sync',
+              'hasMore': false,
+            }),
+          };
+        });
+        addTearDown(transport.close);
+        final verified = await transport.sessionInfo();
+        expect(verified.identityGeneration, 10000);
+        expect(verified.permissionVersion, '2');
+        await transport.mutate(_mutation());
+        await transport.sync();
+        await transport.snapshot();
+      },
+    );
+
+    test(
+      'new generation clears consistency and ignores an old in-flight envelope',
+      () async {
+        var generation = 1;
+        final entered = Completer<void>();
+        final reply = Completer<http.Response>();
+        final transport = _transport((request) async {
+          if (request.url.path == '/v1/session') {
+            return _json(session(generation));
+          }
+          entered.complete();
+          return reply.future;
+        });
+        addTearDown(transport.close);
+        await transport.sessionInfo();
+        transport.consistencyToken = 'original';
+        final pending = transport.sync();
+        await entered.future;
+        generation = 2;
+        await transport.sessionInfo();
+        expect(transport.consistencyToken, isNull);
+        reply.complete(
+          _json(
+            {'changes': <Object?>[], 'cursor': 'old-cursor', 'hasMore': false},
+            headers: {'X-Cosmos-Sync-Session': 'stale-envelope'},
+          ),
+        );
+        await pending;
+        expect(transport.consistencyToken, isNull);
+      },
+    );
+
+    test(
+      'SSE binds identity and classifies learned unlink as authorization loss',
+      () async {
+        final transport = HttpSyncTransport(
+          baseUri: Uri.parse('https://sync.example.test'),
+          tokenProvider: () async => 'api-token',
+          client: _StreamClient((request) async {
+            if (request.url.path == '/v1/session') {
+              return http.StreamedResponse(
+                Stream.value(utf8.encode(jsonEncode(session(1)))),
+                200,
+              );
+            }
+            expect(request.headers['X-Cosmos-Sync-Identity-Generation'], '1');
+            expect(request.headers['X-Cosmos-Sync-Identity'], identity);
+            return _sse(
+              'event: error\ndata: {"code":"identity_session_invalid"}\n\n',
+            );
+          }),
+        );
+        addTearDown(transport.close);
+        await transport.sessionInfo();
+        transport.consistencyToken = 'before';
+        await expectLater(
+          transport.watchChanges(),
+          emitsError(
+            isA<TransportException>().having(
+              (error) => error.authorizationFailure,
+              'authorization failure',
+              isTrue,
+            ),
+          ),
+        );
+        expect(transport.consistencyToken, isNull);
+      },
+    );
+
+    test(
+      'rejects malformed server identity metadata before data requests',
+      () async {
+        for (final generation in [0, -1, 10001, '1', 1.5]) {
+          var requests = 0;
+          final transport = _transport((_) async {
+            requests++;
+            return _json({...session(1), 'identityGeneration': generation});
+          });
+          addTearDown(transport.close);
+          await expectLater(
+            transport.sessionInfo(),
+            throwsA(
+              isA<TransportException>().having(
+                (error) => error.code,
+                'code',
+                'invalid_response',
+              ),
+            ),
+          );
+          expect(requests, 1);
+        }
+      },
+    );
+  });
+
   group('endpoint security', () {
     test('requires HTTPS except opted-in exact loopback hosts', () {
       for (final url in [

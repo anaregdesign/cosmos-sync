@@ -1,4 +1,4 @@
-"""Negative tests for the physical app fixture's device and network boundary."""
+"""Negative tests for exact physical/emulator fixture and network boundaries."""
 import argparse
 import json
 from pathlib import Path
@@ -59,6 +59,43 @@ class AndroidAppBoundaryTest(unittest.TestCase):
         with patch.object(smoke, "private_android_identity", return_value="private-device"):
             with patch.object(smoke, "invoke", return_value=self.result(json.dumps([device]))):
                 self.assertEqual(smoke.android_target(self.arguments(), "flutter"), ("private-device", device))
+
+    def test_emulator_mode_never_selects_a_physical_or_ambiguous_target(self):
+        base = {"id": "emulator-5556", "emulator": True, "isSupported": True,
+                "targetPlatform": "android-arm64"}
+        rows = ([dict(base, emulator=False)], [dict(base, emulator="true")],
+                [dict(base, targetPlatform="ios")], [dict(base, id="emulator-5558")],
+                [base, base], [dict(base, isSupported=False)], {"devices": [base]}, [None])
+        for devices in rows:
+            with self.subTest(devices=devices):
+                with patch.object(smoke, "private_android_identity", return_value="emulator-5556"):
+                    with patch.object(smoke, "invoke", return_value=self.result(json.dumps(devices))):
+                        with self.assertRaises(smoke.ValidationError):
+                            smoke.android_target(self.arguments(), "flutter", emulator=True)
+
+    def test_exact_supported_emulator_is_distinct_from_physical_scope(self):
+        device = {"id": "emulator-5556", "emulator": True, "isSupported": True,
+                  "targetPlatform": "android-arm64"}
+        with patch.object(smoke, "private_android_identity", return_value="emulator-5556"):
+            with patch.object(smoke, "invoke", return_value=self.result(json.dumps([device]))):
+                self.assertEqual(smoke.android_target(self.arguments(), "flutter", emulator=True),
+                                 ("emulator-5556", device))
+                with self.assertRaises(smoke.ValidationError):
+                    smoke.android_target(self.arguments(), "flutter")
+
+    def test_emulator_mode_retains_install_and_private_evidence_gates(self):
+        with patch.object(smoke, "invoke") as invoke, patch.object(smoke, "private_android_identity") as read:
+            with self.assertRaises(smoke.ValidationError):
+                smoke.android_target(argparse.Namespace(authorize_install=False), "flutter", emulator=True)
+            invoke.assert_not_called()
+            read.assert_not_called()
+        args = self.arguments()
+        args.output = str(Path(__file__).resolve().parents[1] / "README.md")
+        with patch.object(smoke, "private_android_identity", return_value="emulator-5556"):
+            with patch.object(smoke, "invoke") as invoke:
+                with self.assertRaises(smoke.ValidationError):
+                    smoke.android_target(args, "flutter", emulator=True)
+                invoke.assert_not_called()
 
     def test_forward_endpoint_rejects_credentials_external_hosts_and_extra_url_parts(self):
         for url in ("https://127.0.0.1:1234", "http://localhost:1234", "http://example.com:1234",

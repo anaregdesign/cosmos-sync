@@ -9,41 +9,71 @@ class SessionInfo {
     required this.principalId,
     required this.permissionVersion,
     this.scopeMode = SyncScopeMode.user,
-  });
+    this.identityGeneration,
+    this.identityId,
+  }) : assert((identityGeneration == null) == (identityId == null)),
+       assert(
+         identityGeneration == null ||
+             identityGeneration >= 1 &&
+                 identityGeneration <= maximumIdentityGeneration,
+       );
+
+  static const maximumIdentityGeneration = 10000;
 
   factory SessionInfo.fromJson(
     Map<String, Object?> json, {
     bool allowLegacy = false,
-  }) => SessionInfo(
-    scopeId: json['scopeId'] as String,
-    principalId: allowLegacy
-        ? (json['principalId'] as String? ?? 'legacy-unverified')
-        : json['principalId'] as String,
-    permissionVersion: json['permissionVersion'] as String,
-    scopeMode: SyncScopeMode.values.byName(
-      allowLegacy
-          ? (json['scopeMode'] as String? ?? 'user')
-          : json['scopeMode'] as String,
-    ),
-  );
+  }) {
+    final generation = json['identityGeneration'];
+    final identity = json['identityId'];
+    if ((json.containsKey('identityGeneration') ||
+            json.containsKey('identityId')) &&
+        (generation is! int ||
+            generation < 1 ||
+            generation > maximumIdentityGeneration ||
+            identity is! String ||
+            !RegExp(r'^[0-9a-f]{64}$').hasMatch(identity))) {
+      throw const FormatException('Invalid server-verified identity binding.');
+    }
+    return SessionInfo(
+      scopeId: json['scopeId'] as String,
+      principalId: allowLegacy
+          ? (json['principalId'] as String? ?? 'legacy-unverified')
+          : json['principalId'] as String,
+      permissionVersion: json['permissionVersion'] as String,
+      scopeMode: SyncScopeMode.values.byName(
+        allowLegacy
+            ? (json['scopeMode'] as String? ?? 'user')
+            : json['scopeMode'] as String,
+      ),
+      identityGeneration: generation as int?,
+      identityId: identity as String?,
+    );
+  }
 
   final String scopeId;
   final String principalId;
   final String permissionVersion;
   final SyncScopeMode scopeMode;
+  final int? identityGeneration;
+  final String? identityId;
 
   Map<String, Object?> toJson() => {
     'scopeId': scopeId,
     'principalId': principalId,
     'permissionVersion': permissionVersion,
     'scopeMode': scopeMode.name,
+    if (identityGeneration != null) 'identityGeneration': identityGeneration,
+    if (identityId != null) 'identityId': identityId,
   };
 
   bool sameScope(SessionInfo other) =>
       scopeId == other.scopeId &&
       principalId == other.principalId &&
       permissionVersion == other.permissionVersion &&
-      scopeMode == other.scopeMode;
+      scopeMode == other.scopeMode &&
+      identityGeneration == other.identityGeneration &&
+      identityId == other.identityId;
 }
 
 /// A confirmed document or retained server deletion tombstone.

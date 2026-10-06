@@ -154,16 +154,21 @@ func (s *Server) cors(w http.ResponseWriter, r *http.Request) bool {
 	}
 	method := r.Header.Get("Access-Control-Request-Method")
 	validRoute := ((r.URL.Path == "/v1/session" || r.URL.Path == "/v1/sync" || r.URL.Path == "/v1/events" || r.URL.Path == "/v1/snapshot") && method == http.MethodGet) || (r.URL.Path == "/v1/mutations" && method == http.MethodPost)
-	if s.builtinAuthorization() {
+	if s.managedAuthorization() {
 		validRoute = validRoute || (r.URL.Path == "/v1/account" && method == http.MethodGet) || (r.URL.Path == "/v1/scopes" && method == http.MethodPost)
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/scopes/"), "/")
 		validRoute = validRoute || (len(parts) == 2 && accountIDPattern.MatchString(parts[0]) && parts[1] == "members" && (method == http.MethodGet || method == http.MethodPost))
+	}
+	if s.directory != nil {
+		validRoute = validRoute || (method == http.MethodGet && (r.URL.Path == "/v1/identity/capabilities" || r.URL.Path == "/v1/identities")) ||
+			(method == http.MethodPost && (r.URL.Path == "/v1/identity/challenges" || r.URL.Path == "/v1/identity/register" ||
+				r.URL.Path == "/v1/identities/link" || r.URL.Path == "/v1/identities/unlink"))
 	}
 	if !validRoute {
 		s.writeError(w, protocolError(403, "preflight_forbidden"))
 		return false
 	}
-	headers := []string{"Authorization", "Content-Type", ScopeHeader, PermissionHeader, PrincipalHeader, ScopeModeHeader, SessionHeader, "Last-Event-ID"}
+	headers := []string{"Authorization", "Content-Type", ScopeHeader, PermissionHeader, PrincipalHeader, ScopeModeHeader, IdentityGenerationHeader, IdentityHeader, SessionHeader, "Last-Event-ID"}
 	for _, requested := range strings.Split(r.Header.Get("Access-Control-Request-Headers"), ",") {
 		if strings.TrimSpace(requested) == "" {
 			continue

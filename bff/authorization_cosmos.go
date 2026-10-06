@@ -26,9 +26,10 @@ type authorizationSessionsKey struct{}
 // opaque Cosmos tokens cannot be ordered by choosing one chain over another.
 // Tokens never cross partition or leave the BFF.
 type authorizationSessions struct {
-	mu       sync.Mutex
-	tokens   map[string]string
-	observed map[string]observedAuthorizationPolicy
+	mu        sync.Mutex
+	tokens    map[string]string
+	observed  map[string]observedAuthorizationPolicy
+	directory *observedIdentityDirectory
 }
 
 // Remember only a security high-water mark, never a cached permission answer.
@@ -146,18 +147,33 @@ func (s *CosmosStore) authorizationAccount(ctx context.Context, accountID string
 	if item == nil && policy == nil {
 		return nil, nil
 	}
-	if item == nil || item.ID != authorizationAccountItemID || item.ScopeID != scopeID || item.Kind != "account" || item.Account == nil || item.Account.Identity.Issuer == "" || len(item.Account.Identity.Issuer) > 2048 || item.Account.Identity.Subject == "" || len(item.Account.Identity.Subject) > 512 || item.Account.AccountID != accountID || item.Account.Account != identityAccount(item.Account.Identity) || policy == nil || policy.Mode != "user" || policy.OwnerAccountID != accountID {
+	if item == nil || item.ID != authorizationAccountItemID || item.ScopeID != scopeID || item.Kind != "account" ||
+		item.Account == nil || !validAccountRecord(*item.Account, accountID) || !validPersonalPolicy(policy, accountID) {
 		return nil, protocolError(503, "authorization_store_unavailable")
 	}
 	return item.Account, nil
 }
 
 func (s *CosmosStore) EnsureAccount(ctx context.Context, identity AccountIdentity) (Account, error) {
-	ctx = withAuthorizationSessions(ctx)
-	if identity.Issuer == "" || len(identity.Issuer) > 2048 || identity.Subject == "" || len(identity.Subject) > 512 {
+	if !validAccountIdentity(identity) {
 		return Account{}, protocolError(400, "invalid_authorization_request")
 	}
-	account := identityAccount(identity)
+	return s.ensureAuthorizationAccount(ctx, accountRecord{Account: identityAccount(identity), Identity: identity})
+}
+
+func (s *CosmosStore) ensureDirectoryAccount(ctx context.Context, account directoryAccount) (Account, error) {
+	if !validDirectoryAccount(account) {
+		return Account{}, protocolError(400, "invalid_authorization_request")
+	}
+	return s.ensureAuthorizationAccount(ctx, accountRecord{Account: account.Account, DirectoryVersion: directoryAccountVersion})
+}
+
+func (s *CosmosStore) ensureAuthorizationAccount(ctx context.Context, record accountRecord) (Account, error) {
+	ctx = withAuthorizationSessions(ctx)
+	if !validAccountRecord(record, record.AccountID) {
+		return Account{}, protocolError(400, "invalid_authorization_request")
+	}
+	account := record.Account
 	for attempt := 0; attempt < 12; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return Account{}, err
@@ -167,15 +183,20 @@ func (s *CosmosStore) EnsureAccount(ctx context.Context, identity AccountIdentit
 			return Account{}, err
 		}
 		if existing != nil {
-			if existing.Identity != identity {
+			if *existing != record {
 				return Account{}, protocolError(503, "authorization_store_unavailable")
 			}
 			return account, nil
 		}
-		record := &accountRecord{Account: account, Identity: identity}
 		policy := newAuthorizationPolicy(account.PersonalScopeID, account.AccountID, "user")
-		accountBody, _ := encodeJSON(storedItem{ID: authorizationAccountItemID, ScopeID: account.PersonalScopeID, Kind: "account", Account: record})
-		policyBody, _ := encodeJSON(storedItem{ID: authorizationPolicyItemID, ScopeID: account.PersonalScopeID, Kind: "authorization", Policy: policy})
+		accountBody, err := encodeJSON(storedItem{ID: authorizationAccountItemID, ScopeID: account.PersonalScopeID, Kind: "account", Account: &record})
+		if err != nil {
+			return Account{}, protocolError(503, "authorization_store_unavailable")
+		}
+		policyBody, err := encodeJSON(storedItem{ID: authorizationPolicyItemID, ScopeID: account.PersonalScopeID, Kind: "authorization", Policy: policy})
+		if err != nil {
+			return Account{}, protocolError(503, "authorization_store_unavailable")
+		}
 		batch := s.container.NewTransactionalBatch(azcosmos.NewPartitionKeyString(account.PersonalScopeID))
 		batch.CreateItem(accountBody, nil)
 		batch.CreateItem(policyBody, nil)
@@ -191,7 +212,7 @@ func (s *CosmosStore) EnsureAccount(ctx context.Context, identity AccountIdentit
 		if err != nil {
 			return Account{}, err
 		}
-		if verified == nil || verified.Identity != identity {
+		if verified == nil || *verified != record {
 			return Account{}, protocolError(503, "authorization_store_unavailable")
 		}
 		return account, nil

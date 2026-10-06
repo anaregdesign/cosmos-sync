@@ -25,20 +25,54 @@ func (s *MemoryStore) EnsureAccount(ctx context.Context, identity AccountIdentit
 	if err := ctx.Err(); err != nil {
 		return Account{}, err
 	}
-	if identity.Issuer == "" || identity.Subject == "" || len(identity.Issuer) > 2048 || len(identity.Subject) > 512 {
+	if !validAccountIdentity(identity) {
+		return Account{}, protocolError(400, "invalid_authorization_request")
+	}
+	return s.ensureAuthorizationAccount(ctx, accountRecord{Account: identityAccount(identity), Identity: identity})
+}
+
+func (s *MemoryStore) ensureDirectoryAccount(ctx context.Context, account directoryAccount) (Account, error) {
+	if !validDirectoryAccount(account) {
+		return Account{}, protocolError(400, "invalid_authorization_request")
+	}
+	return s.ensureAuthorizationAccount(ctx, accountRecord{Account: account.Account, DirectoryVersion: directoryAccountVersion})
+}
+
+// Called with s.mu held.
+func (s *MemoryStore) authorizationAccount(accountID string) (*accountRecord, error) {
+	record, exists := s.accounts[accountID]
+	policy := s.policies[personalScopeID(accountID)]
+	if !exists && policy == nil {
+		return nil, nil
+	}
+	if !exists || !validAccountRecord(record, accountID) || !validPersonalPolicy(policy, accountID) {
+		return nil, protocolError(503, "authorization_store_unavailable")
+	}
+	return &record, nil
+}
+
+func (s *MemoryStore) ensureAuthorizationAccount(ctx context.Context, record accountRecord) (Account, error) {
+	if err := ctx.Err(); err != nil {
+		return Account{}, err
+	}
+	if !validAccountRecord(record, record.AccountID) {
 		return Account{}, protocolError(400, "invalid_authorization_request")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.initializeAuthorization()
-	account := identityAccount(identity)
-	if record, exists := s.accounts[account.AccountID]; exists {
-		if record.Identity != identity || record.Account != account || !validAuthorizationPolicy(s.policies[account.PersonalScopeID], account.PersonalScopeID) {
+	account := record.Account
+	existing, err := s.authorizationAccount(account.AccountID)
+	if err != nil {
+		return Account{}, err
+	}
+	if existing != nil {
+		if *existing != record {
 			return Account{}, protocolError(503, "authorization_store_unavailable")
 		}
 		return account, nil
 	}
-	s.accounts[account.AccountID] = accountRecord{Account: account, Identity: identity}
+	s.accounts[account.AccountID] = record
 	s.policies[account.PersonalScopeID] = newAuthorizationPolicy(account.PersonalScopeID, account.AccountID, "user")
 	return account, nil
 }
@@ -71,7 +105,11 @@ func (s *MemoryStore) CreateSharedScope(ctx context.Context, accountID, operatio
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.initializeAuthorization()
-	if _, exists := s.accounts[accountID]; !exists {
+	account, err := s.authorizationAccount(accountID)
+	if err != nil {
+		return SharedScope{}, err
+	}
+	if account == nil {
 		return SharedScope{}, protocolError(404, "account_not_found")
 	}
 	id := sharedScopeID(accountID, operationID)
@@ -116,7 +154,11 @@ func (s *MemoryStore) ChangeMembership(ctx context.Context, scopeID, actor strin
 		result.Members = append([]ScopeMember{}, result.Members...)
 		return result, nil
 	}
-	if _, exists := s.accounts[change.AccountID]; !exists {
+	account, err := s.authorizationAccount(change.AccountID)
+	if err != nil {
+		return SharedScope{}, err
+	}
+	if account == nil {
 		return SharedScope{}, protocolError(404, "account_not_found")
 	}
 	updated, audit, err := applyMembership(policy, actor, change)

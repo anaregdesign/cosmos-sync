@@ -18,7 +18,8 @@ import (
 // AuthorizationOptions explicitly selects a new namespace. Legacy grants and
 // data are never implicitly adopted by an account's first authenticated request.
 type AuthorizationOptions struct {
-	Mode string `json:"mode"`
+	Mode      string                    `json:"mode"`
+	Directory *IdentityDirectoryOptions `json:"directory,omitempty"`
 }
 
 const maxAuthorizationMembers = 128
@@ -39,7 +40,8 @@ type Account struct {
 
 type accountRecord struct {
 	Account
-	Identity AccountIdentity `json:"identity"`
+	Identity         AccountIdentity `json:"identity"`
+	DirectoryVersion string          `json:"directoryVersion,omitempty"`
 }
 
 type ScopeMember struct {
@@ -93,6 +95,47 @@ type AuthorizationStore interface {
 	LoadAuthorizationPolicy(context.Context, string) (*AuthorizationPolicy, error)
 	LoadAuthorizationPolicyAt(context.Context, string, string) (*AuthorizationPolicy, error)
 	ChangeMembership(context.Context, string, string, MembershipChange) (SharedScope, error)
+}
+
+type directoryAuthorizationStore interface {
+	AuthorizationStore
+	ensureDirectoryAccount(context.Context, directoryAccount) (Account, error)
+}
+
+const directoryAccountVersion = "identity-directory-v1"
+
+func validAccountIdentity(identity AccountIdentity) bool {
+	return identity.Issuer != "" && len(identity.Issuer) <= 2048 && identity.Subject != "" && len(identity.Subject) <= 512
+}
+
+func validAccountRecord(record accountRecord, accountID string) bool {
+	if !accountIDPattern.MatchString(accountID) || record.Account != (Account{accountID, personalScopeID(accountID)}) {
+		return false
+	}
+	if record.DirectoryVersion == directoryAccountVersion {
+		return record.Identity == (AccountIdentity{})
+	}
+	return record.DirectoryVersion == "" && validAccountIdentity(record.Identity) && record.Account == identityAccount(record.Identity)
+}
+
+func validDirectoryAccount(account directoryAccount) bool {
+	if !validAccountRecord(accountRecord{Account: account.Account, DirectoryVersion: directoryAccountVersion}, account.AccountID) ||
+		account.Generation < 1 || account.Generation > maxIdentityGeneration ||
+		len(account.IdentityIDs) == 0 || len(account.IdentityIDs) > maxAccountIdentities {
+		return false
+	}
+	seen := make(map[string]bool, len(account.IdentityIDs))
+	for _, id := range account.IdentityIDs {
+		if !accountIDPattern.MatchString(id) || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return true
+}
+
+func validPersonalPolicy(policy *AuthorizationPolicy, accountID string) bool {
+	return validAuthorizationPolicy(policy, personalScopeID(accountID)) && policy.Mode == "user" && policy.OwnerAccountID == accountID
 }
 
 func namespacedID(parts ...string) string {
@@ -237,11 +280,17 @@ func cloneAuthorizationPolicy(policy *AuthorizationPolicy) *AuthorizationPolicy 
 
 func (s *Server) builtinAuthorization() bool { return s.config.Authorization.Mode == "builtin" }
 
+func (s *Server) managedAuthorization() bool { return s.builtinAuthorization() || s.directory != nil }
+
 func (s *Server) authorizeBuiltin(ctx context.Context, identity AccountIdentity, mode, scopeID, dataMinimum string) (Scope, error) {
 	account, err := s.authorization.EnsureAccount(ctx, identity)
 	if err != nil {
 		return Scope{}, err
 	}
+	return s.authorizeAccountPolicy(ctx, account, mode, scopeID, dataMinimum)
+}
+
+func (s *Server) authorizeAccountPolicy(ctx context.Context, account Account, mode, scopeID, dataMinimum string) (Scope, error) {
 	if mode == "user" {
 		if scopeID != "" && scopeID != account.PersonalScopeID {
 			return Scope{}, protocolError(403, "forbidden")
@@ -269,25 +318,41 @@ func (s *Server) serveAuthorization(w http.ResponseWriter, r *http.Request, toke
 	if path != "/v1/account" && path != "/v1/scopes" && !strings.HasPrefix(path, "/v1/scopes/") {
 		return false
 	}
-	if !s.builtinAuthorization() {
+	if !s.managedAuthorization() {
 		s.writeError(w, protocolError(404, "not_found"))
 		return true
 	}
-	identity, _, err := s.verifyAccessIdentity(r.Context(), token)
+	var account Account
+	var identity AccountIdentity
+	var directoryAccount directoryAccount
+	var err error
+	if s.directory != nil {
+		var session directorySession
+		directoryAccount, session, err = s.directory.resolve(r.Context(), token)
+		if err == nil {
+			err = checkDirectoryRequestBinding(r, session)
+		}
+		account = directoryAccount.Account
+	} else {
+		identity, _, err = s.verifyAccessIdentity(r.Context(), token)
+		account = identityAccount(identity)
+		if err == nil && r.Header.Get(PrincipalHeader) != "" && r.Header.Get(PrincipalHeader) != account.AccountID {
+			err = protocolError(403, "session_mismatch")
+		}
+	}
 	if err != nil {
 		s.writeError(w, err)
-		return true
-	}
-	account := identityAccount(identity)
-	if asserted := r.Header.Get(PrincipalHeader); asserted != "" && asserted != account.AccountID {
-		s.writeError(w, protocolError(403, "session_mismatch"))
 		return true
 	}
 	if !s.controls.allowPrincipal(account.AccountID) {
 		s.writeError(w, &ProtocolError{Status: 429, Code: "rate_limit", RetryAfter: "1"})
 		return true
 	}
-	account, err = s.authorization.EnsureAccount(r.Context(), identity)
+	if s.directory != nil {
+		account, err = s.directory.authorization.ensureDirectoryAccount(r.Context(), directoryAccount)
+	} else {
+		account, err = s.authorization.EnsureAccount(r.Context(), identity)
+	}
 	if err != nil {
 		s.writeError(w, err)
 		return true
@@ -364,8 +429,5 @@ func (s *Server) reauthorizeScope(ctx context.Context, token string, previous Sc
 	if err != nil {
 		return err
 	}
-	if current.ID != previous.ID || current.PrincipalID != previous.PrincipalID || current.PermissionVersion != previous.PermissionVersion || !current.CanRead {
-		return protocolError(403, "forbidden")
-	}
-	return nil
+	return checkScopeBinding(current, previous)
 }

@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:flutter/foundation.dart';
 
-import 'native_oidc.dart';
+import 'native_oidc.dart'
+    if (dart.library.js_interop) 'web_oidc.dart'
+    as platform;
 import 'oidc.dart';
 
 export 'oidc.dart';
@@ -14,6 +17,7 @@ enum AuthSessionState {
   signedOut,
   authorizing,
   refreshing,
+  provingIdentity,
   ready,
   signingOut,
   error,
@@ -26,8 +30,8 @@ class AuthSessionController extends ChangeNotifier {
     OidcClient? oidc,
     RefreshTokenStore? tokenStore,
     DateTime Function()? clock,
-  }) : _oidc = oidc ?? NativeOidcClient(),
-       _store = tokenStore ?? NativeRefreshTokenStore(),
+  }) : _oidc = oidc ?? platform.createOidcClient(),
+       _store = tokenStore ?? platform.createTokenStore(),
        _clock = clock ?? DateTime.now;
 
   final OidcClient _oidc;
@@ -44,10 +48,12 @@ class AuthSessionController extends ChangeNotifier {
   bool _restoredSession = false;
   bool _disposed = false;
   int _generation = 0;
+  int _proofGeneration = 0;
   Future<void> _storeTail = Future<void>.value();
   Future<void>? _restoreFlight;
   Future<void>? _signInFlight;
   Future<String>? _refreshFlight;
+  Future<FreshIdentityProof>? _proofFlight;
 
   OidcConfig? get config => _config;
   AuthSessionState get state => _state;
@@ -56,13 +62,16 @@ class AuthSessionController extends ChangeNotifier {
   bool get hasStoredSession =>
       _credentialSessionId != null && _refreshToken != null;
   bool get restoredSession => _restoredSession;
+  bool get supportsCredentialRestore => _oidc is! MemoryOidcClient;
   String? get credentialSessionId => _credentialSessionId;
+  bool get supportsFreshIdentityProof => _oidc is FreshOidcClient;
 
   void configure(OidcConfig config) {
     _checkDisposed();
     if (_signInFlight != null ||
         _restoreFlight != null ||
         _refreshFlight != null ||
+        _proofFlight != null ||
         isSignedIn ||
         _state == AuthSessionState.signingOut) {
       throw const AuthException(
@@ -85,7 +94,8 @@ class AuthSessionController extends ChangeNotifier {
     if (_state != AuthSessionState.signedOut ||
         _restoreFlight != null ||
         _signInFlight != null ||
-        _refreshFlight != null) {
+        _refreshFlight != null ||
+        _proofFlight != null) {
       return Future.error(
         const AuthException(
           'auth_busy',
@@ -118,6 +128,11 @@ class AuthSessionController extends ChangeNotifier {
 
   Future<void> _performRestore(OidcConfig config, int generation) async {
     try {
+      if (_oidc is MemoryOidcClient) {
+        await _clearCredentials();
+        _ensureCurrent(generation);
+        return;
+      }
       final value = await _queuedStore(_store.read);
       _ensureCurrent(generation);
       if (value == null) {
@@ -133,7 +148,7 @@ class AuthSessionController extends ChangeNotifier {
             r'^[A-Za-z0-9_-]{32}$',
           ).hasMatch(decoded['credentialSessionId'] as String) ||
           (decoded['idToken'] != null && decoded['idToken'] is! String)) {
-        await _queuedStore(_store.clear);
+        await _clearCredentials();
         _ensureCurrent(generation);
         return;
       }
@@ -146,7 +161,7 @@ class AuthSessionController extends ChangeNotifier {
       _ensureCurrent(generation);
       _forgetCredentials();
       if (error is FormatException) {
-        await _queuedStore(_store.clear);
+        await _clearCredentials();
         _ensureCurrent(generation);
         _setState(AuthSessionState.signedOut);
         return;
@@ -167,6 +182,7 @@ class AuthSessionController extends ChangeNotifier {
         : configured.forBrokerProvider(provider);
     if (_signInFlight != null ||
         _restoreFlight != null ||
+        _proofFlight != null ||
         _state == AuthSessionState.signingOut) {
       return Future.error(
         const AuthException(
@@ -204,7 +220,7 @@ class AuthSessionController extends ChangeNotifier {
   Future<void> _performSignIn(OidcConfig config, int generation) async {
     try {
       // An interrupted account switch must never restore the prior credentials.
-      await _queuedStore(_store.clear);
+      await _clearCredentials();
       _ensureCurrent(generation);
       final tokens = await _oidc.signIn(config);
       _ensureCurrent(generation);
@@ -219,6 +235,21 @@ class AuthSessionController extends ChangeNotifier {
     } catch (error) {
       if (!_isCurrent(generation)) {
         throw const AuthException('cancelled', 'Sign-in was cancelled.');
+      }
+      if (_oidc is MemoryOidcClient) {
+        try {
+          await _clearCredentials();
+        } catch (_) {
+          _ensureCurrent(generation);
+          _forgetCredentials();
+          final safe = const AuthException(
+            'storage_failed',
+            'Browser credentials could not be removed. Retry sign-out.',
+          );
+          _setState(AuthSessionState.error, safe);
+          throw safe;
+        }
+        _ensureCurrent(generation);
       }
       _forgetCredentials();
       if (error is OidcFailure && error.kind == OidcFailureKind.cancelled) {
@@ -236,8 +267,7 @@ class AuthSessionController extends ChangeNotifier {
     }
   }
 
-  /// Invalidates any late native callback; close the OS browser to dismiss it.
-  /// AppAuth does not expose portable programmatic browser dismissal.
+  /// Invalidates late callbacks; close the authentication browser to dismiss it.
   Future<void> cancelSignIn() async {
     _checkDisposed();
     if (_state != AuthSessionState.authorizing) {
@@ -247,7 +277,7 @@ class AuthSessionController extends ChangeNotifier {
     _forgetCredentials();
     _setState(AuthSessionState.signedOut);
     try {
-      await _queuedStore(_store.clear);
+      await _clearCredentials();
       _ensureCurrent(generation);
     } catch (_) {
       _ensureCurrent(generation);
@@ -263,7 +293,8 @@ class AuthSessionController extends ChangeNotifier {
   Future<String> accessToken() {
     final config = _requireConfig();
     if (_state == AuthSessionState.authorizing ||
-        _state == AuthSessionState.signingOut) {
+        _state == AuthSessionState.signingOut ||
+        _proofFlight != null) {
       return Future.error(
         const AuthException(
           'auth_busy',
@@ -286,7 +317,7 @@ class AuthSessionController extends ChangeNotifier {
     if (_refreshFlight != null) {
       return _refreshFlight!;
     }
-    if (_refreshToken == null) {
+    if (_refreshToken == null && _oidc is! MemoryOidcClient) {
       _forgetCredentials();
       final safe = const AuthException(
         'sign_in_required',
@@ -296,7 +327,7 @@ class AuthSessionController extends ChangeNotifier {
       return Future.error(safe);
     }
     final generation = _generation;
-    final refreshToken = _refreshToken!;
+    final refreshToken = _refreshToken;
     final binding = _credentialSessionId!;
     // A refreshing listener can ask for a token before _performRefresh returns.
     final completion = Completer<String>();
@@ -321,16 +352,175 @@ class AuthSessionController extends ChangeNotifier {
     return future;
   }
 
+  Future<FreshIdentityProof> freshIdentityProof(IdentityChallenge challenge) {
+    final config = _requireConfig();
+    final client = _oidc;
+    if (client is! FreshOidcClient) {
+      return Future.error(
+        const AuthException(
+          'identity_proof_unavailable',
+          'This authentication adapter cannot obtain a fresh identity proof.',
+        ),
+      );
+    }
+    if (!isSignedIn ||
+        _proofFlight != null ||
+        _signInFlight != null ||
+        _restoreFlight != null ||
+        _refreshFlight != null ||
+        _state == AuthSessionState.signingOut) {
+      return Future.error(
+        const AuthException(
+          'auth_busy',
+          'Finish authentication before requesting an identity proof.',
+        ),
+      );
+    }
+    if (!challenge.target.matchesClient(
+          config.issuer,
+          config.clientId,
+          config.redirectUrl,
+        ) ||
+        !challenge.expiresAt.isAfter(_clock().toUtc())) {
+      return Future.error(
+        const AuthException(
+          'invalid_identity_challenge',
+          'The challenge is expired or does not match this configured client.',
+        ),
+      );
+    }
+    final generation = _generation;
+    final proofGeneration = ++_proofGeneration;
+    final completion = Completer<FreshIdentityProof>();
+    final future = completion.future;
+    _proofFlight = future;
+    _setState(AuthSessionState.provingIdentity);
+    unawaited(
+      _performIdentityProof(
+        client,
+        config,
+        challenge,
+        generation,
+        proofGeneration,
+      ).then<void>(
+        (proof) {
+          if (identical(_proofFlight, future)) _proofFlight = null;
+          if (_isProofCurrent(generation, proofGeneration)) {
+            _setState(AuthSessionState.ready);
+          }
+          completion.complete(proof);
+        },
+        onError: (Object error, StackTrace stack) {
+          if (identical(_proofFlight, future)) _proofFlight = null;
+          if (_isProofCurrent(generation, proofGeneration)) {
+            _setState(
+              AuthSessionState.ready,
+              error is AuthException
+                  ? error
+                  : const AuthException(
+                      'identity_proof_failed',
+                      'Identity authentication failed. No proof was submitted.',
+                    ),
+            );
+          }
+          completion.completeError(error, stack);
+        },
+      ),
+    );
+    return future;
+  }
+
+  Future<FreshIdentityProof> _performIdentityProof(
+    FreshOidcClient client,
+    OidcConfig config,
+    IdentityChallenge challenge,
+    int generation,
+    int proofGeneration,
+  ) async {
+    try {
+      _ensureProofCurrent(generation, proofGeneration);
+      final proof = await client.freshIdentityProof(
+        config,
+        challenge.challenge,
+      );
+      _ensureProofCurrent(generation, proofGeneration);
+      if (!challenge.expiresAt.isAfter(_clock().toUtc())) {
+        throw const AuthException(
+          'invalid_identity_challenge',
+          'The challenge expired. Start a new online operation.',
+        );
+      }
+      return proof;
+    } catch (error) {
+      _ensureProofCurrent(generation, proofGeneration);
+      if (error is AuthException) rethrow;
+      throw error is OidcFailure && error.kind == OidcFailureKind.cancelled
+          ? const AuthException(
+              'cancelled',
+              'Identity authentication was cancelled.',
+            )
+          : const AuthException(
+              'identity_proof_failed',
+              'Identity authentication failed. No proof was submitted.',
+            );
+    }
+  }
+
+  /// Invalidates late proof callbacks without replacing the signed-in session.
+  /// Native AppAuth's system browser must also be dismissed by the user.
+  Future<void> cancelIdentityProof() async {
+    _checkDisposed();
+    if (_proofFlight == null) return;
+    _proofGeneration++;
+    final generation = _generation;
+    _setState(isSignedIn ? AuthSessionState.ready : AuthSessionState.signedOut);
+    final client = _oidc;
+    if (client is CancellableFreshOidcClient) {
+      try {
+        await client.cancelIdentityProof();
+        _ensureCurrent(generation);
+      } catch (_) {
+        _ensureCurrent(generation);
+        final safe = const AuthException(
+          'identity_cancel_failed',
+          'Proof cancellation needs a retry. Close the authentication window.',
+        );
+        _setState(AuthSessionState.ready, safe);
+        throw safe;
+      }
+    }
+  }
+
+  bool _isProofCurrent(int generation, int proofGeneration) =>
+      _isCurrent(generation) && proofGeneration == _proofGeneration;
+
+  void _ensureProofCurrent(int generation, int proofGeneration) {
+    if (!_isProofCurrent(generation, proofGeneration)) {
+      throw const AuthException(
+        'cancelled',
+        'Identity authentication was cancelled.',
+      );
+    }
+  }
+
   Future<String> _performRefresh(
     OidcConfig config,
     int generation,
-    String refreshToken,
+    String? refreshToken,
     String binding,
   ) async {
     try {
       _setState(AuthSessionState.refreshing);
       _ensureCurrent(generation);
-      final tokens = await _oidc.refresh(config, refreshToken);
+      final OidcTokens tokens;
+      final client = _oidc;
+      if (refreshToken != null) {
+        tokens = await client.refresh(config, refreshToken);
+      } else if (client is MemoryOidcClient) {
+        tokens = await client.refreshCurrent(config);
+      } else {
+        throw const OidcFailure(OidcFailureKind.interactionRequired);
+      }
       _ensureCurrent(generation);
       _validateTokens(tokens, config);
       final next = OidcTokens(
@@ -370,7 +560,7 @@ class AuthSessionController extends ChangeNotifier {
               );
         _setState(AuthSessionState.signedOut, safe);
         try {
-          await _queuedStore(_store.clear);
+          await _clearCredentials();
         } catch (_) {
           _ensureCurrent(generation);
           final storageError = const AuthException(
@@ -402,10 +592,11 @@ class AuthSessionController extends ChangeNotifier {
     final config = _config;
     final hint = _idToken;
     final generation = ++_generation;
+    _proofGeneration++;
     _forgetCredentials();
     _setState(AuthSessionState.signingOut);
     try {
-      await _queuedStore(_store.clear);
+      await _clearCredentials();
       _ensureCurrent(generation);
     } catch (error) {
       _ensureCurrent(generation);
@@ -443,6 +634,12 @@ class AuthSessionController extends ChangeNotifier {
     String? idToken,
     String binding,
   ) {
+    if (_oidc is MemoryOidcClient && _nonEmpty(refreshToken)) {
+      throw const AuthException(
+        'invalid_token_response',
+        'Browser refresh credentials must remain inside the provider SDK.',
+      );
+    }
     if (!_nonEmpty(refreshToken)) {
       return _queuedStore(_store.clear);
     }
@@ -506,6 +703,12 @@ class AuthSessionController extends ChangeNotifier {
     return result;
   }
 
+  Future<void> _clearCredentials() async {
+    await _queuedStore(_store.clear);
+    final client = _oidc;
+    if (client is MemoryOidcClient) await client.clearSession();
+  }
+
   OidcConfig _requireConfig() {
     _checkDisposed();
     return _config ??
@@ -542,9 +745,31 @@ class AuthSessionController extends ChangeNotifier {
 
   static bool _nonEmpty(Object? value) => value is String && value.isNotEmpty;
 
+  /// Native app close preserves its secure restore record. Browser close also
+  /// invalidates late callbacks and releases the SDK's in-memory credentials.
+  Future<void> close() async {
+    if (_disposed) return;
+    if (_oidc is MemoryOidcClient) {
+      _generation++;
+      _forgetCredentials();
+      try {
+        await _clearCredentials();
+      } catch (_) {
+        final safe = const AuthException(
+          'storage_failed',
+          'Browser credentials could not be removed. Retry closing the session.',
+        );
+        _setState(AuthSessionState.error, safe);
+        throw safe;
+      }
+    }
+    dispose();
+  }
+
   @override
   void dispose() {
     _generation++;
+    _proofGeneration++;
     _disposed = true;
     _forgetCredentials();
     super.dispose();

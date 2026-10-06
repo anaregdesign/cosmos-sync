@@ -50,7 +50,7 @@ func main() {
 	} else {
 		log.Fatal("storage must be cosmos or memory")
 	}
-	handler, err := syncbff.NewServer(cfg, store, verifier)
+	handler, err := syncbff.NewServerContext(ctx, cfg, store, verifier)
 	if err != nil {
 		log.Fatal(err)
 	}

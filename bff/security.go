@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,8 @@ const PermissionHeader = "X-Cosmos-Sync-Permission"
 const SessionHeader = "X-Cosmos-Sync-Session"
 const PrincipalHeader = "X-Cosmos-Sync-Principal"
 const ScopeModeHeader = "X-Cosmos-Sync-Scope-Mode"
+const IdentityGenerationHeader = "X-Cosmos-Sync-Identity-Generation"
+const IdentityHeader = "X-Cosmos-Sync-Identity"
 
 type OIDCConfig struct {
 	Issuer           string   `json:"issuer"`
@@ -41,12 +44,14 @@ type Grant struct {
 	ScopeMode         string `json:"scopeMode"`
 }
 type Scope struct {
-	ID                string `json:"scopeId"`
-	PermissionVersion string `json:"permissionVersion"`
-	PrincipalID       string `json:"principalId"`
-	ScopeMode         string `json:"scopeMode"`
-	CanRead           bool   `json:"-"`
-	CanWrite          bool   `json:"-"`
+	ID                 string `json:"scopeId"`
+	PermissionVersion  string `json:"permissionVersion"`
+	PrincipalID        string `json:"principalId"`
+	ScopeMode          string `json:"scopeMode"`
+	IdentityGeneration int64  `json:"identityGeneration,omitempty"`
+	IdentityID         string `json:"identityId,omitempty"`
+	CanRead            bool   `json:"-"`
+	CanWrite           bool   `json:"-"`
 }
 type Config struct {
 	Listen          string               `json:"listen"`
@@ -130,12 +135,28 @@ func (s *Server) authorizeSelectedAt(ctx context.Context, token, mode, scopeID, 
 	if mode == "" {
 		mode = "user"
 	}
-	if s.builtinAuthorization() {
+	if s.managedAuthorization() {
 		if mode != "user" && mode != "shared" {
 			return Scope{}, protocolError(400, "invalid_scope_mode")
 		}
 	} else if mode != "user" && mode != "tenant" {
 		return Scope{}, protocolError(400, "invalid_scope_mode")
+	}
+	if s.directory != nil {
+		account, session, err := s.directory.resolve(ctx, token)
+		if err != nil {
+			return Scope{}, err
+		}
+		initialized, err := s.directory.authorization.ensureDirectoryAccount(ctx, account)
+		if err != nil {
+			return Scope{}, err
+		}
+		scope, err := s.authorizeAccountPolicy(ctx, initialized, mode, scopeID, dataMinimum)
+		if err != nil {
+			return Scope{}, err
+		}
+		scope.IdentityGeneration, scope.IdentityID = session.Generation, session.IdentityID
+		return scope, nil
 	}
 	identity, tenant, err := s.verifyAccessIdentity(ctx, token)
 	if err != nil {
@@ -188,14 +209,28 @@ func (s *Server) authorizeSelectedAt(ctx context.Context, token, mode, scopeID, 
 	return Scope{ID: derivedScopeID, PrincipalID: principal, ScopeMode: mode, PermissionVersion: match.PermissionVersion, CanRead: match.CanRead, CanWrite: match.CanWrite}, nil
 }
 
+type verifiedAccessPrincipal struct {
+	Identity  AccountIdentity
+	TenantID  string
+	ObjectID  string
+	ClientID  string
+	Version   string
+	ExpiresAt time.Time
+}
+
 func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (AccountIdentity, string, error) {
+	principal, err := s.verifyAccessPrincipal(ctx, token)
+	return principal.Identity, principal.TenantID, err
+}
+
+func (s *Server) verifyAccessPrincipal(ctx context.Context, token string) (verifiedAccessPrincipal, error) {
 	verified, err := s.verifier.Verify(ctx, token)
 	if err != nil {
-		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+		return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 	}
 	var claims map[string]json.RawMessage
 	if verified.Claims(&claims) != nil {
-		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+		return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 	}
 	claim := func(name string) string { var value string; _ = json.Unmarshal(claims[name], &value); return value }
 	// Client admission is an additional restriction on an already verified API
@@ -204,7 +239,7 @@ func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (Accoun
 	if len(s.config.OIDC.AllowedClientIDs) != 0 {
 		var clientID string
 		if json.Unmarshal(claims["azp"], &clientID) != nil {
-			return AccountIdentity{}, "", protocolError(403, "forbidden")
+			return verifiedAccessPrincipal{}, protocolError(403, "forbidden")
 		}
 		allowed := false
 		for _, configuredID := range s.config.OIDC.AllowedClientIDs {
@@ -214,21 +249,21 @@ func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (Accoun
 			}
 		}
 		if !allowed {
-			return AccountIdentity{}, "", protocolError(403, "forbidden")
+			return verifiedAccessPrincipal{}, protocolError(403, "forbidden")
 		}
 	}
 	var nbf json.Number
 	if value, ok := claims["nbf"]; ok {
 		if json.Unmarshal(value, &nbf) != nil {
-			return AccountIdentity{}, "", protocolError(401, "unauthorized")
+			return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 		}
 		seconds, err := nbf.Int64()
 		if err != nil || seconds > time.Now().Unix() {
-			return AccountIdentity{}, "", protocolError(401, "unauthorized")
+			return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 		}
 	}
 	if s.config.OIDC.TokenUse != "" && claim("token_use") != s.config.OIDC.TokenUse {
-		return AccountIdentity{}, "", protocolError(401, "unauthorized")
+		return verifiedAccessPrincipal{}, protocolError(401, "unauthorized")
 	}
 	// API-only audience plus required scope distinguish access JWTs from ID JWTs.
 	allowed := false
@@ -239,21 +274,26 @@ func (s *Server) verifyAccessIdentity(ctx context.Context, token string) (Accoun
 	}
 	tenant, subject := claim(s.config.OIDC.TenantClaim), verified.Subject
 	if !allowed || subject == "" || len(subject) > 512 || len(verified.Issuer) > 2048 {
-		return AccountIdentity{}, "", protocolError(403, "forbidden")
+		return verifiedAccessPrincipal{}, protocolError(403, "forbidden")
 	}
-	return AccountIdentity{Issuer: verified.Issuer, Subject: subject}, tenant, nil
+	return verifiedAccessPrincipal{
+		Identity: AccountIdentity{Issuer: verified.Issuer, Subject: subject}, TenantID: tenant,
+		ObjectID: claim("oid"), ClientID: claim("azp"), Version: claim("ver"), ExpiresAt: verified.Expiry,
+	}, nil
 }
 
 type signedContext struct {
-	Version    int    `json:"v"`
-	Scope      string `json:"scope"`
-	Permission string `json:"permission"`
-	Sequence   int64  `json:"sequence,omitempty"`
-	Token      string `json:"token,omitempty"`
-	Principal  string `json:"principal"`
-	Mode       string `json:"mode"`
-	Epoch      string `json:"epoch"`
-	Offset     int    `json:"offset,omitempty"`
+	Version            int    `json:"v"`
+	Scope              string `json:"scope"`
+	Permission         string `json:"permission"`
+	Sequence           int64  `json:"sequence,omitempty"`
+	Token              string `json:"token,omitempty"`
+	Principal          string `json:"principal"`
+	Mode               string `json:"mode"`
+	IdentityGeneration int64  `json:"identityGeneration,omitempty"`
+	IdentityID         string `json:"identityId,omitempty"`
+	Epoch              string `json:"epoch"`
+	Offset             int    `json:"offset,omitempty"`
 }
 
 func (s *Server) sign(purpose string, value signedContext) string {
@@ -283,12 +323,51 @@ func (s *Server) verifyContext(purpose, context string, scope Scope) (signedCont
 		return invalid()
 	}
 	var value signedContext
-	if json.Unmarshal(data, &value) != nil || value.Version != 1 || value.Scope != scope.ID || value.Permission != scope.PermissionVersion || value.Principal != scope.PrincipalID || value.Mode != scope.ScopeMode || value.Epoch != s.config.HistoryEpoch {
+	if json.Unmarshal(data, &value) != nil || value.Version != 1 || value.Scope != scope.ID || value.Permission != scope.PermissionVersion || value.Principal != scope.PrincipalID || value.Mode != scope.ScopeMode || value.Epoch != s.config.HistoryEpoch ||
+		!scope.validIdentityBinding() || value.IdentityGeneration != scope.IdentityGeneration || value.IdentityID != scope.IdentityID {
 		return invalid()
 	}
 	return value, nil
 }
 
 func (s *Server) boundContext(scope Scope, sequence int64) signedContext {
-	return signedContext{Version: 1, Scope: scope.ID, Permission: scope.PermissionVersion, Principal: scope.PrincipalID, Mode: scope.ScopeMode, Epoch: s.config.HistoryEpoch, Sequence: sequence}
+	return signedContext{Version: 1, Scope: scope.ID, Permission: scope.PermissionVersion, Principal: scope.PrincipalID, Mode: scope.ScopeMode,
+		IdentityGeneration: scope.IdentityGeneration, IdentityID: scope.IdentityID, Epoch: s.config.HistoryEpoch, Sequence: sequence}
+}
+
+func (scope Scope) validIdentityBinding() bool {
+	return scope.IdentityGeneration == 0 && scope.IdentityID == "" ||
+		scope.IdentityGeneration >= 1 && scope.IdentityGeneration <= maxIdentityGeneration && accountIDPattern.MatchString(scope.IdentityID)
+}
+
+func (scope Scope) sameBinding(other Scope) bool {
+	return scope.ID == other.ID && scope.PrincipalID == other.PrincipalID && scope.ScopeMode == other.ScopeMode &&
+		scope.PermissionVersion == other.PermissionVersion && scope.IdentityGeneration == other.IdentityGeneration && scope.IdentityID == other.IdentityID
+}
+
+func checkScopeBinding(current, previous Scope) error {
+	if current.IdentityGeneration != previous.IdentityGeneration || current.IdentityID != previous.IdentityID {
+		return protocolError(401, "identity_session_invalid")
+	}
+	if !current.sameBinding(previous) || !current.CanRead {
+		return protocolError(403, "forbidden")
+	}
+	return nil
+}
+
+func checkIdentityRequestBinding(request *http.Request, scope Scope) error {
+	if !scope.validIdentityBinding() {
+		return protocolError(503, "identity_directory_unavailable")
+	}
+	if scope.IdentityGeneration == 0 {
+		if len(request.Header.Values(IdentityGenerationHeader)) != 0 || len(request.Header.Values(IdentityHeader)) != 0 {
+			return protocolError(401, "identity_session_invalid")
+		}
+		return nil
+	}
+	if len(request.Header.Values(IdentityGenerationHeader)) != 1 || len(request.Header.Values(IdentityHeader)) != 1 ||
+		request.Header.Get(IdentityGenerationHeader) != strconv.FormatInt(scope.IdentityGeneration, 10) || request.Header.Get(IdentityHeader) != scope.IdentityID {
+		return protocolError(401, "identity_session_invalid")
+	}
+	return nil
 }

@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:flutter/foundation.dart';
 
-import '../data/workspace_repository.dart';
+import '../data/workspace_repository_base.dart';
 
 /// UI state for one verified workspace. The SDK owns queue/cursor semantics.
 class WorkspaceController extends ChangeNotifier {
   WorkspaceController({required this.repository});
 
-  final WorkspaceRepository repository;
+  final WorkspaceRepositoryBase repository;
   CosmosSyncClient? _client;
   StreamSubscription<List<DocumentSnapshot>>? _documentsSubscription;
   StreamSubscription<SyncStatus>? _statusSubscription;
@@ -21,6 +21,7 @@ class WorkspaceController extends ChangeNotifier {
   bool connected = false;
   bool _closed = false;
   String? message;
+  TransportException? lastTransportError;
   SessionInfo? get session => _client?.session;
   bool get bootstrapComplete => _client?.cache.bootstrapIncomplete == false;
   bool get canEdit => connected && !busy && status?.paused != true;
@@ -30,6 +31,7 @@ class WorkspaceController extends ChangeNotifier {
     required String credentialBinding,
     required Future<String> Function() tokenProvider,
     bool offline = false,
+    SessionInfo? expectedIdentity,
   }) => _command(() async {
     await disconnect();
     this.offline = offline;
@@ -38,6 +40,7 @@ class WorkspaceController extends ChangeNotifier {
       credentialBinding: credentialBinding,
       tokenProvider: tokenProvider,
       offline: offline,
+      expectedIdentity: expectedIdentity,
     );
     _client = client;
     connected = true;
@@ -151,10 +154,12 @@ class WorkspaceController extends ChangeNotifier {
     if (busy || _closed) return;
     busy = true;
     message = null;
+    lastTransportError = null;
     _refresh();
     try {
       await action();
     } catch (error) {
+      if (error is TransportException) lastTransportError = error;
       // Never surface raw provider URLs, headers or token responses.
       message = error is TransportException
           ? 'BFF request failed (${error.statusCode ?? 'network'}, ${error.code}). '

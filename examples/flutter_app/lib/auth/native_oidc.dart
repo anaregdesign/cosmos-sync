@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -5,10 +8,18 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'oidc.dart';
 
 /// AppAuth owns state, nonce, PKCE verifier and the external browser callback.
-class NativeOidcClient implements OidcClient {
-  NativeOidcClient({FlutterAppAuth? appAuth})
-    : _appAuth = appAuth ?? const FlutterAppAuth();
+OidcClient createOidcClient() => NativeOidcClient();
+RefreshTokenStore createTokenStore() => NativeRefreshTokenStore();
+String defaultRedirectUrl() =>
+    'com.anaregdesign.cosmossync://auth/oauthredirect';
+
+class NativeOidcClient implements FreshOidcClient {
+  NativeOidcClient({
+    FlutterAppAuth? appAuth,
+    this.freshInteractiveSession = false,
+  }) : _appAuth = appAuth ?? const FlutterAppAuth();
   final FlutterAppAuth _appAuth;
+  final bool freshInteractiveSession;
 
   void _checkPlatform() {
     if (kIsWeb ||
@@ -27,6 +38,12 @@ class NativeOidcClient implements OidcClient {
   @override
   Future<OidcTokens> signIn(OidcConfig config) async {
     _checkPlatform();
+    if (config.browser) {
+      throw const AuthException(
+        'invalid_config',
+        'Use a registered native callback for native authentication.',
+      );
+    }
     return _run(
       () async => _convert(
         await _appAuth.authorizeAndExchangeCode(
@@ -38,8 +55,16 @@ class NativeOidcClient implements OidcClient {
             additionalParameters: config.brokerProvider == null
                 ? null
                 : {'domain_hint': config.brokerProvider!.name},
+            promptValues: freshInteractiveSession ? const ['login'] : null,
             allowInsecureConnections: false,
-            externalUserAgent: ExternalUserAgent.asWebAuthenticationSession,
+            externalUserAgent:
+                freshInteractiveSession &&
+                    {
+                      TargetPlatform.iOS,
+                      TargetPlatform.macOS,
+                    }.contains(defaultTargetPlatform)
+                ? ExternalUserAgent.ephemeralAsWebAuthenticationSession
+                : ExternalUserAgent.asWebAuthenticationSession,
           ),
         ),
       ),
@@ -63,6 +88,51 @@ class NativeOidcClient implements OidcClient {
         ),
       ),
     );
+  }
+
+  @override
+  Future<FreshIdentityProof> freshIdentityProof(
+    OidcConfig config,
+    String nonce,
+  ) async {
+    _checkPlatform();
+    validateIdentityNonce(nonce);
+    if (config.browser) {
+      throw const AuthException(
+        'invalid_config',
+        'Use the approved native callback for identity authentication.',
+      );
+    }
+    final response = await _run(
+      () => _appAuth.authorizeAndExchangeCode(
+        AuthorizationTokenRequest(
+          config.clientId,
+          config.redirectUrl,
+          discoveryUrl: config.discoveryUrl,
+          scopes: config.scopes,
+          nonce: nonce,
+          promptValues: const ['login'],
+          additionalParameters: {
+            'max_age': '0',
+            'claims': jsonEncode({
+              'id_token': {
+                'auth_time': {'essential': true},
+              },
+            }),
+          },
+          allowInsecureConnections: false,
+          externalUserAgent:
+              {
+                TargetPlatform.iOS,
+                TargetPlatform.macOS,
+              }.contains(defaultTargetPlatform)
+              ? ExternalUserAgent.ephemeralAsWebAuthenticationSession
+              : ExternalUserAgent.asWebAuthenticationSession,
+        ),
+      ),
+    );
+    // Refresh credentials from this separate exchange are never retained.
+    return freshProofFromTokens(_convert(response), config);
   }
 
   @override

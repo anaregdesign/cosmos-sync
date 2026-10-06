@@ -7,12 +7,20 @@ not establish an actual Apple/Google login. The
 [social-login design](social-auth.md) covers their additional trust boundary,
 identity linking, platform requirements and acceptance work.
 
+The owner removed actual Google/Apple provider setup and live connections from
+this delivery on 2026-10-04. Their buttons remain disabled; typed local adapter
+and security tests stay in scope. Development now uses simulators, with physical
+Android verification last. Actual CIAM/common OIDC and linking safety remain
+separate from the successful workforce Entra login.
+
 The runnable sample is `examples/flutter_app`. Its native login adapter uses
 `flutter_appauth` 12.1.0 on Android, iOS and macOS. AppAuth performs Authorization
 Code with PKCE and validates its browser callback/state/nonce; Android uses an
 external browser/Custom Tab and Apple platforms use the native web authentication
 session. The sample sends no client secret and never uses an embedded WebView.
-The plugin does not provide web, Linux or Windows login in this sample.
+The plugin does not provide Web, Linux or Windows login. The ordinary app now
+selects a separate [MSAL Browser adapter](web-auth.md) for its Web target;
+native callbacks and secure restore are not reused in the browser.
 See [AppAuth Android](https://github.com/openid/AppAuth-Android),
 [AppAuth iOS/macOS](https://github.com/openid/AppAuth-iOS) and the
 [Flutter adapter](https://pub.dev/packages/flutter_appauth).
@@ -62,11 +70,30 @@ The preference is excluded from stored credential/cache bindings: every new
 interactive login still generates a new credential session and requires a
 BFF-verified owner before cache access. Buttons do not enforce which identity
 provider the broker ultimately used. There is no direct Google/Apple SDK, custom
-token exchange, account linking or provider-ID-token admission in this adapter.
+token exchange or provider-ID-token admission in the ordinary navigation flow.
+Explicit directory account actions use the separate fresh-proof path below.
 The current consumer deployment has not yet configured or verified either
 provider, so its capability flags must remain disabled.
 
-## Apple and Google deployment and remaining work
+## Isolated fresh identity proofs
+
+Only verified directory capabilities enable account registration/link/unlink.
+AppAuth proof requests use the BFF nonce, `prompt=login`, `max_age=0` and essential
+`auth_time`; Apple platforms request an ephemeral authentication session where
+supported. These parameters request fresh authentication, not proof that the
+actual broker issued the required signed claims. The BFF verifies API/ID tokens
+and broker binding independently; missing/noninteger freshness is rejected.
+
+The proof's API/ID pair remains ephemeral and its refresh credential is discarded.
+It never replaces the primary access/refresh/logout-hint credentials or opaque
+cache binding. The shared UI separately confirms local pending-data disposal,
+drains/purges before the challenge and verifies the resulting BFF identity before
+reopening data. Cancellation invalidates late proof callbacks; native AppAuth has
+no supported programmatic system-browser cancellation, so the owner must also
+dismiss that window. An ambiguous submitted outcome requires explicit online
+sign-in, never replay. See [the directory contract](identity-directory.md).
+
+## Future Apple and Google deployment reference
 
 The first integration candidate is a consumer identity broker that federates
 Apple/Google login and issues an access token for the Cosmos Sync API. Microsoft
@@ -79,8 +106,12 @@ proof exchange is the alternative under review. This recommendation is a design
 proposal, not an enabled provider deployment. The selected dedicated CIAM tenant,
 two consumer app registrations and their service principals now exist, with
 API-only administrator consent and compatible public discovery/configuration
-readback. Google/Apple configuration, user-flow association and actual consumer
-login are still pending; see [the reproducible External ID setup](external-id-setup.md).
+readback. Actual Google/Apple configuration is not planned for this delivery.
+The approved workforce provider, one password-free customer profile and a
+sign-in-only flow are configured and read back. Anonymous navigation confirms
+the exact native application exposes that provider; selected-customer callback
+and signed API-JWT acceptance remain separate gates. See
+[the reproducible External ID setup](external-id-setup.md).
 
 An Apple/Google or broker **ID token** proves authentication to its intended
 relying party; it must not replace the API access token expected by existing
@@ -109,20 +140,23 @@ real provider/platform acceptance:
 - Stable accounts, linking, API sessions and cache policy: [#27](https://github.com/anaregdesign/cosmos-sync/issues/27).
 - Flutter provider adapters and platform matrix: [#28](https://github.com/anaregdesign/cosmos-sync/issues/28).
 - Automated attack/lifecycle regressions: [#29](https://github.com/anaregdesign/cosmos-sync/issues/29).
-- Owner-approved provider setup and actual platform acceptance: [#30](https://github.com/anaregdesign/cosmos-sync/issues/30).
+- Actual Google/Apple provider setup and acceptance: [#30](https://github.com/anaregdesign/cosmos-sync/issues/30), cancelled by the owner as not planned and no longer a prerequisite.
+- Final physical Android acceptance: [#20](https://github.com/anaregdesign/cosmos-sync/issues/20), deferred until simulator development is complete.
 
 Apple Developer/Google Cloud/broker registrations, signing or server credentials,
 new consent/scopes and paid resources require concrete owner approval before
 changes. The owner has already authorized the selected dedicated consumer
 tenant's necessary settings, and its native-to-API `AllPrincipals` consent for
 only `Cosmos.Sync` is verified. It adds no Graph data permissions or client
-preauthorization. Workforce consent/configuration remains separate. Google/Apple
-owning accounts and settings are the next external inputs. Current one-account
+preauthorization. Workforce consent/configuration remains separate. No Google/Apple
+owning account or credential input is requested for this delivery. Current one-account
 verification and unsigned iOS choices remain in
-force. The pure Dart SDK has Chromium cache coverage; the current native Flutter
-app has no Web login target. Cancellation/denial, reinstall/relogin, account
-switch/linking, refresh/revocation and offline-cache isolation need both automated
-coverage and explicitly recorded real-provider evidence on each claimed platform.
+force. The ordinary Flutter app now has a separate MSAL/IndexedDB Web target
+and actual signed-fixture Chromium lifecycle evidence, not live customer OIDC.
+Cancellation/denial, reinstall/relogin, account
+switch/linking, refresh/revocation and offline-cache isolation need automated
+coverage. Any claimed actual common-provider/platform result requires separate
+recorded evidence; Google/Apple live evidence is outside current scope.
 
 ## Register a public client and the API
 
@@ -133,9 +167,11 @@ app or BFF. No access, refresh or ID token should be pasted into an Issue.
 
 The existing workforce validation completed actual one-account macOS AppAuth
 PKCE, secure restore and provider refresh. The separate consumer CIAM setup has
-completed two apps/two service principals and API-only consent; only anonymous
-discovery and the actual Flutter constructor have passed there. It has no
-associated customer user flow or verified consumer login. Each BFF deployment
+completed two apps/two service principals, API-only consent and the approved
+one-human workforce federation/sign-in-only flow. Anonymous discovery, the
+actual Flutter constructor and exact application/provider navigation have
+passed. A native run using administrator SSO was rejected by the strict customer
+check; no verified selected-customer login is inferred from that run. Each BFF deployment
 pins one exact issuer and API audience; selecting the consumer configuration does
 not add workforce token acceptance or migrate workforce cache/data ownership.
 
@@ -253,14 +289,65 @@ offline unit/security regressions. They additionally cover typed provider
 request parameters, exact capability binding, hidden/default buttons,
 unavailable-provider rejection, cancellation/late callbacks and BFF-established
 cache ownership during a Google/Apple navigation switch. These use simulated
-provider and BFF responses; real provider registration/login and platform
-acceptance remain in #28 and #30. Existing regressions cover
+provider and BFF responses. Actual Google/Apple registration/login is cancelled
+in #30, not proven; native/browser development remains in #28 and final physical
+Android acceptance in #20. Existing regressions cover
 refresh concurrency/rotation and synchronous listener reentry, missing access
 tokens, cancellation during a secure
 write, late authorization/refresh completion after logout, config/account binding,
 provider logout failure and explicit secure-storage failure. These tests use
 injected OAuth and secure-store adapters; they are not evidence of a real provider
 login or hardware Keychain callback.
+
+The owner-assisted `tools/native_entra_auth.py` runner defaults to the original
+workforce receipts. `--input-dir <private-approved-directory>` selects a separate
+0600 owner/registration receipt without overwriting them. It accepts only the
+exact selected tenant's workforce issuer or tenant-ID-host CIAM issuer, native
+callback, separate native/API clients and API-only scope contract; the independent
+Go verifier checks the actual signed API credential and selected directory object.
+Relative input paths are made absolute before the Go subprocess changes directory.
+
+For intentional new login rather than shared browser SSO, its
+`--isolated-sign-in` flag requests `prompt=login` and the supported Apple
+ephemeral `ASWebAuthenticationSession` preference. Android keeps its ordinary
+supported user agent; no ephemeral support is inferred there. Normal production
+native defaults, secure configuration binding and refresh are unchanged.
+Isolation is a browser preference, not identity proof, recent-authentication
+attestation or provider revocation. The actual API JWT still must match the
+approved customer; a successful administrator SSO cannot substitute for it.
+
+For an attended physical Android run, use `--manual-start`. The test-only page
+waits for the owner to foreground Cosmos Sync and tap **Start Microsoft sign-in**.
+The button is disabled unless the app lifecycle is resumed and becomes single-use
+after the tap. No AppAuth request starts before that action; the resulting run
+also requires the fixed `owner_start_ready` stage alongside every ordinary
+callback/restore/refresh/signout stage. This changes no production adapter,
+authentication requirement, Android background-start policy or browser setting.
+Only manual mode enables device pointer propagation in the integration-test
+binding: Flutter live tests otherwise discard real touches even though
+`tester.tap` works. Live-binding regressions exercise the device event source,
+single-use input and the resumed-lifecycle requirement; automatic mode retains
+its normal input isolation.
+The 2026-10-05 automatic physical attempt reached the AppAuth request stage but
+Android logged a background-activity `BAL_BLOCK`, the owner saw no browser and
+the bounded run ended without either API token. Its owned reverse mapping was
+removed. It is failed evidence, not customer authentication or a provider denial.
+
+For the currently approved one-human CIAM validation, choose
+**Cosmos Sync approved workforce owner** on the initial customer login page
+before entering an account address. Use the original workforce account only on
+the resulting Microsoft workforce page. Directly entering the administrator's
+email on the initial CIAM page can select the separate administrative route.
+The account address is not evidence of which directory object was authenticated;
+the independent signed API-JWT owner check remains mandatory.
+
+The exact native tenant-ID-host request advertises the upstream federation
+callback on that same tenant-ID hostname. It has been added to the dedicated
+source application alongside the two original friendly-host callbacks and
+freshly read back. Do not repair this difference by relaxing issuer/discovery
+origin checks or adding wildcard returns. Microsoft security-information/MFA
+registration remains an owner operation; preserve Security defaults and
+Conditional Access. Ordinary-browser passkey success is not app acceptance.
 
 Before release the owner must supply the registration/consent/BFF configuration,
 sign in through the OS browser, and allow authorized physical devices to be

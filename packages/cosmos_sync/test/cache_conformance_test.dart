@@ -13,11 +13,14 @@ void main() {
   var now = DateTime.utc(2026, 10, 3);
   final clients = <CosmosSyncClient>[];
 
-  Future<CosmosSyncClient> open({TestTransport? transport}) async {
+  Future<CosmosSyncClient> open({
+    TestTransport? transport,
+    SessionInfo session = scope,
+  }) async {
     final client = await CosmosSyncClient.open(
       cache: await location.open(),
       transport: transport ?? TestTransport(server),
-      session: scope,
+      session: session,
       clock: () => now,
     );
     clients.add(client);
@@ -36,6 +39,86 @@ void main() {
     clients.clear();
     await location.cleanup();
   });
+
+  test('verified identity binding survives durable adapter reopen', () async {
+    final bound = SessionInfo(
+      scopeId: scope.scopeId,
+      principalId: scope.principalId,
+      permissionVersion: scope.permissionVersion,
+      scopeMode: scope.scopeMode,
+      identityGeneration: 1,
+      identityId: 'a' * 64,
+    );
+    server.session = bound;
+    server.externalPut('confirmed', {'text': 'verified'});
+    var client = await open(session: bound);
+    await client.sync();
+    final operation = await client.put('pending', {'text': 'offline'});
+    await client.close();
+    client = await open(session: bound);
+    expect(client.cache.session!.sameScope(bound), isTrue);
+    expect(client.cache.session!.identityGeneration, 1);
+    expect(client.cache.session!.identityId, 'a' * 64);
+    expect(client.get('confirmed')!.data!['text'], 'verified');
+    expect(client.pending.single.operationId, operation);
+    await client.flush();
+    expect(client.pending, isEmpty);
+  });
+
+  for (final change in ['generation', 'credential', 'binding removal']) {
+    test('identity $change purges before pending transmission', () async {
+      final original = SessionInfo(
+        scopeId: scope.scopeId,
+        principalId: scope.principalId,
+        permissionVersion: scope.permissionVersion,
+        scopeMode: scope.scopeMode,
+        identityGeneration: 1,
+        identityId: 'a' * 64,
+      );
+      server.session = original;
+      final transport = TestTransport(server);
+      final client = await open(transport: transport, session: original);
+      server.externalPut('confirmed', {'text': 'old context'});
+      await client.sync();
+      await client.put('pending', {'text': 'must not transmit'});
+      final waiting = client.waitForPendingWrites();
+      final expectation = expectLater(
+        waiting,
+        throwsA(
+          isA<PendingWritesException>().having(
+            (error) => error.reason,
+            'reason',
+            'authorization_changed',
+          ),
+        ),
+      );
+      server.session = SessionInfo(
+        scopeId: original.scopeId,
+        principalId: original.principalId,
+        permissionVersion: original.permissionVersion,
+        scopeMode: original.scopeMode,
+        identityGeneration: change == 'binding removal'
+            ? null
+            : change == 'generation'
+            ? 2
+            : 1,
+        identityId: change == 'binding removal'
+            ? null
+            : change == 'credential'
+            ? 'b' * 64
+            : original.identityId,
+      );
+      await expectLater(client.flush(), throwsStateError);
+      await expectation;
+      expect(transport.requests, isEmpty);
+      expect(client.status.paused, isTrue);
+      expect(client.get('confirmed'), isNull);
+      expect(client.get('pending'), isNull);
+      expect(client.pending, isEmpty);
+      expect(client.cache.cursor, isNull);
+      expect(client.cache.consistencyToken, isNull);
+    });
+  }
 
   test(
     'durable offline data and observed bases survive adapter reopen',

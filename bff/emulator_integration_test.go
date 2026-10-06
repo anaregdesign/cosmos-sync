@@ -194,6 +194,238 @@ func TestCosmosEmulatorIntegration(t *testing.T) {
 		}
 	}
 
+	t.Run("inactive identity core uses atomic durable single-partition storage", func(t *testing.T) {
+		signed := newDirectoryProofFixture(t)
+		fixture := newDirectoryFixture(t)
+		fixture.now, fixture.google, fixture.apple = signed.now, signed.target, signed.target
+		fixture.d, err = newIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{signed.target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture.d.now = func() time.Time { return fixture.now }
+		proof := func(raw, subject string) verifiedDirectoryProof {
+			value, err := signed.verifier.verify(ctx, signed.token(t, raw, map[string]any{"sub": subject}, nil, 0), raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return value
+		}
+		second, err := newIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{signed.target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		second.now = fixture.d.now
+		raw, err := fixture.d.begin(ctx, nil, "register", fixture.google, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		firstAccount, err := fixture.d.register(ctx, raw, proof(raw, "first-directory-owner"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err = second.begin(ctx, nil, "register", fixture.google, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		secondAccount, err := second.register(ctx, raw, proof(raw, "second-directory-owner"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		type linkAttempt struct {
+			d       *identityDirectory
+			session directorySession
+			raw     string
+			old     verifiedDirectoryProof
+			next    verifiedDirectoryProof
+		}
+		attempts := make([]linkAttempt, 2)
+		for i, account := range []directoryAccount{firstAccount, secondAccount} {
+			d := []*identityDirectory{fixture.d, second}[i]
+			session := fixture.session(account, 0)
+			raw, err := d.begin(ctx, &session, "link", fixture.apple, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			subject := []string{"first-directory-owner", "second-directory-owner"}[i]
+			attempts[i] = linkAttempt{d, session, raw, proof(raw, subject),
+				proof(raw, "contested-directory-identity")}
+		}
+		start, results := make(chan struct{}), make(chan error, 2)
+		for _, attempt := range attempts {
+			go func() {
+				<-start
+				_, err := attempt.d.change(ctx, attempt.session, attempt.raw, "link", attempt.old, attempt.next)
+				results <- err
+			}()
+		}
+		close(start)
+		successes := 0
+		for range attempts {
+			if err := <-results; err == nil {
+				successes++
+			} else {
+				assertCode(t, err, "identity_already_assigned")
+			}
+		}
+		fresh := cosmosIdentityDirectoryStore{newStore()}
+		state, version, err := fresh.loadIdentityDirectory(withAuthorizationSessions(ctx))
+		if err != nil || version == "" || !validIdentityDirectory(state) || successes != 1 ||
+			len(state.Accounts) != 2 || len(state.Bindings) != 3 || len(state.Audits) != 3 || len(state.Proofs) != 4 {
+			t.Fatalf("real storage lost atomic identity uniqueness: successes=%d err=%v", successes, err)
+		}
+		// The real TLS/JWKS identity is a signed local fixture, not a provider
+		// deployment; production still rejects this emulator's consistency.
+	})
+
+	t.Run("broker fingerprints survive independent SDK account lookup", func(t *testing.T) {
+		fixture := newBrokerProofFixture(t)
+		first, err := newBrokerIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{fixture.signed.target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := newBrokerIdentityDirectory(cosmosIdentityDirectoryStore{newStore()}, []identityProofTarget{fixture.signed.target})
+		if err != nil {
+			t.Fatal(err)
+		}
+		first.now = func() time.Time { return fixture.signed.now }
+		second.now = first.now
+		raw, err := first.begin(ctx, nil, "register", fixture.signed.target, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		access := fixture.access(t, nil, 0)
+		proof, err := fixture.verifier.verify(ctx, access, fixture.id(t, raw, nil, 0), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		account, err := first.register(ctx, raw, proof)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state, version, err := second.store.loadIdentityDirectory(withAuthorizationSessions(ctx))
+		if err != nil || version == "" || !validIdentityDirectory(state) {
+			t.Fatal("independent SDK reader lost broker directory state", err)
+		}
+		expected := state.Bindings[account.IdentityIDs[0]].Broker
+		if expected == nil || *expected != proof.BrokerBinding {
+			t.Fatal("real Cosmos serialization discarded exact expected broker binding")
+		}
+		resolved, session, err := fixture.verifier.resolve(ctx, access, second)
+		if err != nil || resolved.Account != account.Account || session.Generation != account.Generation ||
+			session.IdentityID != account.IdentityIDs[0] {
+			t.Fatal("independent SDK client failed exact persisted random-account resolution", err)
+		}
+		personalWriter, personalReader := newStore(), newStore()
+		if initialized, err := personalWriter.ensureDirectoryAccount(ctx, resolved); err != nil || initialized != account.Account {
+			t.Fatal("real directory account failed its separate atomic personal-policy initialization", err)
+		}
+		if initialized, err := personalReader.ensureDirectoryAccount(ctx, resolved); err != nil || initialized != account.Account {
+			t.Fatal("independent actual SDK client lost random-account provenance/personal policy", err)
+		}
+		retained, err := personalReader.authorizationAccount(withAuthorizationSessions(ctx), account.AccountID)
+		if err != nil || retained == nil || retained.DirectoryVersion != directoryAccountVersion || retained.Identity != (AccountIdentity{}) {
+			t.Fatal("random account metadata was implicitly converted to a hash-derived identity", err)
+		}
+		mutation := operation(930, "directory-personal", "put", 0, `{"value":"random-owned"}`)
+		mutation.PrincipalID, mutation.AuthorizationVersion = account.AccountID, "1"
+		document, dataSession := mutate(t, personalWriter, account.PersonalScopeID, mutation, "")
+		page, _, err := personalReader.Sync(ctx, account.PersonalScopeID, 0, 100, dataSession)
+		if err != nil || len(page.Changes) != 1 || page.Changes[0].ID != document.ID {
+			t.Fatal("stable random ownership failed the real numeric policy write/read boundary", err)
+		}
+		resolved.Generation++
+		if initialized, err := personalReader.ensureDirectoryAccount(ctx, resolved); err != nil || initialized != account.Account {
+			t.Fatal("identity generation reset or moved the persisted personal data partition", err)
+		}
+		shared, err := personalWriter.CreateSharedScope(ctx, account.AccountID, "cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+		if err != nil || shared.OwnerAccountID != account.AccountID {
+			t.Fatal("random-account provenance was rejected by real shared-policy creation", err)
+		}
+		fixture.profile["identities"].([]map[string]any)[0]["issuerAssignedId"] = brokerTestOther
+		_, _, err = fixture.verifier.resolve(ctx, access, second)
+		assertCode(t, err, "identity_binding_changed")
+		after, afterVersion, err := first.store.loadIdentityDirectory(withAuthorizationSessions(ctx))
+		if err != nil || afterVersion != version || !reflect.DeepEqual(state, after) {
+			t.Fatal("changed broker credential was silently persisted/adopted by ordinary API lookup", err)
+		}
+	})
+
+	t.Run("directory HTTP replicas preserve owned data and reject removed credentials", func(t *testing.T) {
+		first := startIdentityHTTPFixture(t, newBrokerProofFixture(t), newStore(), "http-emulator-v1")
+		second := startIdentityHTTPFixture(t, first.broker, newStore(), "http-emulator-v1")
+		first.addProfile(brokerTestOther, brokerProofSecondUser)
+		token, account, original := first.register(t, brokerTestObject)
+		first.request(t, token, "POST", "/v1/mutations", &original,
+			operation(940, "http-directory-owned", "put", 0, `{"value":"before-link"}`), 200)
+		initial := first.request(t, token, "GET", "/v1/sync", &original, nil, 200)
+		var cursor string
+		if json.Unmarshal(initial["cursor"], &cursor) != nil || cursor == "" {
+			t.Fatal("actual Cosmos HTTP response did not issue a signed cursor")
+		}
+		shared := identityHTTPDecode[SharedScope](t, first.request(t, token, "POST", "/v1/scopes", &original,
+			map[string]string{"operationId": "cccccccc-cccc-4ccc-8ccc-ccccccccccc1"}, 200))
+		raw := second.challenge(t, token, &original, "link", "", first.broker.signed.target.Callback)
+		otherToken := first.broker.access(t, map[string]any{"oid": brokerTestOther}, 0)
+		linked := identityHTTPDecode[identityAccountResponse](t, second.request(t, token, "POST", "/v1/identities/link", &original,
+			map[string]any{"challenge": raw,
+				"reauthentication": identityProofRequest{token, first.broker.id(t, raw, nil, 0)},
+				"identity":         identityProofRequest{otherToken, first.broker.id(t, raw, map[string]any{"oid": brokerTestOther}, 0)}}, 200))
+		if linked.Account != account.Account || linked.IdentityGeneration != 2 {
+			t.Fatal("independent actual Cosmos HTTP replica moved ownership or lost its generation")
+		}
+		first.request(t, token, "GET", "/v1/sync", &original, nil, 401)
+		secondary := identityHTTPDecode[Scope](t, first.request(t, otherToken, "GET", "/v1/session?scope=user", nil, nil, 200))
+		if secondary.ID != account.PersonalScopeID || secondary.PrincipalID != account.AccountID ||
+			secondary.PermissionVersion != "1" || secondary.IdentityGeneration != 2 {
+			t.Fatal("linked credential did not retain the numeric same-partition policy fence")
+		}
+		first.request(t, otherToken, "GET", "/v1/sync?cursor="+cursor, &secondary, nil, 410)
+		covered := first.request(t, otherToken, "GET", "/v1/sync", &secondary, nil, 200)
+		if !bytes.Contains(covered["changes"], []byte("before-link")) {
+			t.Fatal("linked credential lost the original actual Cosmos data")
+		}
+		first.request(t, otherToken, "POST", "/v1/mutations", &secondary,
+			operation(941, "http-directory-owned", "put", 1, `{"value":"after-link"}`), 200)
+		policy := identityHTTPDecode[SharedScope](t, first.request(t, otherToken, "GET", "/v1/scopes/"+shared.ScopeID+"/members", &secondary, nil, 200))
+		if policy.OwnerAccountID != account.AccountID || policy.ScopeID != shared.ScopeID || policy.Revision != 1 {
+			t.Fatal("identity generation changed actual shared policy ownership or revision")
+		}
+		primary := identityHTTPDecode[Scope](t, second.request(t, token, "GET", "/v1/session?scope=user", nil, nil, 200))
+		raw = second.challenge(t, token, &primary, "unlink", secondary.IdentityID, first.broker.signed.target.Callback)
+		retained := identityProofRequest{token, first.broker.id(t, raw, nil, 0)}
+		unlinked := identityHTTPDecode[identityAccountResponse](t, second.request(t, token, "POST", "/v1/identities/unlink", &primary,
+			map[string]any{"challenge": raw, "reauthentication": retained, "identity": retained}, 200))
+		if unlinked.Account != account.Account || unlinked.IdentityGeneration != 3 || len(unlinked.Identities) != 1 {
+			t.Fatal("actual HTTP unlink did not retain the original random account")
+		}
+		first.request(t, otherToken, "GET", "/v1/session?scope=user", nil, nil, 401)
+		first.request(t, otherToken, "POST", "/v1/mutations", &secondary,
+			operation(942, "http-directory-owned", "delete", 2, "null"), 401)
+		fresh := newStore()
+		state, version, err := (cosmosIdentityDirectoryStore{fresh}).loadIdentityDirectory(withAuthorizationSessions(ctx))
+		if err != nil || version == "" || !validIdentityDirectory(state) ||
+			state.Accounts[account.AccountID].Generation != 3 || state.Bindings[secondary.IdentityID].Active {
+			t.Fatal("independent SDK read lost the committed unlink/tombstone", err)
+		}
+		record, err := fresh.authorizationAccount(withAuthorizationSessions(ctx), account.AccountID)
+		if err != nil || record == nil || record.DirectoryVersion != directoryAccountVersion || record.Account != account.Account {
+			t.Fatal("HTTP lifecycle changed the independently persisted account provenance", err)
+		}
+		page, _, err := fresh.Sync(ctx, account.PersonalScopeID, 0, 100, "")
+		if err != nil || len(page.Changes) != 2 || page.Changes[1].Version != 2 || page.Changes[1].Deleted {
+			t.Fatal("removed HTTP credential wrote data or linking lost retained history", err)
+		}
+	})
+
+	t.Run("signed HTTP Dart lifecycle uses real Cosmos storage", func(t *testing.T) {
+		if os.Getenv("COSMOS_SYNC_IDENTITY_DART") != "1" {
+			t.Skip("explicit disposable Dart identity fixture not requested")
+		}
+		first := startIdentityHTTPFixture(t, newBrokerProofFixture(t), newStore(), "dart-http-emulator-v1")
+		second := startIdentityHTTPFixture(t, first.broker, newStore(), "dart-http-emulator-v1")
+		runDirectoryDartLifecycle(t, first, second)
+	})
+
 	t.Run("builtin durable account membership replay and revocation fence", func(t *testing.T) {
 		first, second := newStore(), newStore()
 		identity := AccountIdentity{Issuer: "https://builtin-emulator.test", Subject: "owner"}

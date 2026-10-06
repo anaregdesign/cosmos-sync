@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:cosmos_sync_example/auth/auth_session_controller.dart';
 import 'package:cosmos_sync_example/data/workspace_repository.dart';
+import 'package:cosmos_sync_example/data/settings_store_native.dart';
 import 'package:cosmos_sync_example/main.dart';
 import 'package:cosmos_sync_example/ui/app_controller.dart';
 import 'package:cosmos_sync_example/ui/workspace_controller.dart';
@@ -64,7 +65,9 @@ void main() {
                 transport(config.bffUri.toString(), provider),
           ),
         ),
-        settingsFile: File('${directory.path}/connection.json'),
+        settingsStore: FileSettingsStore(
+          File('${directory.path}/connection.json'),
+        ),
       );
       DocumentSnapshot ownDocument() =>
           app!.workspace.documents.firstWhere((item) => item.id == note);

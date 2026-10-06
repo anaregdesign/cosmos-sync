@@ -19,7 +19,7 @@ read/create/replace/query actions. No Entra group synchronization, external poli
 service, additional authorization database, client Cosmos credential or deployment
 administrator account is required. Memory storage implements the same policy
 model for development tests only. Legacy inline/file grants remain the default
-when `authorization.mode` is absent or `legacy`; combining builtin mode with
+when `authorization.mode` is absent or `legacy`; combining builtin/directory mode with
 nonempty grants or `grantsFile` fails startup.
 
 ## Small permission model
@@ -28,8 +28,8 @@ A verified issuer and subject register an internal account. The BFF derives the
 account ID from a namespaced hash of those two values and durably records that
 mapping. No email matching or client-selected account ID is involved. The issuer
 is limited to 2,048 bytes and subject to 512 bytes. An issuer/subject change means
-a different account; account linking and provider migration are not part of this
-preview.
+a different builtin account. This published behavior is not automatically
+converted into the separate opt-in directory account model below.
 
 Every account has one personal scope with an immutable owner and full read/write
 access. Its first trusted API request creates the account and personal policy in
@@ -43,6 +43,35 @@ and receive change hints; writers can additionally put/delete documents. Ownersh
 cannot be removed, transferred or assigned by a request. A member cannot promote
 itself or manage other members. There are no organization groups, invitations,
 field ACLs, policy language, account deletion or owner-transfer flows.
+
+## Opt-in broker-aware directory accounts
+
+The unpublished `authorization.mode:"directory"` source extension uses an
+explicitly registered random account rather than deriving ownership from a broker
+API `sub`. Independently verified API/ID proofs, fresh server nonce/authentication
+time and uncached trusted Graph credential-set reads establish its binding.
+Registration/link/unlink never use email, provider navigation or client partition
+claims. Link/unlink preserve personal/shared data ownership and increment the
+separate `identityGeneration`; `identityId` identifies the current active
+credential. The numeric same-data-partition membership version is unchanged.
+
+Only an exact approved CIAM issuer/public-client namespace and preconfigured
+secret-free reader are supported by this factory. Legacy/builtin configuration
+does not expose the capability or lifecycle routes. Ordinary directory lookup is
+read-only; it cannot register, repair, adopt a changed broker credential or migrate
+an old hash-derived account. Directory registration and personal account/policy
+initialization are separate transactions. A fresh verified online session may
+idempotently finish that exact account's personal initialization after an error.
+
+Management requests in directory mode require the verified account plus both
+identity assertions, but no selected data scope/mode/permission or Cosmos envelope.
+The same fixed-owner shared-policy APIs and limits apply. The application purges
+before explicit lifecycle changes and independently verifies the resulting
+personal identity before reopening a selected personal/shared cache. Ambiguous
+commits and active-credential removal require explicit online sign-in; recovery
+requires a remaining linked credential, not a replacement account or email merge.
+See [the complete configuration and limits](identity-directory.md) and
+[wire routes](protocol.md#directory-identity-lifecycle).
 
 ## Account and shared-scope APIs
 
@@ -107,7 +136,7 @@ revision as its generation; unrelated members keep their generations and caches.
 Removing a member retains a `none` tombstone. Readding it gets a later generation,
 so earlier headers, cursors and consistency envelopes cannot regain validity.
 
-A builtin document transaction includes an ETag-conditional replacement of the
+A builtin/directory document transaction includes an ETag-conditional replacement of the
 unchanged policy together with head, document, immutable journal and receipt.
 A membership change alters that ETag in the same partition. If revocation commits
 first, an already-authorized stale write cannot subsequently commit: its batch
@@ -140,6 +169,11 @@ across independent BFF replicas. A policy check rejects access after that replic
 observes the change. The conditional write fence remains effective against a
 stale policy read. There is also an unavoidable interval between a final check and
 physical response delivery; already received data cannot be retracted.
+
+Directory identity revocation is a different boundary: Graph, directory metadata
+and each data partition are not one transaction. An in-flight authorized write
+can commit between directory rechecks even when its old-session response is then
+denied. The membership-policy ETag fence does not make identity revocation global.
 
 The SDK purges its cache/outbox and pauses when it learns of 401/403 or a bound
 identity/permission mismatch. An offline device cannot learn revocation or erase
@@ -174,6 +208,14 @@ Keep the legacy configuration while planning an explicit, verified export/import
 and provider-account mapping. Separate caches by identity/mode/scope and require
 a fresh server session. Do not rewrite old partition keys, disable fences or
 copy grants from an unverified token to make a migration appear successful.
+
+Directory activation likewise does not adopt builtin/legacy accounts. Account
+deletion and migration have no self-service HTTP endpoint. Operator review must
+verify the exact owner without email matching, record actor/approval/time and
+the affected account/scopes, address immutable shared owners and preserved
+journal/receipt/ownership tombstones, and define cursor/epoch invalidation and
+explicit pending-write disposal. No such execution tool, secure-erasure promise
+or automatic repair is supplied by this preview.
 
 The local HTTP/security, official SDK wire and emulator suites validate this
 contract. Their results are recorded separately from actual hosted Azure tests;

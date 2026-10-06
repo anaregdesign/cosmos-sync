@@ -32,17 +32,18 @@ type CosmosStore struct {
 	retention retentionControls
 }
 type storedItem struct {
-	ID                     string                `json:"id"`
-	ScopeID                string                `json:"scopeId"`
-	Kind                   string                `json:"kind"`
-	Sequence               int64                 `json:"sequence,omitempty"`
-	Document               *Document             `json:"document,omitempty"`
-	RequestHash            string                `json:"requestHash,omitempty"`
-	EstimatedRetainedBytes int64                 `json:"estimatedRetainedBytes,omitempty"`
-	Account                *accountRecord        `json:"account,omitempty"`
-	Policy                 *AuthorizationPolicy  `json:"policy,omitempty"`
-	Audit                  *authorizationAudit   `json:"audit,omitempty"`
-	AuthorizationReceipt   *authorizationReceipt `json:"authorizationReceipt,omitempty"`
+	ID                     string                  `json:"id"`
+	ScopeID                string                  `json:"scopeId"`
+	Kind                   string                  `json:"kind"`
+	Sequence               int64                   `json:"sequence,omitempty"`
+	Document               *Document               `json:"document,omitempty"`
+	RequestHash            string                  `json:"requestHash,omitempty"`
+	EstimatedRetainedBytes int64                   `json:"estimatedRetainedBytes,omitempty"`
+	Account                *accountRecord          `json:"account,omitempty"`
+	Policy                 *AuthorizationPolicy    `json:"policy,omitempty"`
+	Audit                  *authorizationAudit     `json:"audit,omitempty"`
+	AuthorizationReceipt   *authorizationReceipt   `json:"authorizationReceipt,omitempty"`
+	IdentityDirectory      *identityDirectoryState `json:"identityDirectory,omitempty"`
 }
 
 func NewCosmosStore(ctx context.Context, c CosmosConfig) (*CosmosStore, error) {

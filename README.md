@@ -6,6 +6,10 @@ Native SQLite and Chromium IndexedDB store confirmed documents and a durable out
 
 Development is tracked by [epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). [Verification](docs/verification.md) reports actual results; owner-controlled distribution and live-cloud gates remain explicit.
 
+The [2026-10-06 delivery plan](.azure/deployment-plan.md) separates completed
+directory source from remaining deployment/tooling work and actual acceptance.
+It is a planning document, not approval to publish, deploy or operate a device.
+
 The product goal is a Firestore-like developer experience for the supported
 document subset: deploy the supplied BFF on Azure Container Apps, configure the
 identity provider and compatible Cosmos storage, then connect the Dart SDK for authenticated
@@ -16,21 +20,28 @@ resources, operator configuration and remaining acceptance work. Container Apps
 Terraform and its runbook are tracked in [#31](https://github.com/anaregdesign/cosmos-sync/issues/31);
 clean-checkout hosted onboarding is tracked in [#32](https://github.com/anaregdesign/cosmos-sync/issues/32).
 
-**Apple and Google are the intended practical end-user login providers.** The
-current Flutter adapter implements native OIDC/PKCE with a dedicated Entra API
-access-token validation path; Apple/Google login, account linking and provider
-acceptance are additional work, not delivered support. The [social-login design
+**Apple and Google remain intended future end-user login providers.** The
+current Flutter application implements native OIDC/PKCE and memory-only Web MSAL
+with a dedicated API-access-token path. Unpublished opt-in account lifecycle
+source is described below; actual Apple/Google login and provider acceptance are
+not delivered support. The [social-login design
 and roadmap](docs/social-auth.md) compares an API-token identity broker with
 native provider login followed by a backend session exchange. Raw Apple/Google
 ID tokens are not Cosmos Sync API credentials. BFF account and membership policy controls
 document access, and matching email addresses must never automatically merge
 accounts.
 
+On 2026-10-04 the owner removed actual Google/Apple connections, provider
+configuration and live-provider acceptance from this delivery. Development
+continues with simulators; physical Android verification is the final gate.
+Actual External ID fresh OIDC, hosted reader/Cosmos and final device acceptance
+remain separate unfinished work, not inferred from workforce login or fixtures.
+
 ## Layout and verification
 
 - `bff/`: Go service, official Azure SDK, security/atomicity tests and opt-in emulator integration.
 - `packages/cosmos_sync/`: native/browser SDK, cache/query/HTTP tests and examples.
-- `examples/flutter_app/`: normally runnable native Flutter sample with OIDC login, real BFF transport and document/offline/conflict UI. See its [setup guide](examples/flutter_app/README.md) and [native authentication](docs/native-auth.md).
+- `examples/flutter_app/`: normally runnable native/Web Flutter sample with OIDC login, real BFF transport and document/offline/conflict UI. See its [setup guide](examples/flutter_app/README.md) and [native authentication](docs/native-auth.md).
 - `examples/flutter_smoke/`: separate deterministic native platform integration fixture; its test-injected transport does not demonstrate a real provider login or live Azure connection.
 - `infra/terraform/azure-container-apps/`: pinned workload template, saved-plan deployment and mock checks; runtime acceptance stays separate from apply.
 - `infra/terraform/aca-validation-plan/`: private backend VNet/endpoint/DNS/Vault prerequisites; see the [retained topology and deploy sequence](docs/aca-validation-plan.md).
@@ -40,9 +51,10 @@ accounts.
 Use Go 1.26+ and Dart 3.12+; Flutter 3.44.6 is the measured native fixture baseline.
 
 The SDK is a pure Dart package usable from Flutter; it does not contain widgets.
-Flutter application code lives in `examples/flutter_app/lib/`. Configure the
-selected HTTPS BFF and native public OIDC client in that app. Credentials belong
-in the OS browser and native secure store, never source code or a pasted token.
+Flutter application code lives in `examples/flutter_app/lib/`. Configure the selected HTTPS BFF and public native/SPA OIDC client in that app.
+Native restore uses OS secure storage; Web credentials remain in memory.
+Credentials belong in the supported provider/browser flow, never source code or
+a pasted token.
 Actual provider/cloud/physical-device acceptance is tracked separately from the
 existing local signed-fixture and simulator evidence.
 
@@ -115,6 +127,18 @@ accepts its trusted HTTPS ingress boundary and Key Vault secret reference.
 Existing deployments can retain `config.example.json` and explicit legacy
 grants. That mode requires atomic grant distribution to every replica and is
 not automatically migrated to built-in ownership.
+
+The unpublished [directory extension](docs/identity-directory.md) is explicitly
+selected with [`config.directory.example.json`](bff/config.directory.example.json).
+It wires a secret-free trusted broker reader, explicit fresh-proof registration/
+link/unlink, stable random ownership, identity-bound sessions/cursors/caches and
+confirmation/recovery UI. Proofs never replace the main credentials; email and
+provider navigation never link accounts. The original published package/image and
+retained Azure deployment are unchanged. Actual customer nonce/authentication-time,
+MI/Graph and production capacity/recovery checks are required before deployment.
+The current Terraform workload template still selects builtin or legacy mode;
+directory activation needs a separately reviewed compatible image/configuration,
+not an unreviewed template apply.
 
 ```sh
 cd bff
@@ -194,7 +218,8 @@ for the exact settings, narrow IAM, immutable state/bootstrap workflow, saved
 workload plan, recovery and network cost estimate. The current owner authorized
 necessary minimal Azure/tenant setup and retention; resource apply does not
 substitute for runtime acceptance. Separate CIAM API/native registrations and
-API-only consent exist, while consumer flows and Google/Apple login are pending;
+API-only consent exist, while the consumer OIDC flow remains unverified.
+Actual Google/Apple setup and login are outside the current delivery scope;
 see [consumer identity setup](docs/external-id-setup.md).
 [Physical-device acceptance](docs/physical-devices.md)
 records the owner's unsigned iOS build choice: the build and simulator passed,

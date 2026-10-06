@@ -3,6 +3,8 @@ import 'package:cosmos_sync/cosmos_sync.dart';
 
 class TestServer {
   String principal = 'alice';
+  int? identityGeneration;
+  String? identityId;
   bool offline = false;
   bool revoked = false;
   bool capacityExceeded = false;
@@ -32,6 +34,8 @@ class TestTransport implements SyncTransport {
       scopeId: 'scope',
       principalId: server.principal,
       permissionVersion: '1',
+      identityGeneration: server.identityGeneration,
+      identityId: server.identityId,
     );
   }
 

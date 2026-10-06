@@ -80,3 +80,15 @@ cross-replica read-your-writes require the approved Azure verification gate.
 Reference: [Microsoft vNext emulator documentation](https://learn.microsoft.com/en-us/azure/cosmos-db/emulator-linux)
 lists ARM64, gateway API, batch, query pagination and health-probe support. It also
 states that request units are not implemented and custom indexes are a no-op.
+
+## Internal identity and broker persistence checkpoint
+
+The later suite adds one-partition directory contention and durable broker
+fingerprint checks; all nine subtests passed with the race detector in a fresh
+owned container. Independently signed local API/ID proofs and a strict local
+Graph response register a random account with its exact expected upstream
+binding. A separate actual SDK client reloads that binding and resolves the
+same account. A replaced upstream credential is denied without modifying the
+record or its ETag. These provider/Graph responses are fixtures, not actual
+customer login or hosted managed-identity execution. Production consistency
+guards, retained Azure resources and active HTTP authorization are unchanged.

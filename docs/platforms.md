@@ -32,6 +32,43 @@ the run. Native application background scheduling, encryption, production
 identity providers, physical devices, Linux and Windows require separate
 validation and are not inferred from these runs.
 
+### Ordinary Android application on an emulator
+
+For simulator-first development, the ordinary application's signed local
+HTTP/SQLite/secure-storage fixture supports a separate emulator target:
+
+```sh
+python3 tools/flutter_app_smoke.py --device android-emulator \
+  --device-id-file .cache/devices/owned-emulator.txt --authorize-install \
+  --output artifacts/android-emulator-app.json
+```
+
+Use a fresh ignored evidence path and an ignored `0600` file containing the exact
+ID of an already running, supported Android emulator created for this check.
+The runner rejects physical, unsupported, missing and ambiguous targets; it does
+not create/boot an emulator or fall back to a connected phone. It forwards only
+new exact loopback ports and removes only its own mappings. The receipt records
+`physical_device=false` and `emulator=true`; OIDC/cloud/OS process-death and system
+airplane-mode checks remain unperformed. Do not use this mode as a substitute
+for the owner's final physical Android gate.
+
+The 2026-10-04 simulator-first retry passed both the SDK fixture and this
+ordinary application fixture on a new Android 14 / API 34 arm64 emulator.
+The SDK reported `COSMOS_SYNC_NATIVE_PASS android` and `All tests passed`;
+the application receipt reported successful local Go HTTP, SQLite, native
+secure-storage and owned process/control/ADB cleanup. It records the dirty
+working tree based on `94d8d50`, not an exact post-commit run. The disposable
+emulator was stopped and its AVD registry/data removed; no physical device or
+owner AVD was selected.
+
+The first attempt failed before boot because the Homebrew `avdmanager` resolved
+an SDK root without the installed image. Environment variables alone did not
+correct that manager. Restoring the missing `cmdline-tools;latest` into Flutter's
+actual Android SDK root and using that root's exact `avdmanager` resolved the
+creation failure. The existing API 34 image and license acceptance were reused;
+no system image was reinstalled or new license accepted. Keep the failed attempt
+separate from the successful retry.
+
 ## Recorded results
 
 Runs on 2026-10-03 used Flutter 3.44.6 (`ee80f08bbf`), Dart 3.12.2,
@@ -58,7 +95,6 @@ fixture's lockfile records the resolved graph.
 uses the SDK's real Chromium suite separately; this fixture deliberately imports
 `dart:io` and is native only.
 
-
 The Android run used emulator 36.6.11.0, a new AVD with disposable user data and
 an installed Android 34 Google APIs arm64 image. Existing SDK license acceptance
 allowed Gradle to install required Android SDK Platform 35 during the build.
@@ -77,3 +113,29 @@ and its UI integration test executed successfully. The results above mean the
 native SQLite ABI, filesystem path and SDK scenario ran on the named platform;
 they do not prove an arbitrary production app, device backup policy, encrypted
 storage, suspended background sync or physical-device behavior.
+
+## Ordinary Flutter Web application
+
+`examples/flutter_app` now builds the same ordinary UI/controllers for Web with
+memory-only MSAL and IndexedDB/Web Locks. Native SQLite, secure storage and
+custom-scheme callbacks remain separate. Follow the
+[Web setup](web-auth.md), including the exact SPA redirect bridge and BFF origin.
+
+```sh
+python3 tools/flutter_web_smoke.py --output artifacts/flutter-web-fixture.json
+```
+
+Use a fresh ignored evidence path. This runner uses owned headless Chromium,
+actual signed Go HTTP/JWT validation and real IndexedDB. It separately observes
+a full document reload, then verifies retained exact pending operations, refusal
+to reopen offline before fresh BFF verification, online ACK and logout purge.
+Its test-only auth adapter is not production MSAL and cannot prove live CIAM,
+hosted Azure/Cosmos, physical devices or other browser support.
+
+The 2026-10-04 fourth attempt passed this actual Web UI flow from the dirty tree
+based on `0cc3a8d`. The first three failures remain distinct receipts; they were
+not relabeled as success or later-commit evidence. The reload failure exposed
+native-only startup purging when browser memory credentials disappeared.
+Startup now retains locked browser storage while still requiring interactive
+auth and online BFF rebind; native missing-credential purge remains unchanged.
+Owned browser/HTTP/Go helpers were cleaned up after every attempt.

@@ -35,12 +35,20 @@ locals {
       container         = var.cosmos.container
       singleWriteRegion = true
     }
-    # New deployment uses builtin after explicit image verification. Legacy
-    # remains empty/deny-all; no old partitions or user grants are adopted.
-    authorization = { mode = var.authorization_mode }
-    grants        = []
-    events        = { enabled = true, pollMilliseconds = 5000, heartbeatMilliseconds = 10000, maxStreamSeconds = 20 }
-    snapshots     = { enabled = true, maxChanges = 4096, maxReplayBytes = 67108864 }
+    authorization = merge({ mode = var.authorization_mode }, var.directory == null ? {} : {
+      directory = {
+        tenantId                = var.directory.tenant_id
+        initialDomain           = var.directory.initial_domain
+        readerClientId          = var.directory.reader_client_id
+        managedIdentityClientId = local.identity.client_id
+        workforceTenantIds      = var.directory.workforce_tenant_ids
+        namespace               = var.directory.namespace
+        callbacks               = var.directory.callbacks
+      }
+    })
+    grants    = []
+    events    = { enabled = true, pollMilliseconds = 5000, heartbeatMilliseconds = 10000, maxStreamSeconds = 20 }
+    snapshots = { enabled = true, maxChanges = 4096, maxReplayBytes = 67108864 }
     limits = {
       enabled           = true, maxConcurrentRequests = 64, maxConcurrentStreams = 8,
       requestsPerMinute = 120, burst = 30, maxPrincipalBuckets = 10000,
@@ -203,6 +211,17 @@ resource "azapi_resource" "app" {
     precondition {
       condition     = var.authorization_mode != "builtin" || var.builtin_authorization_image_verified
       error_message = "Builtin requires a verified compatible image and intentional new-namespace choice. Review release evidence then set builtin_authorization_image_verified=true; this flag is not cloud-deployment permission."
+    }
+    precondition {
+      condition     = var.authorization_mode != "directory" || var.directory_image_verification != null
+      error_message = "Directory requires reviewed compatible immutable image/source metadata; configuration support is not publication or deployment permission."
+    }
+    precondition {
+      condition = var.directory == null ? true : (
+        can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", local.identity.client_id)) &&
+        var.directory.reader_client_id != local.identity.client_id
+      )
+      error_message = "Directory mode requires the assigned UAMI's canonical lowercase client ID, distinct from the cross-tenant reader application."
     }
   }
 }

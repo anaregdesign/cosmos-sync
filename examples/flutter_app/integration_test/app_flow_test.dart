@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +5,7 @@ import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:cosmos_sync_example/auth/auth_session_controller.dart';
 import 'package:cosmos_sync_example/auth/native_oidc.dart';
 import 'package:cosmos_sync_example/data/workspace_repository.dart';
+import 'package:cosmos_sync_example/data/settings_store_native.dart';
 import 'package:cosmos_sync_example/main.dart';
 import 'package:cosmos_sync_example/ui/app_controller.dart';
 import 'package:cosmos_sync_example/ui/workspace_controller.dart';
@@ -14,7 +14,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Test-target-only adapter. The ordinary main target always uses AppAuth.
+import 'support/ui_actions.dart' as ui;
+
+/// Test-target-only adapter. The ordinary native main target uses AppAuth.
 /// A loopback test control URL supplies a short-lived JWT signed by the Go test
 /// issuer; no credential is embedded in a dart-define, asset or checked-in file.
 void main() {
@@ -47,7 +49,9 @@ void main() {
           directory: Directory('${directory.path}/workspaces'),
         ),
       ),
-      settingsFile: File('${directory.path}/connection.json'),
+      settingsStore: FileSettingsStore(
+        File('${directory.path}/connection.json'),
+      ),
     );
     try {
       await nativeStore.write('fixture-refresh-record');
@@ -193,7 +197,7 @@ void main() {
       expect(app.workspace.pending, isEmpty);
       expect(app.auth.credentialSessionId, null);
       expect(store.value, null);
-      expect(await app.workspace.repository.directory.exists(), false);
+      expect(await Directory('${directory.path}/workspaces').exists(), false);
       debugPrint(
         'COSMOS_SYNC_APP_PASS ${Platform.operatingSystem} '
         'realHttp=true realSqlite=true auth=test-adapter nativeSecureStorage=verified',
@@ -228,47 +232,17 @@ Future<void> _wait(
   bool Function() ready, {
   void Function()? onTimeout,
 }) async {
-  await tester.runAsync(() async {
-    final deadline = DateTime.now().add(const Duration(seconds: 20));
-    while (!ready()) {
-      if (DateTime.now().isAfter(deadline)) {
-        onTimeout?.call();
-        throw TimeoutException('App operation did not finish.');
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    }
-  });
-  await tester.pumpAndSettle();
+  await ui.waitFor(tester, ready, onTimeout: onTimeout);
 }
 
-Future<void> _tap(WidgetTester tester, Finder finder) async {
-  // Native software keyboards can cover the next tap target on a small screen.
-  // Closing the keyboard is a user interaction, before scrolling and hit tests.
-  FocusManager.instance.primaryFocus?.unfocus();
-  await tester.pumpAndSettle();
-  await tester.ensureVisible(finder);
-  await tester.pumpAndSettle();
-  await tester.tap(finder);
-  await tester.pump();
-}
+Future<void> _tap(WidgetTester tester, Finder finder) => ui.tap(tester, finder);
 
 Future<void> _edit(
   WidgetTester tester, {
   required String id,
   required String json,
   bool existing = false,
-}) async {
-  await _tap(
-    tester,
-    find.byKey(Key(existing ? 'document-$id' : 'new-document')),
-  );
-  await tester.pumpAndSettle();
-  if (!existing) {
-    await tester.enterText(find.byKey(const Key('document-id')), id);
-  }
-  await tester.enterText(find.byKey(const Key('document-json')), json);
-  await _tap(tester, find.byKey(const Key('save-document')));
-}
+}) => ui.edit(tester, id: id, json: json, existing: existing);
 
 class _MemoryStore implements RefreshTokenStore {
   String? value;

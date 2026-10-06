@@ -24,6 +24,8 @@ type MemoryStore struct {
 	policies              map[string]*AuthorizationPolicy
 	authorizationReceipts map[string]map[string]authorizationReceipt
 	authorizationAudits   map[string][]authorizationAudit
+	identityDirectory     *identityDirectoryState
+	identityVersion       uint64
 }
 
 func NewMemoryStore() *MemoryStore { return &MemoryStore{partitions: map[string]*memoryPartition{}} }

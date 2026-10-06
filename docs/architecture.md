@@ -75,16 +75,31 @@ History, receipts and tombstones have no TTL or GC. Conservative per-scope event
 | Authorization | Validated API JWTs; durable personal scopes and fixed-owner shared reader/writer membership | Provider setup/linking, invitations, owner transfer, account deletion and generic security rules are separate work; legacy grants remain opt-in |
 | Operations | Local/fault/emulator/platform tests and preparation | Approved live Azure RU/replica/backup/deployment gate |
 
+The unpublished [opt-in identity directory](identity-directory.md) is separate
+from builtin issuer/subject registration. Its explicit factory wires bounded
+Cosmos CAS, trusted broker-profile reads, dedicated fresh-proof lifecycle routes
+and identity-bound authorization/contexts/caches. Native/Web proofs do not adopt
+independent credentials. Actual customer freshness, hosted MI/Graph, broker
+self-service behavior and production capacity/recovery remain deployment gates.
+Directory, Graph and data partitions are not globally atomic; the existing
+numeric same-data-partition membership fence remains independent.
+
 The owner approved MIT, public GitHub/GHCR visibility, personal pub.dev ownership
 and the experimental `0.2.0-dev.1` preview. The foundation is merged; subsequent
 main integration and distribution are authorized and tracked in
 [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). Actual registry,
 provider, Azure and device results remain separate verification gates. The
-cheapest live Azure proposal uses an isolated retained account and local BFF.
-Its tagged resource group retains the intended serverless account in ARM
-`Failed` state with no data endpoint: the subscription rejected free-tier
-provisioning and East US capacity was unavailable. No usable Cosmos target or
-cloud data result exists. Another region and target await updated owner approval;
-the failed record is retained. Actual ACA deployment and consumer Apple/Google
-provider setup remain separate gates; neither a mocked plan nor local test
-establishes a hosted production SLA.
+original East US serverless attempt remains retained in ARM `Failed` state after
+free-tier/capacity rejection. With subsequent owner approval, the West US2 Cosmos
+account/database/container, private prerequisites and actual Container Apps
+deployment were created successfully. The executable-only command repaired the
+observed startup configuration conflict; the deployment retains min 0/max 1.
+As of the 2026-10-04 resumed readback, app/environment provisioning succeeded, but
+verified-TLS ingress still returns Envoy 403 despite the matching approved `/32`.
+No SDK/cloud data write or ordinary hosted Flutter journey has passed.
+Scale-to-zero does not remove fixed network/storage/logging charges. See the
+[retained ACA record](aca-validation-plan.md). Actual hosted data and common
+External ID OIDC acceptance remain separate gates. The owner removed actual
+Google/Apple connections and configuration from this delivery on 2026-10-04 and
+deferred physical Android checks until simulator development is complete; neither a mocked
+plan nor local test establishes a hosted production SLA.

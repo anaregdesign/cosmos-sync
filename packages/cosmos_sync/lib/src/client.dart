@@ -145,6 +145,10 @@ class CosmosSyncClient {
           _session.principalId,
           _session.permissionVersion,
           _session.scopeMode.name,
+          if (_session.identityGeneration != null) ...[
+            _session.identityGeneration,
+            _session.identityId,
+          ],
         ]),
       ),
     );

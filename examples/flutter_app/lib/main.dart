@@ -1,36 +1,14 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
-import 'auth/auth_session_controller.dart';
-import 'data/workspace_repository.dart';
+import 'platform/app_platform_native.dart'
+    if (dart.library.js_interop) 'platform/app_platform_web.dart'
+    as platform;
 import 'ui/app_controller.dart';
-import 'ui/workspace_controller.dart';
 import 'ui/workspace_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final support = await getApplicationSupportDirectory();
-  final root = Directory(p.join(support.path, 'cosmos-sync-example'));
-  const sharedScopeId = String.fromEnvironment('COSMOS_SYNC_SHARED_SCOPE_ID');
-  const brokerConfig = String.fromEnvironment(
-    'COSMOS_SYNC_ENTRA_BROKER_CAPABILITIES',
-  );
-  final controller = AppController(
-    auth: AuthSessionController(),
-    workspace: WorkspaceController(
-      repository: WorkspaceRepository(
-        directory: Directory(p.join(root.path, 'workspaces')),
-      ),
-    ),
-    settingsFile: File(p.join(root.path, 'connection.json')),
-    sharedScopeId: sharedScopeId.isEmpty ? null : sharedScopeId,
-    brokerCapabilities: brokerConfig.isEmpty
-        ? null
-        : EntraBrokerCapabilities.fromJsonString(brokerConfig),
-  );
+  final controller = await platform.createController();
   await controller.initialize();
   runApp(CosmosSyncApp(controller: controller));
 }

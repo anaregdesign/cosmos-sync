@@ -30,8 +30,11 @@ The first `0.2.0-dev.1` preview has a finite API. It implements durable local
 documents/outbox, explicit synchronization, optimistic conflicts, tombstones,
 resumable cursors, local queries/watches and server-authorized personal/shared
 scopes. It does not implement Firestore's complete API or security-rule language.
-Apple and Google are the intended consumer login providers, with their adapters
-and stable account linking still tracked in [#26–30](social-auth.md). The
+Apple and Google remain intended future consumer login providers. On 2026-10-04
+the owner cancelled their actual setup/live connections (#30, not planned) and
+moved physical Android checks to the final gate. Simulator development,
+common External ID OIDC and stable account/linking safety remain tracked in
+[#27–29](social-auth.md). The
 implemented native path uses OIDC/PKCE and a dedicated API access token, with
 Entra used for actual provider validation. Provider registration, authorization
 policy and compatible Cosmos resources remain operator responsibilities.
@@ -43,6 +46,34 @@ verified source and distinguish local tests from actual hosted acceptance.
 Existing explicit server grants remain the legacy
 mode. An empty legacy grants configuration deliberately denies document access.
 A healthy container is not yet the completed developer experience.
+
+## Current delivery paths and acceptance ownership, 2026-10-06
+
+The [delivery plan](../.azure/deployment-plan.md) replaces cumulative Issue
+checklists with explicit source, tooling, hosted and final-device milestones.
+The core directory factory, typed SDK and native/Web account lifecycle are
+implemented. Directory-mode Terraform and actual fresh-proof/hosted acceptance
+tooling are now implemented as separately gated preparation. Compatible artifact
+activation, actual customer/hosted acceptance and coverage decisions still remain.
+
+| Path | Actual version boundary | Acceptance |
+| --- | --- | --- |
+| Published preview | SDK `0.2.0-dev.1` from `82e937c`, public BFF from `76c1f46`; retained Azure still uses the original image | Builtin/legacy only; publication is not hosted CRUD evidence |
+| Directory candidate | Unpublished source in open PR #39; existing package/image cannot be relabeled as directory-enabled | #27 configuration, #28 proof/restart tooling, #16 hosting, #24 actual integration |
+| Reproducible onboarding | Pin the exact chosen source/package/image and authorization mode before the run | #32 follows #24; it does not depend on closing epic #2 or physical-device #20 |
+| Final device | Selected physical Android after source/cloud/onboarding and owner availability | #20; iOS and cancelled actual Google/Apple are not prerequisites |
+
+The old hosted SDK runner remains explicitly builtin-only, and local cloud/UI
+runners retain their legacy-grant/recorded-token contracts. Native directory
+proof and the new recorded directory SDK driver are separate versioned modes,
+described below. Do not execute an old manifest against a new mode or widen a
+document budget to include uncounted registration writes.
+
+One approved customer credential cannot demonstrate actual two-credential
+link/unlink or a distinct shared member's permission transitions. Those actual
+coverage decisions remain open in #24; deterministic security tests remain
+required and no additional identity or waiver is implied. Legacy same-account
+transitions are separate evidence, never a substitute for directory membership.
 
 ## 1. Start from a clean checkout
 
@@ -92,8 +123,11 @@ SQLite and a signed test identity adapter. It exercises the protocol without
 Azure or a real provider; it does not perform provider registration or a hosted
 deployment. A physical Android target requires the separate explicitly selected
 device procedure in [physical-device validation](physical-devices.md). The sample
-targets Android API 24+, iOS 15+ and macOS 12+. It supplies no Flutter Web, Linux
-or Windows login app; Chromium SDK persistence tests are separate coverage.
+targets Android API 24+, iOS 15+ and macOS 12+, and also supplies a Web target with
+memory-only MSAL and IndexedDB/Web Locks. Build its pinned local auth assets and
+register the exact SPA bridge as described in [Web authentication](web-auth.md).
+Linux/Windows Flutter applications are not supplied. Chromium application,
+SDK-storage and actual provider results remain distinct evidence.
 
 ## 2. Prepare the hosting and identity inputs
 
@@ -152,6 +186,21 @@ actual immutable image and intended new namespace. The example leaves that
 assertion false, so it cannot silently deploy an unverified policy image. This
 assertion does not approve a cloud apply or migrate a legacy deployment.
 
+The unpublished `directory` extension is selectable only with explicit
+`authorization_mode="directory"`, typed `directory` settings and reviewed
+`directory_image_verification`. Its source configuration is
+[`config.directory.example.json`](../bff/config.directory.example.json), with a
+sole public-client namespace and server-only secret-free reader metadata.
+The [Terraform example](../infra/terraform/azure-container-apps/directory.tfvars.example)
+leaves image verification false. The module derives the reader's managed-identity
+client from the identity actually assigned to the app and rejects mixed legacy
+grants, inconsistent trust and the known incompatible published/retained images.
+Generated mock-plan JSON is checked against the strict Go production contract.
+Do not inject those unknown fields into the original retained image or change
+the legacy/builtin authorization mode implicitly. A separately reviewed
+compatible image, generated configuration and saved plan must precede deployment;
+local lifecycle/emulator tests do not approve that apply.
+
 ACA runtime configuration uses non-secret `COSMOS_SYNC_CONFIG_JSON`, explicit
 `COSMOS_SYNC_TLS_MODE=container-apps` behind HTTPS ingress, and a selected managed
 identity. The shared cursor key uses a Key Vault secret reference. JWT checks
@@ -164,6 +213,62 @@ omitted when using environment JSON. The pinned image's default file-config CMD
 otherwise selects `/run/config/config.json` and fails before listening. The
 [actual startup fix](aca-validation-plan.md#service-side-failure-recovery) passed
 without changing the image or key. Startup alone does not prove external CRUD.
+
+### Directory acceptance tooling
+
+Use the [native directory proof procedure](native-auth-live.md#directory-fresh-proof-mode)
+first, after an exact compatible deployment and with the owner present. It
+verifies a real server challenge and transient selected-customer API/ID pair,
+registers explicitly and correlates the verified account/session. It neither
+opens an ordinary data workspace nor hides metadata writes in a document budget.
+
+The separate [directory validation manifest](../ops/azure/directory-validation.example.json)
+pins the clean source commit, immutable image, reviewed runtime configuration,
+hosting resource, exact origin and existing aggregate ledger. It requires the
+just-completed native proof (at most 15 minutes old), that run's sibling
+`initial.jwt`, identical configuration/endpoint/hosting candidate and preserved
+request history. Read-only hosting checks and independent API verification precede
+SDK execution. Blank approvals/retention acknowledgment in the template must not
+be treated as approved inputs.
+
+```sh
+# Offline manifest review only: no tokens, Azure reads or BFF calls.
+python3 tools/directory_azure_live.py \
+  --manifest .cache/approved-directory/directory-validation.local.json
+
+# Only after explicit target/data-write approval and the attended proof run.
+python3 tools/directory_azure_live.py \
+  --manifest .cache/approved-directory/directory-validation.local.json \
+  --execute-approved
+```
+
+This is **recorded-API-token native Dart/SQLite acceptance**, not a new provider
+login, ordinary Flutter UI, distinct member, two actual credentials, two hosted
+replicas or physical lifecycle acceptance. It verifies exact capabilities and
+registered session before cache open, offline durable close/reopen and matching
+ACK, two-client stale conflict/discard, change hint, remote tombstone, reopen and
+local SDK signout purge. It never permits identity writes or fresh proof exchanges
+inside its data envelope.
+
+The same recorded journey is exercised by the signed TLS/Graph/Dart/SQLite
+fixture and the official Cosmos-emulator driver. Its empty-scope fixture uses
+25 BFF requests within a 29-request reservation; the complete signed lifecycle
+uses a separate 80-request fixture budget. For the retained history, seven prior
+attempts plus four native proof requests plus a 29-request SDK envelope fit the
+40-request cap. Real pagination/revalidation remains counted and can exhaust
+that cap; fixture results never reset it. The SDK permits exactly three accepted
+document responses and four mutation attempts including one conflict, with zero
+new directory operations/fresh proofs. Physical SDK/CAS retries, Graph/issuer
+requests, RU and billing are not measured by these reservations.
+
+Every execution starts a new private partial receipt/latest pointer before
+preflight. Unknown mutation outcomes stop further work, preserve observed
+counts and require new online resolution, not replay or cross-partition rollback.
+Owned processes/control links are closed. Test document receipts/tombstones and
+directory challenge/proof/audit state may remain; explicit retention approval is
+required. A completed production directory application path can correlate
+hosted Graph acceptance; ARM metadata alone cannot. Actual RU, ordinary UI,
+native/SPA provider and broader coverage remain the separate #24 criteria.
 
 Never place secret values in `terraform.tfvars`, committed JSON, plan output or
 chat. Secret-reference names/URIs are configuration; the cursor key, credentials
@@ -240,8 +345,9 @@ The shared owner cannot be replaced or edited as an ordinary member. A nonowner
 cannot self-grant. A conflicting revision returns `membership_conflict`; refresh
 the membership view and ask for an explicit new operation rather than silently
 overwrite it. Unknown accounts cannot be invited by email through these APIs.
-Provider invitations, cross-provider linking, owner transfer and account/scope
-deletion are separate work. API authentication alone grants no membership of
+Provider invitations, owner transfer and account/scope deletion are separate
+work. Explicit linking is available only in the opt-in directory source described
+below, not this builtin contract. API authentication alone grants no membership of
 someone else's shared scope.
 
 Leaving `authorization.mode` unset or choosing `legacy` retains the explicit
@@ -257,13 +363,27 @@ OIDC/Broker app roles may gate application entry; they do not replace document
 ownership or shared memberships. The chosen architecture keeps those data
 permissions in the BFF. External ID consumer configuration remains separate
 from the validated workforce Entra setup. The dedicated CIAM directory now has
-API/native apps, their service principals and an API-only administrator grant;
-its user flow, social provider configuration and actual consumer login remain
-pending. The current hosted test selects the already tested workforce API JWT.
+API/native apps, their service principals and an API-only administrator grant.
+The approved same-human customer, restricted federation and sole-provider flow
+have recorded setup readback; actual selected-customer API/fresh-ID issuance and
+common consumer OIDC login remain unverified. Actual
+Google/Apple provider configuration is outside current delivery scope. The
+current retained hosted target still selects the already tested workforce API JWT.
 Built-in data ownership neither creates a provider registration nor grants shared
 membership by email. The official comparison and
 implementation acceptance are recorded in
 [#33](https://github.com/anaregdesign/cosmos-sync/issues/33).
+
+The opt-in [directory lifecycle](identity-directory.md) instead requires explicit
+registration with independently verified fresh API/ID proofs and an uncached
+trusted broker profile. It preserves random personal/shared ownership across
+link/unlink and binds sessions/cursors/caches to a separate identity generation.
+The application confirms local pending-data loss, drains/purges before proof
+acquisition and verifies the new session before opening a cache. Recovery uses
+only a remaining credential; ambiguous submitted results require signout and new
+online resolution. This source wiring is implemented, but actual selected-customer
+nonce/integer authentication time and ACA MI/Graph execution remain unverified.
+The administrative profile is not a substitute for the approved customer.
 
 ## 4. Run the application, then integrate the SDK
 
@@ -441,5 +561,8 @@ versions, validated Terraform/approved plan, actual ACA readiness and managed
 identity access, provider callback, CRUD/offline/conflict/grant/purge results, and
 measured runtime/request charges. Preserve private configuration outside Git.
 Do not publish tokens, secret values, private owner identities, device IDs or
-document payloads. Mark each evidence boundary: local fixture, actual provider,
-actual Cosmos, hosted ACA and physical platform. Leave unperformed gates open.
+document payloads. Mark each evidence boundary: local fixture, simulator, actual
+common OIDC provider, actual Cosmos, hosted ACA and physical Android. Complete
+simulator development before the final physical gate. Actual Google/Apple
+connections are owner-cancelled, not proven by other OIDC results. Leave other
+unperformed gates open.

@@ -7,6 +7,7 @@ import 'package:http_parser/http_parser.dart';
 
 import 'models.dart';
 import 'authorization.dart';
+import 'identity.dart';
 
 /// HTTP wire transport. Durable retries belong to the offline client.
 ///
@@ -129,8 +130,8 @@ class HttpSyncTransport
     return session;
   }
 
-  /// Registers/reads the currently authenticated built-in account. Available
-  /// only when the BFF enables `authorization.mode: builtin`.
+  /// Registers/reads the current account with builtin/directory authorization.
+  /// Directory mode requires [sessionInfo] first to pin its identity binding.
   /// The BFF derives this identity from a verified API token, never an email.
   Future<BuiltinAccount> account() async {
     final principal = _managementPrincipal;
@@ -138,6 +139,8 @@ class HttpSyncTransport
       'GET',
       'account',
       expectedPrincipal: principal,
+      expectedSession: _lastSession,
+      identityOnly: true,
     );
     final account = _parse(response.json, BuiltinAccount.fromJson);
     if (principal != null && account.accountId != principal) {
@@ -159,6 +162,8 @@ class HttpSyncTransport
       'scopes',
       body: request.toJson(),
       expectedPrincipal: principal,
+      expectedSession: _lastSession,
+      identityOnly: true,
     );
     final scope = _parse(response.json, SharedScope.fromJson);
     if (principal != null && scope.ownerAccountId != principal) {
@@ -174,6 +179,8 @@ class HttpSyncTransport
       'GET',
       'scopes/$scopeId/members',
       expectedPrincipal: _managementPrincipal,
+      expectedSession: _lastSession,
+      identityOnly: true,
     );
     final scope = _parse(response.json, SharedScope.fromJson);
     if (scope.scopeId != scopeId) throw _invalidResponse();
@@ -195,10 +202,165 @@ class HttpSyncTransport
       'scopes/$scopeId/members',
       body: request.toJson(),
       expectedPrincipal: _managementPrincipal,
+      expectedSession: _lastSession,
+      identityOnly: true,
     );
     final scope = _parse(response.json, SharedScope.fromJson);
     if (scope.scopeId != scopeId) throw _invalidResponse();
     return scope;
+  }
+
+  Future<IdentityCapabilities> identityCapabilities() async {
+    final response = await _request('GET', 'identity/capabilities');
+    return _parse(response.json, IdentityCapabilities.fromJson);
+  }
+
+  Future<IdentityAccount> accountIdentities() async {
+    final binding = _identityBinding();
+    final response = await _request(
+      'GET',
+      'identities',
+      expectedSession: binding,
+      identityOnly: true,
+    );
+    final account = _parse(response.json, IdentityAccount.fromJson);
+    if (account.account.accountId != binding.principalId ||
+        account.identityGeneration != binding.identityGeneration ||
+        account.currentIdentityId != binding.identityId) {
+      throw _invalidResponse();
+    }
+    return account;
+  }
+
+  Future<IdentityChallenge> createIdentityChallenge({
+    required IdentityOperation operation,
+    required String callback,
+    String? removeIdentityId,
+  }) async {
+    if ((operation == IdentityOperation.unlink) != (removeIdentityId != null)) {
+      throw ArgumentError('Only unlink requires a BFF-issued identity ID.');
+    }
+    if (removeIdentityId != null) {
+      validateAuthorizationId(removeIdentityId, 'removeIdentityId');
+    }
+    final response = await _request(
+      'POST',
+      'identity/challenges',
+      body: {
+        'operation': operation.name,
+        'callback': callback,
+        'removeIdentityId': ?removeIdentityId,
+      },
+      expectedSession: operation == IdentityOperation.register
+          ? null
+          : _identityBinding(),
+      identityOnly: true,
+    );
+    final challenge = _parse(response.json, IdentityChallenge.fromJson);
+    if (challenge.operation != operation ||
+        challenge.target.callback != callback ||
+        !challenge.expiresAt.isAfter(DateTime.now().toUtc())) {
+      throw _invalidResponse();
+    }
+    return challenge;
+  }
+
+  Future<IdentityAccount> registerIdentity(
+    IdentityChallenge challenge,
+    FreshIdentityProof proof,
+  ) async {
+    if (challenge.operation != IdentityOperation.register) {
+      throw ArgumentError('Use a registration challenge.');
+    }
+    try {
+      final response = await _request(
+        'POST',
+        'identity/register',
+        body: {'challenge': challenge.challenge, 'idToken': proof.idToken},
+        accessToken: proof.accessToken,
+      );
+      final result = _parse(response.json, IdentityAccount.fromJson);
+      if (result.identityGeneration != 1 ||
+          result.currentIdentityId == null ||
+          result.identities.length != 1) {
+        throw _invalidResponse();
+      }
+      return result;
+    } finally {
+      _invalidateIdentityBinding();
+    }
+  }
+
+  Future<IdentityAccount> linkIdentity({
+    required IdentityChallenge challenge,
+    required FreshIdentityProof reauthentication,
+    required FreshIdentityProof identity,
+  }) => _changeIdentity(
+    IdentityOperation.link,
+    challenge,
+    reauthentication,
+    identity,
+  );
+
+  Future<IdentityAccount> unlinkIdentity({
+    required IdentityChallenge challenge,
+    required FreshIdentityProof reauthentication,
+    required FreshIdentityProof remainingIdentity,
+  }) => _changeIdentity(
+    IdentityOperation.unlink,
+    challenge,
+    reauthentication,
+    remainingIdentity,
+  );
+
+  Future<IdentityAccount> _changeIdentity(
+    IdentityOperation operation,
+    IdentityChallenge challenge,
+    FreshIdentityProof reauthentication,
+    FreshIdentityProof identity,
+  ) async {
+    if (challenge.operation != operation) {
+      throw ArgumentError('Use the exact identity-operation challenge.');
+    }
+    final binding = _identityBinding();
+    try {
+      final response = await _request(
+        'POST',
+        'identities/${operation.name}',
+        expectedSession: binding,
+        identityOnly: true,
+        body: {
+          'challenge': challenge.challenge,
+          'reauthentication': reauthentication.toJson(),
+          'identity': identity.toJson(),
+        },
+      );
+      final result = _parse(response.json, IdentityAccount.fromJson);
+      if (result.account.accountId != binding.principalId ||
+          result.identityGeneration != binding.identityGeneration! + 1) {
+        throw _invalidResponse();
+      }
+      return result;
+    } finally {
+      _invalidateIdentityBinding();
+    }
+  }
+
+  SessionInfo _identityBinding() {
+    final binding = _lastSession;
+    if (binding?.identityGeneration == null) {
+      throw const TransportException(
+        code: 'identity_session_required',
+        message: 'Verify a directory-backed BFF session first.',
+      );
+    }
+    return binding!;
+  }
+
+  void _invalidateIdentityBinding() {
+    _lastSession = null;
+    _lastAccount = null;
+    _consistencyToken = null;
   }
 
   String? get _managementPrincipal =>
@@ -501,6 +663,11 @@ class HttpSyncTransport
     request.headers['X-Cosmos-Sync-Principal'] = session.principalId;
     request.headers['X-Cosmos-Sync-Scope-Mode'] = session.scopeMode.name;
     request.headers['X-Cosmos-Sync-Permission'] = session.permissionVersion;
+    if (session.identityGeneration != null) {
+      request.headers['X-Cosmos-Sync-Identity-Generation'] =
+          '${session.identityGeneration}';
+      request.headers['X-Cosmos-Sync-Identity'] = session.identityId!;
+    }
     if (token != null) request.headers[_sessionHeader] = token;
   }
 
@@ -517,7 +684,12 @@ class HttpSyncTransport
     code: code,
     message: 'Change stream returned $code.',
     statusCode: switch (code) {
-      'unauthorized' => 401,
+      'unauthorized' ||
+      'identity_session_invalid' ||
+      'identity_binding_changed' ||
+      'identity_binding_inactive' ||
+      'identity_binding_required' ||
+      'identity_registration_required' => 401,
       'forbidden' || 'session_mismatch' => 403,
       'resync_required' => 410,
       'rate_limited' ||
@@ -638,6 +810,9 @@ class HttpSyncTransport
     Map<String, String>? queryParameters,
     bool useConsistencyToken = false,
     String? expectedPrincipal,
+    SessionInfo? expectedSession,
+    String? accessToken,
+    bool identityOnly = false,
   }) async {
     if (_closed) throw StateError('Transport is closed.');
     if (useConsistencyToken && _lastSession == null) {
@@ -645,7 +820,7 @@ class HttpSyncTransport
         'Verify the authorization scope with sessionInfo first.',
       );
     }
-    final expectedSession = useConsistencyToken ? _lastSession : null;
+    final binding = useConsistencyToken ? _lastSession : expectedSession;
     final expectedConsistencyToken = useConsistencyToken
         ? _consistencyToken
         : null;
@@ -657,9 +832,11 @@ class HttpSyncTransport
         _endpoint(endpoint, queryParameters),
         abort,
         body: body,
-        expectedSession: expectedSession,
+        expectedSession: binding,
         expectedConsistencyToken: expectedConsistencyToken,
         expectedPrincipal: expectedPrincipal,
+        accessToken: accessToken,
+        identityOnly: identityOnly,
       ).timeout(
         requestTimeout,
         onTimeout: () {
@@ -684,10 +861,17 @@ class HttpSyncTransport
     SessionInfo? expectedSession,
     String? expectedConsistencyToken,
     String? expectedPrincipal,
+    String? accessToken,
+    bool identityOnly = false,
   }) async {
     try {
       // A fresh access token is fetched for every operation, including retries.
-      final token = await _untilAbort(tokenProvider(), abort);
+      final token = await _untilAbort(
+        accessToken == null
+            ? tokenProvider()
+            : Future<String>.value(accessToken),
+        abort,
+      );
       if (abort.isCompleted) {
         throw const TransportException(
           code: 'request_aborted',
@@ -701,7 +885,18 @@ class HttpSyncTransport
             ..headers['Authorization'] = 'Bearer $token'
             ..headers['Accept'] = 'application/json';
       if (expectedSession != null) {
-        _bindRequest(request, expectedSession, expectedConsistencyToken);
+        if (identityOnly) {
+          request.headers['X-Cosmos-Sync-Principal'] =
+              expectedSession.principalId;
+          if (expectedSession.identityGeneration != null) {
+            request.headers['X-Cosmos-Sync-Identity-Generation'] =
+                '${expectedSession.identityGeneration}';
+            request.headers['X-Cosmos-Sync-Identity'] =
+                expectedSession.identityId!;
+          }
+        } else {
+          _bindRequest(request, expectedSession, expectedConsistencyToken);
+        }
       } else if (expectedPrincipal != null) {
         request.headers['X-Cosmos-Sync-Principal'] = expectedPrincipal;
       }
