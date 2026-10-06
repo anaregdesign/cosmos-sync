@@ -36,6 +36,8 @@ migrate_working_dir/
 /web/auth.js
 /web/auth-redirect.js
 /web/auth*.js.LEGAL.txt
+/web/oidc-redirect.js
+/web/oidc-redirect.js.LEGAL.txt
 
 # Symbolication related
 app.*.symbols
