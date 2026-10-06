@@ -47,6 +47,33 @@ Existing explicit server grants remain the legacy
 mode. An empty legacy grants configuration deliberately denies document access.
 A healthy container is not yet the completed developer experience.
 
+## Current delivery paths and acceptance ownership, 2026-10-06
+
+The [delivery plan](../.azure/deployment-plan.md) replaces cumulative Issue
+checklists with explicit source, tooling, hosted and final-device milestones.
+The core directory factory, typed SDK and native/Web account lifecycle are
+implemented. Directory-mode Terraform and actual fresh-proof/hosted acceptance
+tooling still need work; this is not solely an owner-login wait.
+
+| Path | Actual version boundary | Acceptance |
+| --- | --- | --- |
+| Published preview | SDK `0.2.0-dev.1` from `82e937c`, public BFF from `76c1f46`; retained Azure still uses the original image | Builtin/legacy only; publication is not hosted CRUD evidence |
+| Directory candidate | Unpublished source in open PR #39; existing package/image cannot be relabeled as directory-enabled | #27 configuration, #28 proof/restart tooling, #16 hosting, #24 actual integration |
+| Reproducible onboarding | Pin the exact chosen source/package/image and authorization mode before the run | #32 follows #24; it does not depend on closing epic #2 or physical-device #20 |
+| Final device | Selected physical Android after source/cloud/onboarding and owner availability | #20; iOS and cancelled actual Google/Apple are not prerequisites |
+
+The current hosted SDK runner explicitly accepts builtin only. Local cloud/UI
+runners use legacy grants and recorded API tokens; the native provider runner
+captures API credentials but no server-challenge fresh ID proof. These are useful
+separate contracts, not the directory journey. Do not execute an old manifest
+against a new mode or widen a budget to include uncounted registration writes.
+
+One approved customer credential cannot demonstrate actual two-credential
+link/unlink or a distinct shared member's permission transitions. Those actual
+coverage decisions remain open in #24; deterministic security tests remain
+required and no additional identity or waiver is implied. Legacy same-account
+transitions are separate evidence, never a substitute for directory membership.
+
 ## 1. Start from a clean checkout
 
 ```sh
@@ -273,8 +300,10 @@ OIDC/Broker app roles may gate application entry; they do not replace document
 ownership or shared memberships. The chosen architecture keeps those data
 permissions in the BFF. External ID consumer configuration remains separate
 from the validated workforce Entra setup. The dedicated CIAM directory now has
-API/native apps, their service principals and an API-only administrator grant;
-its user flow and actual common consumer OIDC login remain unverified. Actual
+API/native apps, their service principals and an API-only administrator grant.
+The approved same-human customer, restricted federation and sole-provider flow
+have recorded setup readback; actual selected-customer API/fresh-ID issuance and
+common consumer OIDC login remain unverified. Actual
 Google/Apple provider configuration is outside current delivery scope. The
 current retained hosted target still selects the already tested workforce API JWT.
 Built-in data ownership neither creates a provider registration nor grants shared

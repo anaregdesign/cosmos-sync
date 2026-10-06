@@ -6,6 +6,10 @@ Native SQLite and Chromium IndexedDB store confirmed documents and a durable out
 
 Development is tracked by [epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). [Verification](docs/verification.md) reports actual results; owner-controlled distribution and live-cloud gates remain explicit.
 
+The [2026-10-06 delivery plan](.azure/deployment-plan.md) separates completed
+directory source from remaining deployment/tooling work and actual acceptance.
+It is a planning document, not approval to publish, deploy or operate a device.
+
 The product goal is a Firestore-like developer experience for the supported
 document subset: deploy the supplied BFF on Azure Container Apps, configure the
 identity provider and compatible Cosmos storage, then connect the Dart SDK for authenticated
