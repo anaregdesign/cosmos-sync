@@ -53,7 +53,8 @@ The [delivery plan](../.azure/deployment-plan.md) replaces cumulative Issue
 checklists with explicit source, tooling, hosted and final-device milestones.
 The core directory factory, typed SDK and native/Web account lifecycle are
 implemented. Directory-mode Terraform and actual fresh-proof/hosted acceptance
-tooling still need work; this is not solely an owner-login wait.
+tooling are now implemented as separately gated preparation. Compatible artifact
+activation, actual customer/hosted acceptance and coverage decisions still remain.
 
 | Path | Actual version boundary | Acceptance |
 | --- | --- | --- |
@@ -62,11 +63,11 @@ tooling still need work; this is not solely an owner-login wait.
 | Reproducible onboarding | Pin the exact chosen source/package/image and authorization mode before the run | #32 follows #24; it does not depend on closing epic #2 or physical-device #20 |
 | Final device | Selected physical Android after source/cloud/onboarding and owner availability | #20; iOS and cancelled actual Google/Apple are not prerequisites |
 
-The current hosted SDK runner explicitly accepts builtin only. Local cloud/UI
-runners use legacy grants and recorded API tokens; the native provider runner
-captures API credentials but no server-challenge fresh ID proof. These are useful
-separate contracts, not the directory journey. Do not execute an old manifest
-against a new mode or widen a budget to include uncounted registration writes.
+The old hosted SDK runner remains explicitly builtin-only, and local cloud/UI
+runners retain their legacy-grant/recorded-token contracts. Native directory
+proof and the new recorded directory SDK driver are separate versioned modes,
+described below. Do not execute an old manifest against a new mode or widen a
+document budget to include uncounted registration writes.
 
 One approved customer credential cannot demonstrate actual two-credential
 link/unlink or a distinct shared member's permission transitions. Those actual
@@ -185,13 +186,19 @@ actual immutable image and intended new namespace. The example leaves that
 assertion false, so it cannot silently deploy an unverified policy image. This
 assertion does not approve a cloud apply or migrate a legacy deployment.
 
-The unpublished `directory` extension is not selectable by this Terraform
-template. Its explicit source configuration is
+The unpublished `directory` extension is selectable only with explicit
+`authorization_mode="directory"`, typed `directory` settings and reviewed
+`directory_image_verification`. Its source configuration is
 [`config.directory.example.json`](../bff/config.directory.example.json), with a
 sole public-client namespace and server-only secret-free reader metadata.
+The [Terraform example](../infra/terraform/azure-container-apps/directory.tfvars.example)
+leaves image verification false. The module derives the reader's managed-identity
+client from the identity actually assigned to the app and rejects mixed legacy
+grants, inconsistent trust and the known incompatible published/retained images.
+Generated mock-plan JSON is checked against the strict Go production contract.
 Do not inject those unknown fields into the original retained image or change
 the legacy/builtin authorization mode implicitly. A separately reviewed
-compatible image and workload adaptation must precede any directory deployment;
+compatible image, generated configuration and saved plan must precede deployment;
 local lifecycle/emulator tests do not approve that apply.
 
 ACA runtime configuration uses non-secret `COSMOS_SYNC_CONFIG_JSON`, explicit
@@ -206,6 +213,62 @@ omitted when using environment JSON. The pinned image's default file-config CMD
 otherwise selects `/run/config/config.json` and fails before listening. The
 [actual startup fix](aca-validation-plan.md#service-side-failure-recovery) passed
 without changing the image or key. Startup alone does not prove external CRUD.
+
+### Directory acceptance tooling
+
+Use the [native directory proof procedure](native-auth-live.md#directory-fresh-proof-mode)
+first, after an exact compatible deployment and with the owner present. It
+verifies a real server challenge and transient selected-customer API/ID pair,
+registers explicitly and correlates the verified account/session. It neither
+opens an ordinary data workspace nor hides metadata writes in a document budget.
+
+The separate [directory validation manifest](../ops/azure/directory-validation.example.json)
+pins the clean source commit, immutable image, reviewed runtime configuration,
+hosting resource, exact origin and existing aggregate ledger. It requires the
+just-completed native proof (at most 15 minutes old), that run's sibling
+`initial.jwt`, identical configuration/endpoint/hosting candidate and preserved
+request history. Read-only hosting checks and independent API verification precede
+SDK execution. Blank approvals/retention acknowledgment in the template must not
+be treated as approved inputs.
+
+```sh
+# Offline manifest review only: no tokens, Azure reads or BFF calls.
+python3 tools/directory_azure_live.py \
+  --manifest .cache/approved-directory/directory-validation.local.json
+
+# Only after explicit target/data-write approval and the attended proof run.
+python3 tools/directory_azure_live.py \
+  --manifest .cache/approved-directory/directory-validation.local.json \
+  --execute-approved
+```
+
+This is **recorded-API-token native Dart/SQLite acceptance**, not a new provider
+login, ordinary Flutter UI, distinct member, two actual credentials, two hosted
+replicas or physical lifecycle acceptance. It verifies exact capabilities and
+registered session before cache open, offline durable close/reopen and matching
+ACK, two-client stale conflict/discard, change hint, remote tombstone, reopen and
+local SDK signout purge. It never permits identity writes or fresh proof exchanges
+inside its data envelope.
+
+The same recorded journey is exercised by the signed TLS/Graph/Dart/SQLite
+fixture and the official Cosmos-emulator driver. Its empty-scope fixture uses
+25 BFF requests within a 29-request reservation; the complete signed lifecycle
+uses a separate 80-request fixture budget. For the retained history, seven prior
+attempts plus four native proof requests plus a 29-request SDK envelope fit the
+40-request cap. Real pagination/revalidation remains counted and can exhaust
+that cap; fixture results never reset it. The SDK permits exactly three accepted
+document responses and four mutation attempts including one conflict, with zero
+new directory operations/fresh proofs. Physical SDK/CAS retries, Graph/issuer
+requests, RU and billing are not measured by these reservations.
+
+Every execution starts a new private partial receipt/latest pointer before
+preflight. Unknown mutation outcomes stop further work, preserve observed
+counts and require new online resolution, not replay or cross-partition rollback.
+Owned processes/control links are closed. Test document receipts/tombstones and
+directory challenge/proof/audit state may remain; explicit retention approval is
+required. A completed production directory application path can correlate
+hosted Graph acceptance; ARM metadata alone cannot. Actual RU, ordinary UI,
+native/SPA provider and broader coverage remain the separate #24 criteria.
 
 Never place secret values in `terraform.tfvars`, committed JSON, plan output or
 chat. Secret-reference names/URIs are configuration; the cursor key, credentials

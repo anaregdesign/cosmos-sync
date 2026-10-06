@@ -69,6 +69,8 @@ type proof struct {
 
 type options struct {
 	OwnerFile, ReceiptFile, TokenFile, OutputDir, PermissionVersion string
+	DirectoryConfigFile, Callback                                   string
+	FreshProofStdin                                                 bool
 }
 
 func main() {
@@ -80,6 +82,9 @@ func main() {
 	flags.StringVar(&opts.TokenFile, "token-file", "", "Private 0600 file containing the API access JWT")
 	flags.StringVar(&opts.OutputDir, "output-dir", "", "Existing private 0700, Git-ignored directory; files must not exist")
 	flags.StringVar(&opts.PermissionVersion, "permission-version", "", "Explicit version for the proposed user grant")
+	flags.BoolVar(&opts.FreshProofStdin, "fresh-proof-stdin", false, "Verify transient API/ID fresh authentication evidence from stdin; no grants or token files")
+	flags.StringVar(&opts.DirectoryConfigFile, "directory-config-file", "", "Private exact directory runtime configuration for fresh-proof verification")
+	flags.StringVar(&opts.Callback, "callback", "", "Exact approved callback for fresh-proof verification")
 	err := flags.Parse(os.Args[1:])
 	if errors.Is(err, flag.ErrHelp) {
 		flags.SetOutput(os.Stdout)
@@ -92,6 +97,23 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if opts.FreshProofStdin {
+		if err := runFreshProof(ctx, opts, os.Stdin); err != nil {
+			fmt.Fprintln(os.Stderr, "directory_authentication_proof_rejected")
+			os.Exit(1)
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]bool{
+			"independentApiIdSignaturesVerified": true, "selectedObjectTenantCorrelated": true,
+			"exactProvidedNonceVerified": true, "recentIntegerAuthenticationTimeVerified": true,
+			"brokerProfileVerified": false, "directoryOwnershipRegistered": false,
+			"rawProofPersisted": false, "grantsApplied": false,
+		})
+		return
+	}
+	if opts.DirectoryConfigFile != "" || opts.Callback != "" {
+		fmt.Fprintln(os.Stderr, "invalid_arguments")
+		os.Exit(1)
+	}
 	result, err := run(ctx, opts)
 	if err != nil {
 		// Do not print provider, filesystem, JWT, claim, or identifier details.

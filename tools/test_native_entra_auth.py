@@ -134,6 +134,131 @@ class PrivateInputTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 private_input(link)
 
+    def test_atomic_replacement_never_follows_a_destination_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "unrelated"
+            target.write_text("unchanged")
+            destination = root / "latest.local.json"
+            destination.symlink_to(target)
+            native.replace_private_json(destination, {"new": True})
+            self.assertFalse(destination.is_symlink())
+            self.assertEqual(private_input(destination), {"new": True})
+            self.assertEqual(target.read_text(), "unchanged")
+            self.assertEqual(list(root.glob(".native-*.tmp")), [])
+
+
+class NativeRunFailureTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.args = argparse.Namespace(
+            device="macos", output=None, timeout=60, flutter_bin="flutter", go_bin="go",
+            input_dir=None, isolated_sign_in=False, manual_start=False,
+            device_id_file=None, authorize_install=False,
+        )
+        source = patch.object(native, "source_state", return_value={"sourceSha": "a" * 40, "sourceTreeDirty": False})
+        source.start()
+        self.addCleanup(source.stop)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def report(self):
+        latest = private_input(self.root / ".cache/entra-live-native/latest.local.json")
+        directory = Path(latest["runDirectory"])
+        self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
+        return private_input(directory / "proof.json")
+
+    def test_target_preflight_creates_fresh_redacted_receipt_not_stale_latest(self):
+        parent = self.root / ".cache/entra-live-native"
+        parent.mkdir(parents=True)
+        private_json(parent / "latest.local.json", {"runDirectory": "old_completed_attempt"})
+        sentinel = "SECRET_ACCOUNT_OR_DEVICE_MUST_NOT_LEAK"
+        with patch.object(native, "native_target", side_effect=ValueError(sentinel)), \
+                patch.object(native, "approved_registration") as registration, \
+                patch.object(native, "NativeControl") as control:
+            with self.assertRaises(ValueError):
+                native.run_native(self.args, self.root)
+        report = self.report()
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["failureStage"], "target_preflight")
+        self.assertEqual(report["failureReason"], "stage_failed")
+        self.assertTrue(report["cleanupComplete"])
+        self.assertFalse(report["actualNativeAppAuth"])
+        self.assertFalse(report["verifiedApiSignatureIssuerAudienceScopeTenantOwner"])
+        self.assertEqual(report["stages"], [])
+        self.assertNotIn(sentinel, json.dumps(report))
+        registration.assert_not_called()
+        control.assert_not_called()
+
+    def test_registration_preflight_failure_is_attributed_without_starting_auth(self):
+        with patch.object(native, "native_target", return_value="macos"), \
+                patch.object(native, "approved_registration", side_effect=OSError("PRIVATE_PATH")), \
+                patch.object(native, "NativeControl") as control:
+            with self.assertRaises(OSError):
+                native.run_native(self.args, self.root)
+        self.assertEqual(self.report()["failureStage"], "registration_preflight")
+        self.assertNotIn("PRIVATE_PATH", json.dumps(self.report()))
+        control.assert_not_called()
+
+    def test_argument_denial_is_recorded_before_target_discovery(self):
+        self.args.timeout = 901
+        with patch.object(native, "native_target") as target:
+            with self.assertRaises(ValueError):
+                native.run_native(self.args, self.root)
+        self.assertEqual(self.report()["failureStage"], "argument_preflight")
+        target.assert_not_called()
+
+    def test_interrupt_is_distinct_and_preserves_partial_stages(self):
+        control = Mock(stages=["browser_request_started"], captured=set(),
+                       url="http://127.0.0.1:1234/capability/", store_key="isolated")
+        process = Mock(returncode=None)
+        process.poll.side_effect = KeyboardInterrupt()
+        with patch.object(native, "native_target", return_value="macos"), \
+                patch.object(native, "approved_registration", return_value=(Path("receipt"), Path("owner"), {})), \
+                patch.object(native, "NativeControl", return_value=control), \
+                patch.object(native.subprocess, "Popen", return_value=process), \
+                patch.object(native, "stop_owned_process") as stop, \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(KeyboardInterrupt):
+                native.run_native(self.args, self.root)
+        report = self.report()
+        self.assertEqual(report["failureReason"], "interrupted")
+        self.assertEqual(report["failureStage"], "native_run")
+        self.assertEqual(report["stages"], ["browser_request_started"])
+        self.assertFalse(report["actualNativeAppAuth"])
+        self.assertEqual(report["capturedApiPhases"], [])
+        stop.assert_called_once_with(process)
+        control.close.assert_called_once_with()
+
+    def test_cleanup_failure_records_no_success(self):
+        control = Mock(stages=[], captured=set(),
+                       url="http://127.0.0.1:1234/capability/", store_key="isolated")
+        process = Mock(returncode=1)
+        process.poll.return_value = 1
+        control.close.side_effect = RuntimeError("PRIVATE_CLEANUP_FAILURE")
+        with patch.object(native, "native_target", return_value="macos"), \
+                patch.object(native, "approved_registration", return_value=(Path("receipt"), Path("owner"), {})), \
+                patch.object(native, "NativeControl", return_value=control), \
+                patch.object(native.subprocess, "Popen", return_value=process), \
+                patch.object(native, "stop_owned_process"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(RuntimeError):
+                native.run_native(self.args, self.root)
+        report = self.report()
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["failureStage"], "cleanup")
+        self.assertFalse(report["cleanupComplete"])
+        self.assertNotIn("PRIVATE_CLEANUP_FAILURE", json.dumps(report))
+
+    def test_unstarted_control_cleanup_does_not_wait_for_shutdown(self):
+        directory = self.root / "control"
+        directory.mkdir()
+        control = NativeControl(directory, {})
+        control.close()
+        self.assertFalse(control.thread.is_alive())
+
 
 class ApprovedRegistrationTests(unittest.TestCase):
     tenant = "11111111-1111-4111-8111-111111111111"

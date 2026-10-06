@@ -5,6 +5,8 @@ import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
+import '../test/support/recorded_data_journey.dart';
+
 // Accept only the private disposable Go fixture, never real provider inputs.
 Future<void> main(List<String> args) async {
   if (args.length != 1) {
@@ -12,6 +14,12 @@ Future<void> main(List<String> args) async {
   }
   final fixture = (jsonDecode(File(args.single).readAsStringSync()) as Map)
       .cast<String, Object?>();
+  check(
+    fixture['schemaVersion'] == 2 &&
+        fixture['authorizationMode'] == 'directory' &&
+        fixture['validationMode'] == 'signed-test-fixture',
+    'Use the versioned signed directory fixture, never an old/live manifest.',
+  );
   Uri endpoint(String key) {
     final result = Uri.parse(fixture[key] as String);
     if (result.scheme != 'https' ||
@@ -36,17 +44,26 @@ Future<void> main(List<String> args) async {
         ..setTrustedCertificatesBytes(certificate),
     )..connectionTimeout = const Duration(seconds: 4),
   );
+  final budget = _FixtureBudget({first.origin, second.origin});
   final proofClient = httpClient();
   final transports = <HttpSyncTransport>[];
   final clients = <CosmosSyncClient>[];
   final directory = Directory.systemTemp.createTempSync(
     'cosmos-sync-identity-cache-',
   );
-  HttpSyncTransport transport(String credential, Uri url) {
+  HttpSyncTransport transport(
+    String credential,
+    Uri url, {
+    bool Function()? networkAllowed,
+  }) {
     final result = HttpSyncTransport(
       baseUri: url,
       tokenProvider: () async => tokens[credential]!,
-      client: httpClient(),
+      client: _FixtureClient(
+        httpClient(),
+        budget,
+        networkAllowed ?? () => true,
+      ),
       requestTimeout: const Duration(seconds: 4),
     );
     transports.add(result);
@@ -57,6 +74,7 @@ Future<void> main(List<String> args) async {
     IdentityChallenge challenge,
     String credential,
   ) async {
+    budget.proofCheck();
     final request = http.Request('POST', proofEndpoint)
       ..followRedirects = false
       ..headers['Content-Type'] = 'application/json'
@@ -211,10 +229,52 @@ Future<void> main(List<String> args) async {
       original.pending.isEmpty && original.list().isEmpty,
       'Explicit signout did not purge.',
     );
+    final recordedStart = budget.requests;
+    final recordedIdentity = transport('primary', first);
+    final recordedSession = await verifyDirectoryIdentity(
+      transport: recordedIdentity,
+      issuer: fixture['issuer'] as String,
+      clientId: fixture['clientId'] as String,
+      callback: fixture['callback'] as String,
+      namespace: fixture['namespace'] as String,
+      stage: (value) async => budget.stages.add(value),
+    );
+    recordedIdentity.close();
+    await RecordedDataJourney(
+      directory: Directory('${directory.path}/bounded-data'),
+      documentId: 'directory-bounded-data',
+      directoryMode: true,
+      purgeOnSignout: true,
+      initialVerifiedSession: recordedSession,
+      stage: (value) async => budget.stages.add(value),
+      transportFactory: (allowed, peer) =>
+          transport('primary', peer ? second : first, networkAllowed: allowed),
+    ).run();
+    final recordedRequests = budget.requests - recordedStart;
+    check(
+      budget.metadataAcknowledged == 6 &&
+          budget.authorizationAcknowledged == 1 &&
+          budget.proofChecks == 4 &&
+          budget.accepted == 5 &&
+          budget.conflicts == 1 &&
+          !budget.unknown &&
+          recordedRequests <= 29 &&
+          budget.stages.length == 16 &&
+          budget.stages.last == 'directory_signout_purged',
+      'The shared directory driver did not complete its separated budgets.',
+    );
     print(
       'Signed local TLS/Go/Dart/SQLite identity lifecycle passed: '
       'register/link/unlink, stable ownership, generation and outbox fences, '
-      'removed-credential denial, explicit recovery and purge.',
+      'removed-credential denial, explicit recovery and purge. '
+      'Bounded shared driver: requests=${budget.requests}/80 '
+      'recordedDirectoryRequests=$recordedRequests/29 '
+      'directoryOperations=${budget.metadataAcknowledged}/6 '
+      'authorizationOperations=${budget.authorizationAcknowledged}/1 '
+      'freshProofChecks=${budget.proofChecks}/4 '
+      'acceptedMutations=${budget.accepted}/5 conflicts=${budget.conflicts}/1; '
+      'offline reopen/exact ACK, two-client conflict/resolution, hint, tombstone '
+      'and local signout verified. Actual provider/Azure remain unverified.',
     );
   } finally {
     for (final client in clients) {
@@ -226,6 +286,139 @@ Future<void> main(List<String> args) async {
     proofClient.close();
     directory.deleteSync(recursive: true);
   }
+}
+
+class _FixtureBudget {
+  _FixtureBudget(this.origins);
+  final Set<String> origins;
+  int requests = 0;
+  int metadataReserved = 0;
+  int metadataAcknowledged = 0;
+  int authorizationReserved = 0;
+  int authorizationAcknowledged = 0;
+  int mutationAttempts = 0;
+  int proofChecks = 0;
+  int accepted = 0;
+  int conflicts = 0;
+  bool unknown = false;
+  final List<String> stages = [];
+  void proofCheck() {
+    check(proofChecks < 4 && !unknown, 'Fresh proof fixture budget exhausted.');
+    proofChecks++;
+  }
+}
+
+class _FixtureClient extends http.BaseClient {
+  _FixtureClient(this.inner, this.budget, this.networkAllowed);
+  final IOClient inner;
+  final _FixtureBudget budget;
+  final bool Function() networkAllowed;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    check(
+      networkAllowed() &&
+          !budget.unknown &&
+          budget.requests < 80 &&
+          request.url.scheme == 'https' &&
+          budget.origins.contains(request.url.origin) &&
+          request.url.userInfo.isEmpty &&
+          !request.url.hasFragment &&
+          request.url.queryParameters.keys.every(
+            (key) => {'scope', 'cursor', 'limit'}.contains(key),
+          ),
+      'Signed fixture request was not admitted.',
+    );
+    final directory =
+        request.method == 'POST' &&
+        {
+          '/v1/identity/challenges',
+          '/v1/identity/register',
+          '/v1/identities/link',
+          '/v1/identities/unlink',
+        }.contains(request.url.path);
+    final authorization =
+        request.method == 'POST' && request.url.path == '/v1/scopes';
+    final mutation =
+        request.method == 'POST' && request.url.path == '/v1/mutations';
+    final read =
+        request.method == 'GET' &&
+        ({
+              '/v1/session',
+              '/v1/identity/capabilities',
+              '/v1/identities',
+              '/v1/snapshot',
+              '/v1/sync',
+              '/v1/events',
+            }.contains(request.url.path) ||
+            RegExp(
+              r'^/v1/scopes/[0-9a-f]{64}/members$',
+            ).hasMatch(request.url.path));
+    check(
+      read || directory || authorization || mutation,
+      'Signed fixture method/route rejected.',
+    );
+    if (directory) {
+      check(budget.metadataReserved < 6, 'Directory fixture budget exhausted.');
+      budget.metadataReserved++;
+    }
+    if (authorization) {
+      check(
+        budget.authorizationReserved < 1,
+        'Policy fixture budget exhausted.',
+      );
+      budget.authorizationReserved++;
+    }
+    if (mutation) {
+      check(
+        budget.mutationAttempts < 6 && budget.accepted < 5,
+        'Document fixture budget exhausted.',
+      );
+      budget.mutationAttempts++;
+    }
+    budget.requests++;
+    request.followRedirects = false;
+    if (!directory && !authorization && !mutation) return inner.send(request);
+    try {
+      final response = await inner.send(request);
+      final bytes = <int>[];
+      await for (final chunk in response.stream.timeout(
+        const Duration(seconds: 4),
+      )) {
+        bytes.addAll(chunk);
+        check(
+          bytes.length <= 1024 * 1024,
+          'Fixture response exceeded its bound.',
+        );
+      }
+      check(
+        response.statusCode == 200 ||
+            authorization && response.statusCode == 201 ||
+            mutation && response.statusCode == 409,
+        'Fixture mutation outcome was not established.',
+      );
+      if (directory) budget.metadataAcknowledged++;
+      if (authorization) budget.authorizationAcknowledged++;
+      if (mutation) {
+        if (response.statusCode == 200) {
+          budget.accepted++;
+        } else {
+          budget.conflicts++;
+        }
+      }
+      return http.StreamedResponse(
+        Stream.value(bytes),
+        response.statusCode,
+        headers: response.headers,
+        request: response.request,
+      );
+    } catch (_) {
+      budget.unknown = true;
+      rethrow;
+    }
+  }
+
+  @override
+  void close() => inner.close();
 }
 
 Future<void> expectAuthorization(Future<Object?> Function() action) async {

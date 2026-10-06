@@ -11,6 +11,8 @@ import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
+import 'support/recorded_data_journey.dart';
+
 Future<void> main() async {
   try {
     await run();
@@ -23,7 +25,7 @@ Future<void> main() async {
 }
 
 Future<void> run() async {
-  final control = _Control(
+  final control = HostedManualControl(
     Uri.parse(Platform.environment['COSMOS_SYNC_HOSTED_CONTROL_URL'] ?? ''),
   );
   final fixture = await control.configuration();
@@ -32,164 +34,30 @@ Future<void> run() async {
   final token = fixture['accessToken'] as String;
   final id = fixture['documentId'] as String;
   final directory = Directory(fixture['cacheDirectory'] as String);
-  await directory.create(recursive: true);
-  CosmosSyncClient? writer;
-  CosmosSyncClient? peer;
-  StreamSubscription<ChangeHint>? hintSubscription;
-  StreamSubscription<DocumentSnapshot?>? watchSubscription;
-  var networkAllowed = true;
-  HttpSyncTransport transport() => HttpSyncTransport(
-    baseUri: endpoint,
-    tokenProvider: () async => token,
-    requestTimeout: const Duration(seconds: 15),
-    client: _BoundedClient(endpoint, control, () => networkAllowed),
-  );
-  void checkDocument(CosmosSyncClient client, String value) {
-    final document = client.get(id);
-    _check(
-      document != null &&
-          !document.deleted &&
-          !document.hasPendingWrites &&
-          document.data?['value'] == value,
-    );
-  }
-
-  try {
-    writer = await CosmosSyncClient.open(
-      path: '${directory.path}/writer.sqlite',
-      transport: transport(),
-    );
-    await writer.sync(maxPages: 4);
-    _check(writer.query(LocalQuery()).metadata.bootstrapComplete);
-    await control.stage('session_bootstrapped');
-
-    networkAllowed = false;
-    final operation = await writer.put(id, {
-      'fixture': 'bounded-hosted-validation',
-      'value': 'offline-create',
-    });
-    _check(writer.get(id)!.hasPendingWrites);
-    _check(writer.pending.single.operationId == operation);
-    await control.stage('offline_write_durable');
-    await writer.close();
-    writer = await CosmosSyncClient.open(
-      path: '${directory.path}/writer.sqlite',
-      transport: transport(),
-    );
-    _check(writer.pending.single.operationId == operation);
-    _check(writer.get(id)!.data?['value'] == 'offline-create');
-    await control.stage('offline_cache_reopened');
-
-    networkAllowed = true;
-    final acknowledged = writer.waitForPendingWrites();
-    final created = await writer.flush(maxOperations: 1);
-    _check(created.acknowledged == 1 && created.remaining == 0);
-    await acknowledged;
-    checkDocument(writer, 'offline-create');
-    await control.stage('create_acknowledged');
-
-    final peerTransport = transport();
-    peer = await CosmosSyncClient.open(
-      path: '${directory.path}/peer.sqlite',
-      transport: peerTransport,
-    );
-    await peer.sync(maxPages: 4);
-    checkDocument(peer, 'offline-create');
-    await control.stage('peer_received_create');
-    final staleOperation = await peer.put(id, {
-      'fixture': 'bounded-hosted-validation',
-      'value': 'stale-peer-edit',
-    });
-    final hint = Completer<void>();
-    hintSubscription = peerTransport
-        .watchChanges(cursor: peer.cache.cursor)
-        .listen(
-          (_) {
-            if (!hint.isCompleted) hint.complete();
-          },
-          onError: (Object _) {
-            if (!hint.isCompleted) {
-              hint.completeError(StateError('Hosted change hint failed.'));
-            }
-          },
-        );
-    final hintReady = hint.future.timeout(const Duration(seconds: 20));
-    // Install an immediate listener so an early transport error stays bounded
-    // and is observed by the later assertion, without an unhandled async error.
-    unawaited(hintReady.catchError((Object _) {}));
-    await writer.put(id, {
-      'fixture': 'bounded-hosted-validation',
-      'value': 'online-update',
-    });
-    final updated = await writer.flush(maxOperations: 1);
-    _check(updated.acknowledged == 1 && updated.remaining == 0);
-    checkDocument(writer, 'online-update');
-    await control.stage('update_acknowledged');
-    await hintReady;
-    await hintSubscription.cancel();
-    hintSubscription = null;
-    await control.stage('server_hint_received');
-    final conflicted = await peer.flush(maxOperations: 1);
-    _check(conflicted.acknowledged == 0 && conflicted.remaining == 1);
-    _check(peer.pending.single.state == MutationState.conflict);
-    _check(peer.pending.single.errorCode == 'conflict');
-    _check(peer.get(id)!.hasConflict);
-    await control.stage('stale_write_conflicted');
-    await peer.discard(staleOperation);
-    _check(peer.pending.isEmpty);
-    checkDocument(peer, 'online-update');
-    await control.stage('server_version_chosen');
-    await peer.sync(maxPages: 4);
-    checkDocument(peer, 'online-update');
-    await control.stage('remote_update_synchronized');
-    // A fresh watcher cannot be satisfied by the earlier 409/discard. This
-    // peer's tombstone can arrive only through the next durable remote sync.
-    final remoteTombstone = Completer<void>();
-    watchSubscription = peer.watch(id).listen((document) {
-      if (document?.deleted == true &&
-          document?.hasPendingWrites == false &&
-          !remoteTombstone.isCompleted) {
-        remoteTombstone.complete();
-      }
-    });
-
-    await writer.delete(id);
-    final deleted = await writer.flush(maxOperations: 1);
-    _check(deleted.acknowledged == 1 && deleted.remaining == 0);
-    _check(writer.get(id)!.deleted && !writer.get(id)!.hasPendingWrites);
-    await control.stage('delete_acknowledged');
-    await peer.sync(maxPages: 4);
-    await remoteTombstone.future.timeout(const Duration(seconds: 2));
-    _check(peer.get(id)!.deleted && !peer.get(id)!.hasPendingWrites);
-    await control.stage('remote_tombstone_watched');
-    await writer.close();
-    writer = await CosmosSyncClient.open(
-      path: '${directory.path}/writer.sqlite',
-      transport: transport(),
-    );
-    await writer.sync(maxPages: 4);
-    _check(writer.pending.isEmpty && writer.get(id)!.deleted);
-    await control.stage('cache_reopened_with_tombstone');
-  } finally {
-    await hintSubscription?.cancel();
-    await watchSubscription?.cancel();
-    await peer?.close();
-    await writer?.close();
-    // Leave the private SQLite evidence and retained server tombstone in place.
-  }
+  await RecordedDataJourney(
+    directory: directory,
+    documentId: id,
+    stage: control.stage,
+    transportFactory: (allowed, _) => HttpSyncTransport(
+      baseUri: endpoint,
+      tokenProvider: () async => token,
+      requestTimeout: const Duration(seconds: 15),
+      client: HostedBudgetClient(endpoint, control, allowed),
+    ),
+  ).run();
 }
 
 void _check(bool condition) {
   if (!condition) throw StateError('Hosted SDK assertion failed.');
 }
 
-class _BoundedClient extends http.BaseClient {
-  _BoundedClient(this.origin, this.control, this.networkAllowed)
+class HostedBudgetClient extends http.BaseClient {
+  HostedBudgetClient(this.origin, this.control, this.networkAllowed)
     : inner = IOClient(
         HttpClient()..connectionTimeout = const Duration(seconds: 10),
       );
   final Uri origin;
-  final _Control control;
+  final HostedManualControl control;
   final bool Function() networkAllowed;
   final IOClient inner;
 
@@ -249,8 +117,8 @@ class _BoundedClient extends http.BaseClient {
   void close() => inner.close();
 }
 
-class _Control {
-  _Control(this.base) {
+class HostedManualControl {
+  HostedManualControl(this.base) {
     if (base.scheme != 'http' ||
         base.host != '127.0.0.1' ||
         base.userInfo.isNotEmpty ||

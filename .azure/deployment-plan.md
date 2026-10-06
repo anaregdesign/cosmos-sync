@@ -1,6 +1,6 @@
 # Cosmos Sync delivery and deployment plan
 
-Status: Planning
+Status: Approved
 Date: 2026-10-06 JST
 Mode: MODIFY
 Reviewed source: `88be42ef000814b2934d45cf6b9ccde0386e0984`
@@ -10,13 +10,15 @@ Reviewed source: `88be42ef000814b2934d45cf6b9ccde0386e0984`
 Finish the directory-enabled preview candidate and its selected real OIDC,
 hosted Cosmos and final Android acceptance without rebuilding already completed
 features. This document is the implementation plan, not implementation,
-publication or deployment approval.
+publication or deployment evidence. Local implementation is approved below;
+publication and deployment require their own concrete review.
 
-The owner requested Issue reconciliation and planning. No executable code,
-Terraform runtime configuration, Azure resource, identity, credential or device
-is changed by this review. Historical owner pauses are lifted; the latest
-simulator-first instruction and temporary unavailability for attended login
-remain in effect until the owner changes them.
+The owner approved execution of this plan on 2026-10-06. Local implementation,
+nonpublishing validation and simulator work can proceed. Exact artifact,
+deployment, additional identity and attended-operation gates below remain
+separate; approval is not a waiver of actual acceptance evidence. Historical
+owner pauses are lifted; simulator-first delivery and temporary unavailability
+for attended login remain in effect until the owner changes them.
 
 Keep Cosmos DB for NoSQL, validated API access JWTs, server-managed authorization
 and server-selected partitions. ID tokens are limited to dedicated fresh-proof
@@ -47,7 +49,7 @@ actual resource operation, verify that the private target and live metadata
 still match that approved context. Planning does not refresh Azure credentials
 or establish current cloud health.
 
-## 3. Verified baseline and remaining source gaps
+## 3. Verified baseline and implementation progress
 
 [PR #39](https://github.com/anaregdesign/cosmos-sync/pull/39) is open and unmerged.
 All nine checks passed at `88be42e` in
@@ -63,15 +65,22 @@ remain distinguishable.
 | Go BFF | `bff/identity_runtime.go`, `identity_http.go`, `broker_proof.go`, `broker_directory.go` | Opt-in directory factory, exact API/ID correlation, uncached trusted profile, register/link/unlink, stable ownership, generation fences | Compatible deployment contract and actual hosted identity execution |
 | Dart SDK | `packages/cosmos_sync/`, `tool/identity_probe.dart` | Typed lifecycle transport, identity-aware SQLite/IndexedDB fencing and coordinated signed local/emulator driver | Directory-aware bounded actual-host acceptance driver |
 | Native/Web app | `examples/flutter_app/lib/auth/`, account lifecycle UI | Isolated fresh proofs, pending consent, cancellation/recovery and cache-open verification | Actual proof receipts and host-driven simulator process-death tooling |
-| ACA Terraform | `infra/terraform/azure-container-apps/` | Verified builtin/legacy template, retained IAM/secret/ingress safeguards | Directory settings and immutable compatible-image guard are not implemented |
-| Native live runner | `tools/native_entra_auth.py`, `entra_auth_live_test.dart` | Actual API-token capture/verification and foreground owner gate | No fresh ID/server nonce/auth_time result; preflight may fail before a new receipt exists |
-| Hosted SDK runner | `tools/hosted_azure_live.py`, `test/hosted_azure_live.dart` | Explicitly builtin-only, one hosted replica, bounded three document mutations | No directory registration/proof route permissions or identity-specific receipt budget |
+| ACA Terraform | `infra/terraform/azure-container-apps/` | Typed directory opt-in/image guard, assigned UAMI binding, 61 mock plans and strict generated-JSON/Go contract; old modes preserved | Exact nonpublishing candidate image/CI and separate activation review |
+| Native live runner | `tools/native_entra_auth.py`, `entra_auth_live_test.dart` | API-only mode retained; transient directory-proof v2, provided/server nonce distinction, source-bound fresh failure receipts and foreground gate implemented | Clean-source emulator restart repetition and actual attended customer evidence |
+| Hosted SDK runner | `tools/directory_azure_live.py`, `test/directory_azure_live.dart` | Explicit recorded-directory preflight/data journey, immutable runtime/native-proof pinning, shared ledger and partial/unknown-outcome receipts | Official Cosmos-emulator/candidate CI, then actual approved hosting/customer journey |
 | Local cloud/UI runners | `tools/live_azure_contract.py`, `tools/flutter_azure_live.py`, `azure_live_ui_test.dart` | Separate legacy grants-file and recorded-token contracts | Cannot stand for directory authorization, hosted MI or actual fresh ordinary login |
 | Retained Azure | Prior readback and Issues #16/#24 | Startup/configuration observed; minimum replicas returned to zero | Envoy 403, evaluated peer, log delivery and actual application data path remain unverified |
 
-This is not merely a wait for a person to log in: IaC and acceptance tooling
-still need implementation. Conversely, identity linking, Web support and core
-authorization should not be reimplemented because an old Issue says so.
+The reviewed IaC/proof/driver gaps are now implemented. The same recorded
+preflight/data path measured 25/29 requests inside the signed TLS/Graph/Dart/SQLite
+fixture; the full lifecycle uses its separate 54/80 fixture allowance. An actual
+Android emulator restart passed on the working tree with dirty-source attribution.
+Native SDK/application, Chromium/Node, Python and BFF race/vet/build checks passed.
+Neither configured local Docker socket is currently available, so current
+container and official Cosmos-emulator attempts failed before execution; exact
+portable candidate CI and clean restart repetition remain necessary. Identity
+linking, Web support and core authorization must not be reimplemented to work
+around the separate actual customer/artifact/hosting gates.
 
 ## 4. Recipe and architecture
 
@@ -80,6 +89,14 @@ Selected recipe: **existing Terraform and saved-plan workflow**.
 Preserve the repository's locked providers, mock-plan tests, private state,
 immutable saved-plan review and existing CLI runbooks. Do not introduce azd,
 another framework or a new hosting service for this bounded modification.
+
+Research sources: Azure Prepare's Container Apps, Cosmos DB, Key Vault and
+Terraform references; the repository's pinned provider schemas and mock-plan
+workflow. Retained GHCR/AzAPI hosting needs no new ACR, placeholder app, state
+backend, log workspace or paid resource. Preserve managed-identity Cosmos/Graph
+access, existing secret references and the existing topology instead of adopting
+the references' unrelated new-resource examples. The mock-plan JSON contract
+uses Terraform's versioned machine-readable test output.
 
 The candidate keeps the existing topology:
 
@@ -337,7 +354,7 @@ source/CI completion and no merge is authorized here.
 
 ## 9. Provisioning inventory and decision gates
 
-This planning pass deploys **zero** resources and executes **zero** Azure plans/
+This preparation deploys **zero** resources and executes **zero** Azure plans/
 applies. No subscription quota or replica allocation is changed or claimed
 validated. Live quota/capacity checks are not applicable to this zero-operation
 review; they must be completed for an explicitly approved execution plan if its
@@ -345,7 +362,7 @@ inventory changes. The retained environment continues to have costs.
 
 | Gate | Required decision/evidence |
 | --- | --- |
-| Implementation | Approval to execute the local P1/P2/P3 plan; no approval inferred from this planning document |
+| Implementation | Approved by the owner on 2026-10-06; execute and verify P1/P2/P3, then persist measured evidence |
 | Candidate distribution/hosting | Exact compatible immutable artifact and reviewed saved plan; no development publication or retained-image overwrite |
 | Namespace/data | Explicit new directory provenance; no automatic builtin/legacy ownership migration |
 | Real credential/member coverage | Owner decision on incompatible one-customer versus independent-credential/member criteria; no silent waiver or extra identity |
@@ -366,11 +383,52 @@ not proof of current customer issuance or hosted execution.
 - [x] Select existing recipe and retained architecture; propose no new resources.
 - [x] Assign nonduplicated source/tooling/live/device criteria and acyclic dependencies.
 - [x] Record validation targets, version boundaries and unresolved decisions.
-- [ ] Owner approves implementation plan.
-- [ ] Execute and validate local work packages.
+- [x] Owner approves implementation plan (2026-10-06).
+- [x] Implement and locally verify source/proof/recorded-driver work and initial emulator OS restart.
+- [ ] Persist the candidate, repeat restart cleanly and complete nonpublishing container/Cosmos-emulator checks and exact-head CI.
 - [ ] Review a concrete activation artifact/plan and complete Azure validation.
 - [ ] Execute separately authorized deployment and attended acceptance.
 - [ ] Reproduce onboarding, final Android and close scoped leaves with evidence.
 
-Stop after planning. Do not mark this document Approved, Ready for Validation,
-Validated or Deployed without the corresponding real decision/work/evidence.
+Execute approved local work first. Do not mark this document Ready for
+Validation, Validated or Deployed without the corresponding real work/evidence.
+
+## 11. Owner-requested restart pause, 2026-10-06
+
+Pause execution at the owner's request for a machine/device restart. This is a
+temporary handoff, not cancellation of the approved implementation plan or
+authorization of its separately gated live operations.
+
+P1/P2/P3 source, tests, examples and related documentation are being preserved on
+the existing PR branch. Local BFF vet/race/build, 186 native SDK/164 Chromium
+cases, 108 native app/24 Chromium/19 Node cases and 196 portable tool tests passed.
+The signed directory lifecycle passed at 54/80 fixture requests; its shared
+recorded preflight/data path measured 25/29 with all 16 stages. Actual Android
+emulator exact-PID SIGKILL/relaunch preserved secure binding, pending operation
+and matching ACK/deduplication, but that receipt still identifies dirty source
+based on `c9f3402`. It is not clean-candidate acceptance.
+
+The owned emulator is stopped, its exact disposable AVD/registration and private
+target file are removed, and its ports are released. Owned fixture processes and
+individual reverse mappings were already cleaned. No session automation is
+attached. Shared Docker/ADB services and physical devices were not terminated or
+modified for the pause.
+
+Resume in this order:
+
+1. Read the current #2 handoff and exact candidate CI, including nonpublishing
+   container and official Cosmos-emulator jobs. Local Docker engine sockets were
+   unavailable; failed local attempts must not be relabeled passed.
+2. Repeat the restart fixture from the exact clean candidate using a newly owned
+   supported emulator, fresh private target/evidence and explicit installation
+   authorization. No physical fallback or shared package/data clearing.
+3. Finish #27/#28 source/tooling acceptance and #24's offline checklist only when
+   the revised criteria actually pass; keep actual integration criteria open.
+4. Continue bounded read-only #16 diagnosis with existing credentials, then
+   separately review immutable artifact/saved plan, live coverage/reachability
+   and attended customer/onboarding/final Android gates.
+
+Do not start unattended customer/management login, rotate the source secret,
+publish, apply, widen a policy, create an identity or operate the connected
+physical phone on resumption without its applicable authorization. The real
+ledger remains seven attempts and zero accepted document mutations.

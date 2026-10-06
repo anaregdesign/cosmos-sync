@@ -35,10 +35,16 @@ storage or inconsistent trust fail startup. Memory storage is development-only.
 Readiness indicates completed startup/configuration, not continuous Graph or
 Cosmos availability.
 
-The provided ACA Terraform workload template still supports only builtin/legacy.
-Directory deployment requires a separately reviewed compatible image and explicit
-workload configuration; the example is not permission to alter the retained
-runtime or claim hosted acceptance.
+The ACA Terraform workload now admits explicit directory opt-in with typed trust
+and a reviewed immutable image/source assertion; builtin/legacy remain unchanged.
+Its [directory example](../infra/terraform/azure-container-apps/directory.tfvars.example)
+is unapproved by default. Generated mock-plan JSON is checked with the strict Go
+schema and the actual factory target restrictions. The managed-identity client
+comes from the identity assigned to the app. A configuration assertion is neither
+registry source verification nor permission to publish/apply; the known old
+images cannot be relabeled directory-capable. Follow the
+[activation/rollback runbook](azure-container-apps.md)
+without adopting existing legacy/builtin ownership or removing retained metadata.
 
 The [wire protocol](protocol.md#directory-identity-lifecycle) specifies the
 capability/challenge/register/list/link/unlink routes. Registration is explicit;
@@ -241,6 +247,23 @@ and bounded child; native TLS trusts only that fixture certificate without
 disabling verification. No such proof issuer exists in the production binary.
 These results remain separate from actual code/PKCE, customer freshness and
 hosted MI/Graph/Cosmos.
+
+That coordinated driver also invokes the shared recorded-directory preflight and
+data journey used by `tools/directory_azure_live.py`: capabilities, verified
+registered session, offline reopen/exact ACK, two-client conflict/discard, hint,
+tombstone/reopen and SDK signout purge. The signed empty-scope fixture measures
+25 requests within its separate 29-request recorded-path allowance; the entire
+register/link/unlink lifecycle remains a separately bounded 80-request fixture.
+The same Dart path is selected for official Cosmos-emulator verification, not
+substituted by an in-memory transport. These budgets reserve logical requests and
+operations, not RU, physical SDK/CAS attempts or a live 40-request run.
+
+The [manual native proof control](native-auth-live.md#directory-fresh-proof-mode)
+obtains an actual authenticated challenge only in a separately approved live run.
+Its transient-stdin CLI reuses production API/ID verification but deliberately
+does not call Graph, consume the stored nonce or authorize an account. Standalone
+provided-nonce verification and coordinated server-challenge provenance are
+distinct receipt fields. Signed fixture receipts are not actual customer issuance.
 
 Additional RSA/TLS/JWKS API/ID and Graph-transport fixtures verify differing
 subjects with matching signed objects, wrong signatures/claims/audiences/scopes/

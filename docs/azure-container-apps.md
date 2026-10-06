@@ -69,6 +69,18 @@ all end users. Neither mode imports legacy partitions automatically; migration
 must be reviewed separately. Never solve onboarding with a wildcard grant, trust
 in email/client roles, or an auth bypass.
 
+The unpublished directory candidate adds an opt-in
+`authorization_mode="directory"` with typed server-only `directory` settings.
+The module derives the reader's managed identity from the actual assigned BFF
+UAMI and requires exact CIAM/API/public-client trust and callbacks.
+`directory_image_verification` pins the same image and full reviewed source
+commit with an explicit verified assertion; known old builtin/legacy artifacts
+are rejected. The [directory overlay and activation/rollback
+procedure](../infra/terraform/azure-container-apps/README.md) preserve existing
+state, roles, private networking and replica limits. No profile, Graph grant,
+federated credential or published candidate is created by this option.
+Offline mock/configuration checks are not hosted execution evidence.
+
 Only six Cosmos data actions are included: metadata read, item read/create/replace,
 query and the SDK-required readChangeFeed permission. They allow the BFF's atomic
 document/journal/receipt operations inside one logical partition, with no account
@@ -219,7 +231,7 @@ inside the BFF.
 
 ## Validate, deploy and upgrade
 
-From a clean checkout with Bash, Python 3 and curl, run the pinned validator:
+From a clean checkout with Bash, Python 3, curl and Go 1.26+, run the pinned validator:
 
 ```sh
 bash infra/terraform/azure-container-apps/verify.sh

@@ -92,7 +92,8 @@ def validate_manifest(value):
 
 class HostedControl:
     """Capability-bound loopback configuration and hard protocol attempt budget."""
-    def __init__(self, fixture, *, max_requests=40, seconds=120, clock=time.monotonic):
+    def __init__(self, fixture, *, max_requests=40, seconds=120, clock=time.monotonic,
+                 stages=STAGES, get_paths=GET_PATHS, request_ledger=None):
         require(type(max_requests) is int and 1 <= max_requests <= 40
                 and type(seconds) is int and 1 <= seconds <= 120, "invalid hosted control bounds")
         self.fixture = fixture
@@ -103,6 +104,8 @@ class HostedControl:
         self.accepted, self.conflicts = 0, 0
         self.pending_attempt, self.unknown_outcome = None, False
         self.stages, self.lock = [], threading.Lock()
+        self.expected_stages, self.get_paths, self.request_ledger = stages, get_paths, request_ledger
+        self.aggregate_requests = None
         self.prefix = "/" + secrets.token_urlsafe(32) + "/"
         control = self
 
@@ -156,12 +159,18 @@ class HostedControl:
                             if set(value) != {"method", "path", "origin"} or account_https_origin(value["origin"]) != control.origin:
                                 raise ValueError()
                             mutation = value["method"] == "POST" and value["path"] == "/v1/mutations"
-                            if not (mutation or value["method"] == "GET" and value["path"] in GET_PATHS):
+                            if not (mutation or value["method"] == "GET" and value["path"] in control.get_paths):
                                 raise ValueError()
                             if control.unknown_outcome or control.requests >= control.max_requests or mutation and (
                                     control.mutation_attempts >= 4 or control.accepted >= 3 or control.pending_attempt is not None):
                                 self.reply(429, {"error": "private_budget_exhausted"})
                                 return
+                            if control.request_ledger is not None:
+                                try:
+                                    control.aggregate_requests = control.request_ledger.reserve()["protocolRequests"]
+                                except GateError:
+                                    self.reply(429, {"error": "private_aggregate_budget_exhausted"})
+                                    return
                             control.requests += 1
                             control.mutation_attempts += int(mutation)
                             if mutation:
@@ -178,7 +187,7 @@ class HostedControl:
                             control.pending_attempt = None
                         else:
                             index = len(control.stages)
-                            if set(value) != {"stage"} or index >= len(STAGES) or value["stage"] != STAGES[index]:
+                            if set(value) != {"stage"} or index >= len(control.expected_stages) or value["stage"] != control.expected_stages[index]:
                                 raise ValueError()
                             control.stages.append(value["stage"])
                     self.reply(200, result)
@@ -186,7 +195,7 @@ class HostedControl:
                     self.reply(400, {"error": "invalid_control_request"})
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.server.daemon_threads = True
+        self.server.daemon_threads = False
         self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
 
     @property
@@ -197,9 +206,11 @@ class HostedControl:
         self.thread.start()
 
     def close(self):
-        self.server.shutdown()
+        if self.thread.is_alive():
+            self.server.shutdown()
         self.server.server_close()
-        self.thread.join(timeout=3)
+        if self.thread.ident is not None:
+            self.thread.join(timeout=3)
 
 
 def verify_token(manifest, directory, *, go_bin="go"):

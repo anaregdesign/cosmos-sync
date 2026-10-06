@@ -205,12 +205,12 @@ variable "history_epoch" {
 }
 
 variable "authorization_mode" {
-  description = "New-deployment builtin personal/shared memberships, or explicit legacy empty grants (deny all). Builtin uses a new namespace and does not migrate legacy partitions."
+  description = "Builtin personal/shared memberships, opt-in directory lifecycle, or legacy empty grants (deny all). No mode automatically adopts another mode's ownership."
   type        = string
   default     = "builtin"
   validation {
-    condition     = contains(["legacy", "builtin"], var.authorization_mode)
-    error_message = "Choose builtin for a verified new deployment or explicit legacy (empty/deny-all grants), never an allow-all policy."
+    condition     = contains(["legacy", "builtin", "directory"], var.authorization_mode)
+    error_message = "Choose builtin, explicitly configured directory, or legacy (empty/deny-all grants), never an allow-all policy."
   }
 }
 
@@ -218,6 +218,87 @@ variable "builtin_authorization_image_verified" {
   description = "Operator assertion that the selected immutable image includes tested builtin authorization and the chosen new namespace/migration is intentional. This does not inspect the registry or authorize deployment."
   type        = bool
   default     = false
+}
+
+variable "directory" {
+  description = "Server-only directory trust, required only in directory mode. Use exact lowercase UUIDs, one public client, 1–16 distinct callbacks and a 1–128 byte visible ASCII namespace. The reader's managed identity is derived from the BFF's actual assigned UAMI. No user, Graph grant or federated credential is created."
+  type = object({
+    tenant_id            = string
+    initial_domain       = string
+    reader_client_id     = string
+    workforce_tenant_ids = list(string)
+    namespace            = string
+    callbacks            = list(string)
+  })
+  default = null
+  validation {
+    condition     = var.directory == null ? var.authorization_mode != "directory" : var.authorization_mode == "directory"
+    error_message = "Directory settings are required in directory mode and forbidden in builtin/legacy modes."
+  }
+  validation {
+    condition = var.directory == null ? true : (
+      alltrue([for id in concat([var.directory.tenant_id, var.directory.reader_client_id], var.directory.workforce_tenant_ids) :
+        can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", id))
+      ]) &&
+      can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.onmicrosoft\\.com$", var.directory.initial_domain)) &&
+      length(var.directory.workforce_tenant_ids) >= 1 && length(var.directory.workforce_tenant_ids) <= 16 &&
+      length(distinct(var.directory.workforce_tenant_ids)) == length(var.directory.workforce_tenant_ids) &&
+      !contains(var.directory.workforce_tenant_ids, var.directory.tenant_id) &&
+      can(regex("^[!-~]([ -~]{0,126}[!-~])?$", var.directory.namespace))
+    )
+    error_message = "Directory trust needs canonical lowercase IDs, an exact initial onmicrosoft.com domain, 1–16 distinct non-target workforce tenants and a bounded, unpadded ASCII namespace."
+  }
+  validation {
+    condition = var.directory == null ? true : (
+      var.oidc.issuer == "https://${var.directory.tenant_id}.ciamlogin.com/${var.directory.tenant_id}/v2.0" &&
+      var.oidc.tenant_claim == "tid" &&
+      length(var.oidc.allowed_client_ids) == 1 &&
+      alltrue([for id in concat([var.oidc.audience], var.oidc.allowed_client_ids) :
+        can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", id))
+      ]) &&
+      !contains(var.oidc.allowed_client_ids, var.oidc.audience)
+    )
+    error_message = "Directory mode requires the exact tenant-ID CIAM issuer, tid, a dedicated canonical API GUID audience and exactly one distinct public-client GUID."
+  }
+  validation {
+    condition = var.directory == null ? true : (
+      length(var.directory.callbacks) >= 1 && length(var.directory.callbacks) <= 16 &&
+      length(distinct(var.directory.callbacks)) == length(var.directory.callbacks) &&
+      alltrue([for callback in var.directory.callbacks :
+        length(callback) <= 2048 && can(regex("^[!-~]+$", callback)) &&
+        can(regex("^(https://[A-Za-z0-9.-]+(:[0-9]+)?|http://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:[0-9]+)?|[a-z][a-z0-9+.-]*\\.[a-z0-9+.-]*://[A-Za-z0-9.-]+)(/([A-Za-z0-9._~!$&'()*+,;=:@/-]|%[0-9A-Fa-f]{2})*)?$", callback))
+      ])
+    )
+    error_message = "Use 1–16 exact distinct bounded callbacks: HTTPS, loopback HTTP or a dotted native scheme, without userinfo, query, fragment or whitespace."
+  }
+}
+
+variable "directory_image_verification" {
+  description = "Reviewed directory-capable immutable image and exact source commit, plus explicit verified assertion. Metadata only, not a registry inspection, publication or deployment approval. The image must equal image; known builtin/legacy-only release artifacts are rejected."
+  type = object({
+    image         = string
+    source_commit = string
+    verified      = bool
+  })
+  default = null
+  validation {
+    condition = var.directory_image_verification == null ? true : (
+      var.authorization_mode == "directory" &&
+      var.directory_image_verification.image == var.image &&
+      can(regex("^[0-9a-f]{40}$", var.directory_image_verification.source_commit)) &&
+      var.directory_image_verification.source_commit != "0000000000000000000000000000000000000000" &&
+      var.directory_image_verification.verified &&
+      !contains([
+        "82e937c8659e9ec0263a78e6e3ad2f43e05be20a",
+        "76c1f46876b3dfd13f4bd7d4dd144cdf74efa5c0"
+      ], var.directory_image_verification.source_commit) &&
+      !contains([
+        "sha256:a23ab75eb4518597aa26e4833787b9b77a07def717868e080944555594adc1b3",
+        "sha256:2651a4bca6df6f751b7f5e46d317ea9f6e4ca83081374badae142d57cdfc812a"
+      ], try(split("@", var.image)[1], ""))
+    )
+    error_message = "Supply verified directory-capable image/source metadata for this exact pinned image, not a different digest, mutable/unverified candidate or known builtin/legacy release."
+  }
 }
 
 variable "log_destination" {

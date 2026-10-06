@@ -124,6 +124,19 @@ online reauthentication. Proofs never replace primary credentials or enter an
 offline outbox. Recovery is normal sign-in with a remaining linked credential,
 not an email search, replacement registration, deletion or migration endpoint.
 
+Validation tools do not extend this wire contract. The standalone fresh-proof
+stdin verifier checks authentication against an exact *provided* nonce; it
+does not establish server provenance, read Graph, consume directory state or
+authorize a session. The separately approved native control obtains the actual
+authenticated challenge, keeps proof credentials transient and submits a single
+registration before verifying the account/session. Its recorded-token SDK
+successor permits only reads and three document mutations, with no new lifecycle
+writes. Both share an existing origin-bound aggregate request ledger and stop on
+unknown submitted outcomes. Request/operation reservations and acknowledged
+HTTP responses are not measurements of Cosmos CAS attempts, audit items, RU or
+cross-partition atomicity. See [native proof](native-auth-live.md#directory-fresh-proof-mode)
+and [directory acceptance tooling](developer-onboarding.md#directory-acceptance-tooling).
+
 ## Documents and mutations
 
 `Document = {id: string, data: JSON object|null, version: positive integer, deleted: boolean}`. Versions/sequences/preconditions are exact JSON integers at most `2^53-1`. Native and web reject unsafe integral JSON data rather than round it. IDs contain 1–128 ASCII letters/numbers, dot, underscore or hyphen, beginning with a letter/number. Data is bounded to 256 KiB on the BFF; the SDK uses a conservative 255 KiB bound. Unknown request fields and duplicate JSON keys are rejected.

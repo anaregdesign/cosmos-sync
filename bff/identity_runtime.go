@@ -31,12 +31,33 @@ func (options *IdentityDirectoryOptions) readerOptions() brokerDirectoryOptions 
 		options.ManagedIdentityClientID, options.WorkforceTenantIDs}
 }
 
-func newIdentityRuntime(ctx context.Context, server *Server, options *IdentityDirectoryOptions) (*identityRuntime, error) {
+func identityProofTargets(config Config, options *IdentityDirectoryOptions) ([]identityProofTarget, error) {
 	if options == nil || !validBrokerDirectoryOptions(options.readerOptions()) || !validIdentityText(options.Namespace, 128) ||
 		len(options.Callbacks) == 0 || len(options.Callbacks) > 16 ||
-		server.config.OIDC.Issuer != brokerIssuer(options.TenantID) || server.config.OIDC.TenantClaim != "tid" ||
-		len(server.config.OIDC.AllowedClientIDs) != 1 {
+		config.OIDC.Issuer != brokerIssuer(options.TenantID) || config.OIDC.TenantClaim != "tid" ||
+		len(config.OIDC.AllowedClientIDs) != 1 {
 		return nil, protocolError(400, "invalid_identity_configuration")
+	}
+	clientID := config.OIDC.AllowedClientIDs[0]
+	targets := make([]identityProofTarget, 0, len(options.Callbacks))
+	seen := make(map[string]bool)
+	for _, callback := range options.Callbacks {
+		target := identityProofTarget{config.OIDC.Issuer, "entra", options.Namespace, clientID, callback}
+		if !validIdentityTarget(target) || seen[callback] || !operationIDPattern.MatchString(clientID) ||
+			clientID != strings.ToLower(clientID) || !operationIDPattern.MatchString(config.OIDC.Audience) ||
+			config.OIDC.Audience != strings.ToLower(config.OIDC.Audience) || clientID == config.OIDC.Audience {
+			return nil, protocolError(400, "invalid_identity_configuration")
+		}
+		seen[callback] = true
+		targets = append(targets, target)
+	}
+	return targets, nil
+}
+
+func newIdentityRuntime(ctx context.Context, server *Server, options *IdentityDirectoryOptions) (*identityRuntime, error) {
+	targets, err := identityProofTargets(server.config, options)
+	if err != nil {
+		return nil, err
 	}
 	authorization, ok := server.store.(directoryAuthorizationStore)
 	if !ok {
@@ -53,19 +74,6 @@ func newIdentityRuntime(ctx context.Context, server *Server, options *IdentityDi
 		store = memoryIdentityDirectoryStore{configured}
 	default:
 		return nil, protocolError(400, "invalid_identity_configuration")
-	}
-	clientID := server.config.OIDC.AllowedClientIDs[0]
-	targets := make([]identityProofTarget, 0, len(options.Callbacks))
-	seen := make(map[string]bool)
-	for _, callback := range options.Callbacks {
-		target := identityProofTarget{server.config.OIDC.Issuer, "entra", options.Namespace, clientID, callback}
-		if !validIdentityTarget(target) || seen[callback] || !operationIDPattern.MatchString(clientID) ||
-			clientID != strings.ToLower(clientID) || !operationIDPattern.MatchString(server.config.OIDC.Audience) ||
-			server.config.OIDC.Audience != strings.ToLower(server.config.OIDC.Audience) || clientID == server.config.OIDC.Audience {
-			return nil, protocolError(400, "invalid_identity_configuration")
-		}
-		seen[callback] = true
-		targets = append(targets, target)
 	}
 	directory, err := newBrokerIdentityDirectory(store, targets)
 	if err != nil {

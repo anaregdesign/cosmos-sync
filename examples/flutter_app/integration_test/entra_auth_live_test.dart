@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cosmos_sync/cosmos_sync.dart';
 import 'package:cosmos_sync_example/auth/auth_session_controller.dart';
 import 'package:cosmos_sync_example/auth/native_oidc.dart';
 import 'package:flutter/material.dart';
@@ -81,6 +82,24 @@ void main() {
           final binding = current.credentialSessionId;
           _require(current.hasStoredSession && binding != null);
           await control.capture('initial', await current.accessToken());
+          if (control.directoryProof) {
+            final challenge = await control.challenge();
+            await control.stage('directory_challenge_received');
+            _require(
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed,
+            );
+            final saved = await store.read();
+            await control.stage('fresh_browser_request_started');
+            final proof = await current.freshIdentityProof(challenge);
+            await control.stage('fresh_callback_received');
+            _require(
+              current.credentialSessionId == binding &&
+                  await store.read() == saved,
+            );
+            await control.proof(proof);
+            await control.stage('fresh_proof_verified');
+          }
 
           // A new controller has no RAM access token. Restoration reads the real
           // OS secure store, and its next token call performs provider refresh.
@@ -148,12 +167,15 @@ class _Control {
 
   final Uri base;
   String? _storeKey;
+  bool directoryProof = false;
   String get storeKey =>
       _storeKey ?? (throw StateError('Validation configuration is not ready.'));
 
   Future<Map<String, Object?>> configuration() async {
     final result = await _request('GET', 'config');
-    if (result['protocolVersion'] != 1 ||
+    if (!{1, 2}.contains(result['protocolVersion']) ||
+        result['protocolVersion'] == 2 &&
+            result['proofMode'] != 'directory-register-v1' ||
         result['nativeConfig'] is! Map ||
         result['storeKey'] is! String ||
         !(result['storeKey'] as String).startsWith(
@@ -162,6 +184,7 @@ class _Control {
       throw StateError('Validation configuration is invalid.');
     }
     _storeKey = result['storeKey'] as String;
+    directoryProof = result['protocolVersion'] == 2;
     return (result['nativeConfig'] as Map).cast<String, Object?>();
   }
 
@@ -174,6 +197,17 @@ class _Control {
 
   Future<void> stage(String value) async {
     await _request('POST', 'stage', {'stage': value});
+  }
+
+  Future<IdentityChallenge> challenge() async =>
+      IdentityChallenge.fromJson(await _request('POST', 'challenge', {}));
+
+  Future<void> proof(FreshIdentityProof proof) async {
+    final result = await _request('POST', 'proof', proof.toJson());
+    if (result['freshAuthenticationVerified'] != true ||
+        result['directoryRegistrationVerified'] != true) {
+      throw StateError('Directory authentication proof was not accepted.');
+    }
   }
 
   Future<Map<String, Object?>> _request(
@@ -193,7 +227,7 @@ class _Control {
         request.add(encoded);
       }
       final response = await request.close().timeout(
-        const Duration(seconds: 15),
+        Duration(seconds: directoryProof ? 90 : 15),
       );
       if (response.statusCode != HttpStatus.ok) {
         throw StateError('Private validation control request failed.');

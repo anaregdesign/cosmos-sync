@@ -37,6 +37,37 @@ These debug fixtures prove neither actual CIAM authentication/Azure storage
 nor OS process death, airplane mode or suspension. Exact source and additional
 clean-checkout evidence are in [verification](verification.md#foreground-input-and-clean-source-simulator-evidence-2026-10-05).
 
+## Simulator process-death fixture
+
+The separate host-driven restart target is an Android-emulator-only test:
+
+```sh
+python3 tools/flutter_restart_smoke.py --exclusive-emulator \
+  --device-id-file .cache/devices/emulator.txt --authorize-install \
+  --output artifacts/android-restart-new-run.json
+```
+
+Use only a newly owned supported emulator and fresh private evidence destination.
+The runner refuses an existing `com.anaregdesign.cosmos_sync_example` package;
+it must not replace a shared installation or clear another app's data. It builds
+and installs one signed-test-adapter APK, durably commits native secure
+credential binding/settings/SQLite/pending operation, verifies the exact old PID,
+sends SIGKILL to only that exact fixture PID under its debuggable app UID,
+checks the old process is gone and relaunches the
+same installation with a different PID. There is no `pm clear` or reinstall
+between phases. The new process restores offline without token refresh, sends
+the same operation, verifies its matching ACK and backend replay deduplication,
+then purges/signs out. Only its owned package/process and exact reverse mappings
+are cleaned.
+
+An initial Android 14/API 34 working-tree run passed those assertions on
+2026-10-06; the dirty source receipt remains separate from clean committed
+repetition recorded in #28. Earlier failed attempts remain failures. This is
+actual emulator OS process-death evidence, not physical airplane/suspension,
+power loss, actual AppAuth/provider issuance or Azure access. The production
+application has no test authentication path. Keep final attended Android #20
+separate and do not select a connected physical phone for this command.
+
 ## Current inventory and pending owner actions
 
 Initial read-only discovery on 2026-10-03 found no attached Android device. Apple

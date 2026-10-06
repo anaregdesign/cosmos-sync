@@ -865,3 +865,56 @@ directory runtime/configuration requires separate review. No additional
 people, permission/scope/secret changes, callback repair, cloud data operation,
 paid provisioning, deployment or publication occurred. The live ledger is
 unchanged at **7/40 attempts and zero accepted application mutations**.
+
+## Directory delivery preparation, 2026-10-06
+
+The owner approved P1/P2/P3 implementation in the
+[delivery plan](../.azure/deployment-plan.md), retaining separate artifact,
+deployment, identity-coverage and attended-operation gates. The new source
+provides typed directory Terraform, shared authentication-only proof verification,
+fresh native failure receipts/transient directory control, actual emulator restart
+tooling and a bounded recorded-directory SDK driver. No Azure mutation,
+publication, physical operation or attended customer login occurred in this
+preparation checkpoint.
+
+| Check | Measured result and scope |
+| --- | --- |
+| Directory IaC | All 61 workload mock plans, locked init/format/validate/TFLint, actual generated mock JSON to strict Go schema/factory contract and three extraction tests passed; no Azure plan/apply |
+| BFF candidate | Formatting/vet/race/build passed; root race suite 221.419 seconds, with signed fresh API/ID and transient CLI regressions |
+| SDK candidate | 186 native SQLite tests and 164 Chromium cases passed; analyzer clean |
+| Application candidate | 108 native tests, 24 Chromium auth/lifecycle cases and 19 Node/MSAL tests passed; analyzer/format clean |
+| Portable tools | 196 tests passed, including origin/configuration/candidate binding, preserved aggregate history, transient proof cancellation, new preflight/failure receipts, SDK timeout/ambiguous partial counts and owned cleanup |
+| Shared signed directory path | Actual TLS/Go/Graph-fixture/Dart/SQLite passed; complete lifecycle 54/80 requests, six directory operations, one shared-policy operation, four proof pair checks, five accepted document responses and one conflict |
+| Recorded preflight plus data journey | The same empty-scope fixture measured 25/29 BFF requests and all 16 stages; old builtin target reuses its data journey without becoming directory-enabled |
+| Actual Android emulator OS death | Initial working-tree r4 receipt passed: one installation, old PID gone/new PID different, restored native secure binding and exact pending operation/session, matching ACK, backend deduplication and owned app/link cleanup |
+| Current local Docker limitation | Docker Desktop processes exist but neither configured engine socket is available; current container/Cosmos-emulator attempts failed before a usable engine. They are not recorded as passed; exact-candidate portable CI remains required |
+
+The initial restart receipt identifies planning commit `c9f3402` with
+`sourceTreeDirty=true`; it is not a clean committed-candidate result. Exact
+candidate hashes, clean repetition and current portable CI outcomes are recorded
+on #27/#28/#24. Earlier failed restart attempts are retained, not overwritten.
+The previously completed planning-head
+[CI 37397985564](https://github.com/anaregdesign/cosmos-sync/actions/runs/37397985564)
+does not validate these later implementation changes.
+
+Native directory proof requires a matching healthy immutable hosting readback,
+selected customer trust and attended foreground action before its four BFF
+requests. A standalone CLI proves the provided nonce only; server challenge
+provenance, directory registration and session correlation belong to the control.
+Fresh API/ID proofs are transient, while historical API capture files remain
+private. The SDK successor reuses a just-completed matching native receipt and
+its initial API credential; it performs no new proof/identity writes.
+
+The shared private ledger preserves the historical seven attempts. Four native
+proof reservations and a 29-request SDK envelope fit its remaining 33; fixture
+budgets never erase actual history. These are logical request/operation
+reservations and observed HTTP outcomes, not physical SDK/CAS attempts, Graph/
+issuer requests, RU or billing. Unknown submitted outcomes stop, retain partial
+counts and do not imply rollback. Directory and document retention are explicit.
+
+The supplied Terraform can now prepare directory mode; the retained/public
+images still cannot run it. Actual CIAM native/SPA callback and freshness,
+hosted UAMI/Graph/Cosmos, ingress/evaluated peer/log delivery, ordinary hosted UI,
+independent credentials/members/two real BFFs and final physical Android remain
+their distinct open acceptance gates. No additional identity, grant, secret,
+network policy, replica change, paid provisioning, rollout or release is implied.

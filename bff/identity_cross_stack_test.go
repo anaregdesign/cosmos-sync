@@ -55,9 +55,11 @@ func runDirectoryDartLifecycle(t *testing.T, first, second *identityHTTPFixture)
 		t.Fatal("cannot write private local fixture certificate")
 	}
 	input, err := json.Marshal(map[string]any{
+		"schemaVersion": 2, "authorizationMode": "directory", "validationMode": "signed-test-fixture",
 		"url": first.server.URL, "replica": second.server.URL, "proofs": proofs.URL,
 		"certificate": certificate, "issuer": first.broker.signed.target.Issuer,
 		"clientId": first.broker.signed.target.ClientID, "callback": first.broker.signed.target.Callback,
+		"namespace": first.broker.signed.target.Namespace,
 		"tokens": map[string]string{"primary": first.broker.access(t, nil, 0),
 			"secondary": first.broker.access(t, map[string]any{"oid": brokerTestOther}, 0)},
 	})

@@ -72,5 +72,15 @@ printf '%s\n' 'disable_checkpoint = true' > "$TF_CLI_CONFIG_FILE"
 "$task_scratch_dir/terraform" -chdir="$task_module_dir" init -backend=false -input=false -lockfile=readonly
 "$task_scratch_dir/terraform" -chdir="$task_module_dir" validate -no-color
 "$task_scratch_dir/terraform" -chdir="$task_module_dir" test -no-color
+"$task_scratch_dir/terraform" -chdir="$task_module_dir" test -json -verbose \
+  -filter=tests/directory.tftest.hcl > "$task_scratch_dir/directory-mock-plans.jsonl"
+task_repo_dir="$(cd -- "$task_module_dir/../../.." && pwd)"
+python3 "$task_repo_dir/tools/terraform_config_contract.py" \
+  < "$task_scratch_dir/directory-mock-plans.jsonl" > "$task_scratch_dir/directory-config.json"
+(
+  cd -- "$task_repo_dir/bff"
+  COSMOS_SYNC_TERRAFORM_CONFIG="$task_scratch_dir/directory-config.json" \
+    go test -run '^TestTerraformDirectoryConfigurationContract$' -count=1 .
+)
 "$task_scratch_dir/tflint" --chdir="$task_module_dir" --config="$task_module_dir/.tflint.hcl" --format=compact
-printf '%s\n' 'ACA Terraform: fmt, locked init, validate, mock plan tests and TFLint passed; no Azure apply or live acceptance.'
+printf '%s\n' 'ACA Terraform: fmt, locked init, validate, mock plans, exact JSON/Go directory contract and TFLint passed; no Azure apply or live acceptance.'

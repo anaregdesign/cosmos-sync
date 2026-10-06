@@ -3,9 +3,10 @@ package syncbff
 import (
 	"context"
 	"strings"
+
+	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-// This adapter remains internal until account/session and client integration.
 type brokerProofVerifier struct {
 	api       *Server
 	idProof   *directoryProofVerifier
@@ -70,21 +71,11 @@ func newBrokerProofVerifier(api *Server, idProof *directoryProofVerifier, direct
 }
 
 func (v *brokerProofVerifier) verify(ctx context.Context, accessToken, idToken, challenge string) (verifiedDirectoryProof, error) {
-	invalid := func() (verifiedDirectoryProof, error) {
-		return verifiedDirectoryProof{}, protocolError(401, "identity_fresh_proof_required")
-	}
-	principal, err := v.verifyAPI(ctx, accessToken)
+	proof, err := verifyBrokerProofPair(ctx, v.api, v.idProof, v.directory.options.TenantID, accessToken, idToken, challenge)
 	if err != nil {
 		return verifiedDirectoryProof{}, err
 	}
-	proof, err := v.idProof.verify(ctx, idToken, challenge)
-	if err != nil {
-		return verifiedDirectoryProof{}, err
-	}
-	if proof.BrokerObjectID != principal.ObjectID || proof.BrokerTenantID != principal.TenantID || proof.BrokerVersion != "2.0" {
-		return invalid()
-	}
-	binding, err := v.directory.lookup(ctx, principal.ObjectID)
+	binding, err := v.directory.lookup(ctx, proof.BrokerObjectID)
 	if err != nil {
 		return verifiedDirectoryProof{}, err
 	}
@@ -92,28 +83,97 @@ func (v *brokerProofVerifier) verify(ctx context.Context, accessToken, idToken, 
 	// ownership derives from the freshly read, namespaced upstream identity.
 	proof.Subject, proof.BrokerBinding = brokerIdentitySubject(binding), binding
 	if !validBrokerDirectoryProof(proof) {
-		return invalid()
+		return verifiedDirectoryProof{}, protocolError(401, "identity_fresh_proof_required")
 	}
 	return proof, nil
 }
 
 func (v *brokerProofVerifier) verifyAPI(ctx context.Context, accessToken string) (verifiedAccessPrincipal, error) {
+	return verifyBrokerAPI(ctx, v.api, v.idProof.target, v.directory.options.TenantID, accessToken)
+}
+
+func verifyBrokerAPI(ctx context.Context, api *Server, target identityProofTarget, tenant, accessToken string) (verifiedAccessPrincipal, error) {
 	invalid := func() (verifiedAccessPrincipal, error) {
 		return verifiedAccessPrincipal{}, protocolError(401, "identity_session_invalid")
 	}
 	if accessToken == "" || len(accessToken) > 32768 {
 		return invalid()
 	}
-	principal, err := v.api.verifyAccessPrincipal(ctx, accessToken)
+	principal, err := api.verifyAccessPrincipal(ctx, accessToken)
 	if err != nil {
 		return verifiedAccessPrincipal{}, err
 	}
-	if principal.Identity.Issuer != v.idProof.target.Issuer || principal.TenantID != v.directory.options.TenantID ||
-		principal.ClientID != v.idProof.target.ClientID || principal.Version != "2.0" ||
+	if principal.Identity.Issuer != target.Issuer || principal.TenantID != tenant ||
+		principal.ClientID != target.ClientID || principal.Version != "2.0" ||
 		!operationIDPattern.MatchString(principal.ObjectID) || principal.ObjectID != strings.ToLower(principal.ObjectID) {
 		return invalid()
 	}
 	return principal, nil
+}
+
+func verifyBrokerProofPair(ctx context.Context, api *Server, idProof *directoryProofVerifier, tenant, accessToken, idToken, challenge string) (verifiedDirectoryProof, error) {
+	principal, err := verifyBrokerAPI(ctx, api, idProof.target, tenant, accessToken)
+	if err != nil {
+		return verifiedDirectoryProof{}, err
+	}
+	proof, err := idProof.verify(ctx, idToken, challenge)
+	if err != nil {
+		return verifiedDirectoryProof{}, err
+	}
+	if proof.BrokerObjectID != principal.ObjectID || proof.BrokerTenantID != principal.TenantID || proof.BrokerVersion != "2.0" {
+		return verifiedDirectoryProof{}, protocolError(401, "identity_fresh_proof_required")
+	}
+	return proof, nil
+}
+
+// VerifyFreshBrokerAuthentication checks authentication evidence only. It does
+// not read Graph, admit a directory session, register ownership or consume the
+// challenge. Those checks still belong to the authenticated lifecycle route.
+func VerifyFreshBrokerAuthentication(ctx context.Context, config Config, callback, challenge, selectedObjectID, accessToken, idToken string) error {
+	targets, err := identityProofTargets(config, config.Authorization.Directory)
+	if err != nil || config.Authorization.Mode != "directory" ||
+		!operationIDPattern.MatchString(selectedObjectID) || selectedObjectID != strings.ToLower(selectedObjectID) {
+		return protocolError(400, "invalid_identity_configuration")
+	}
+	var selected *identityProofTarget
+	for _, target := range targets {
+		if target.Callback == callback {
+			selected = &target
+			break
+		}
+	}
+	if selected == nil {
+		return protocolError(400, "invalid_identity_configuration")
+	}
+	ctx = oidc.ClientContext(ctx, brokerHTTPClient(ctx))
+	provider, err := oidc.NewProvider(ctx, config.OIDC.Issuer)
+	if err != nil {
+		return protocolError(503, "identity_binding_unavailable")
+	}
+	var metadata struct {
+		Keys string `json:"jwks_uri"`
+	}
+	if provider.Claims(&metadata) != nil {
+		return protocolError(503, "identity_binding_unavailable")
+	}
+	idProof, err := newDirectoryProofVerifier(ctx, *selected, metadata.Keys)
+	if err != nil {
+		return err
+	}
+	api := &Server{config: config, verifier: provider.VerifierContext(ctx, &oidc.Config{
+		ClientID: config.OIDC.Audience,
+		SupportedSigningAlgs: []string{
+			oidc.RS256, oidc.RS384, oidc.RS512, oidc.ES256, oidc.ES384, oidc.ES512,
+		},
+	})}
+	proof, err := verifyBrokerProofPair(ctx, api, idProof, config.Authorization.Directory.TenantID, accessToken, idToken, challenge)
+	if err != nil {
+		return err
+	}
+	if proof.BrokerObjectID != selectedObjectID {
+		return protocolError(401, "identity_fresh_proof_required")
+	}
+	return nil
 }
 
 func (v *brokerProofVerifier) resolve(ctx context.Context, accessToken string, directory *identityDirectory) (directoryAccount, directorySession, error) {

@@ -14,14 +14,33 @@ explicit compatible-image/new-namespace verification assertion. Explicit legacy
 mode contains empty grants and denies all end users. Neither mode adopts legacy
 data or provisions identity-provider accounts automatically.
 
-The unpublished directory lifecycle extension is deliberately not a selectable
-mode in this template. Its server-only configuration is documented in
-[the source directory contract](../../../docs/identity-directory.md).
-Using it on ACA requires a separately reviewed compatible immutable image and
-workload adaptation, including the already authorized cross-tenant reader
-prerequisites. No Graph grant, federated credential or directory namespace is
-implicitly created here. Do not send directory fields to an older strict-decoder
-image or interpret a builtin plan as a directory deployment.
+The unpublished directory lifecycle extension is an explicit opt-in:
+`authorization_mode="directory"` requires the typed `directory` input and
+`directory_image_verification`. The overlay in `directory.tfvars.example` is
+deliberately unverified and must not be used unchanged. The module checks exact
+CIAM/tid trust, distinct API/public-client GUIDs, one admitted client, bounded
+callbacks/domain/source tenants and namespace. It derives
+`managedIdentityClientId` from the BFF's actual assigned UAMI, not another
+client-supplied setting. The reader application must have a different client ID.
+See [the server-only directory contract](../../../docs/identity-directory.md).
+
+The verification record must name the **same immutable image** as `image`, a
+full source commit and `verified=true` after reviewing its source/build evidence.
+Known published builtin/legacy-only artifacts are rejected even if asserted
+verified. This does not inspect a registry, publish a candidate or authorize an
+apply. No Graph grant, federated credential, user or legacy ownership migration
+is implicitly created here. Builtin/legacy omit `authorization.directory` and
+retain their previous generated configuration.
+
+Before activation, preserve the existing state/cursor key, pin the compatible
+candidate and verify the retained UAMI/FIC, target-only Graph `User.Read.All`,
+exact native/SPA callbacks and private Cosmos path. Review a saved plan showing
+only the intended workload configuration, no replacements/roles/network or
+replica expansion. Complete Azure validation before a separately authorized
+apply. Do not send directory settings to the retained old image. A rollback
+must restore its matching configuration/image together; it neither undoes
+directory commits nor adopts directory-owned documents in builtin/legacy mode.
+Stop after a partial/unknown acceptance outcome and preserve its receipt.
 
 ACA launches `command = ["/cosmos-sync-bff"]` with no `args`, taking configuration
 from `COSMOS_SYNC_CONFIG_JSON`. This replaces the published image's default
@@ -58,7 +77,10 @@ letters/digits/`_`/`-`/`.`/parentheses, no trailing period), never a resource ID
 Do not pass the existing application, data or networking resource group, and
 verify that the proposed name is unused before an approved apply.
 
-From a clean checkout, run the validator with Bash, Python 3 and curl. It downloads
+From a clean checkout, run the validator with Bash, Python 3, curl and Go 1.26+.
+It checks the actual mocked directory JSON with the Go factory's pure trust
+validation and strict configuration schema, without OIDC/Graph/Azure requests.
+It downloads
 Terraform 1.15.8 and TFLint 0.64.0 into an owned temporary directory, verifies
 embedded official-release SHA256 hashes and removes only that temporary directory
 on exit. It supports macOS/Linux ARM64 and AMD64 and performs no Azure operations:
