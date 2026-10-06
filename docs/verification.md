@@ -946,3 +946,49 @@ Azure/customer/hosted Graph acceptance. The earlier Docker failures and failed
 Clean committed-candidate restart repetition, nonpublishing image checks and
 portable CI are subsequent evidence, pinned in #27/#28/#24. This checkpoint does
 not claim them complete or waive the separate live and physical criteria.
+
+### Clean candidate preparation acceptance
+
+Runtime candidate `36f502fe5040f81164a9304992f6819b9d382c5a` passed all nine
+individual [CI 37428407923](https://github.com/anaregdesign/cosmos-sync/actions/runs/37428407923)
+jobs, including official Cosmos emulator, both application targets and the
+nonpublishing container/release-tool contracts. A clean local repeat passed all
+61 workload mock plans and the generated JSON/Go contract. Local OCI validation
+passed amd64/arm64 source/version/MIT/nonroot, BuildKit provenance and SPDX checks
+with `sourceTreeDirty=false`, `published=false` and owned builder removal.
+
+The Android14/API34 process-restart receipt at `2026-10-06T07:16:54Z` identifies
+that exact clean source. It verifies exact old-PID death/different new PID, the
+same installation, restored native secure binding and pending operation/session,
+offline reopen without refresh, matching ACK, backend deduplication and local
+signout purge. App/reverse/backend cleanup passed; the newly owned emulator,
+private AVD/registration and target file were then removed and its ports released.
+The receipt remains a signed test-issuer adapter:
+`liveOidc=false`, `liveAzure=false`, `physicalDevice=false` and
+`systemAirplaneModeTested=false`.
+
+Scoped preparation #27/#28 is completed, and #24's offline implementation
+checklist is complete. Actual provider/cloud/physical criteria are unchanged.
+Earlier dirty restart receipts and the failed `f300273` CI are preserved.
+
+### Retained hosting read-only follow-up
+
+Post-restart reads found the original builtin image/configuration, assigned
+UAMI, sole ingress allow rule, min0/max1 and active Healthy/ScaledToZero revision
+unchanged. App/environment/workspace are Succeeded; ResourceHealth's
+UnsupportedResourceType is not an app failure. HTTP diagnostic category/destination
+exists, but the target query returned zero HTTP/health/403/peer records since
+October 4. Request/replica metrics each had 52 hourly values, totaling zero
+requests and a maximum of zero replicas; missing values were not converted to
+zero.
+
+These observations do not establish the evaluated peer, request-log delivery,
+current BFF reachability or hosted UAMI/Graph execution. The
+[HTTP table reference](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/containerapphttplogs)
+describes ingress metadata; the
+[generic diagnostic REST contract](https://learn.microsoft.com/en-us/rest/api/monitor/diagnostic-settings/create-or-update?view=rest-monitor-2021-05-01-preview)
+describes null versus Dedicated destinations. Neither a table's existence nor
+nullable readback proves actual delivery or a root cause. No logging/network
+change or new BFF probe was made; the historical ledger remains seven requests
+and zero accepted application mutations. Exact retained routing/identity and
+compatible activation remain #16, before actual #24/#32/#20 acceptance.

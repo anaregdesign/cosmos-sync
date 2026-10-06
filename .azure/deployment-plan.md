@@ -3,7 +3,7 @@
 Status: Approved
 Date: 2026-10-06 JST
 Mode: MODIFY
-Reviewed source: `88be42ef000814b2934d45cf6b9ccde0386e0984`
+Runtime preparation candidate: `36f502fe5040f81164a9304992f6819b9d382c5a`
 
 ## 1. Goal and authorization
 
@@ -52,7 +52,13 @@ or establish current cloud health.
 ## 3. Verified baseline and implementation progress
 
 [PR #39](https://github.com/anaregdesign/cosmos-sync/pull/39) is open and unmerged.
-All nine checks passed at `88be42e` in
+All nine candidate jobs passed at `36f502f` in
+[CI 37428407923](https://github.com/anaregdesign/cosmos-sync/actions/runs/37428407923).
+Exact clean-source Android process-death/replay and local nonpublishing
+amd64/arm64 OCI checks also passed. Scoped preparation #27/#28 is completed;
+actual hosted/customer/physical criteria remain open.
+
+Historical baseline checks passed at `88be42e` in
 [CI 37294322969](https://github.com/anaregdesign/cosmos-sync/actions/runs/37294322969).
 Runtime `3214d0d` separately passed all nine checks in
 [CI 37288105353](https://github.com/anaregdesign/cosmos-sync/actions/runs/37288105353).
@@ -62,26 +68,27 @@ remain distinguishable.
 
 | Component | Reviewed source | Completed scope | Concrete remaining work |
 | --- | --- | --- | --- |
-| Go BFF | `bff/identity_runtime.go`, `identity_http.go`, `broker_proof.go`, `broker_directory.go` | Opt-in directory factory, exact API/ID correlation, uncached trusted profile, register/link/unlink, stable ownership, generation fences | Compatible deployment contract and actual hosted identity execution |
-| Dart SDK | `packages/cosmos_sync/`, `tool/identity_probe.dart` | Typed lifecycle transport, identity-aware SQLite/IndexedDB fencing and coordinated signed local/emulator driver | Directory-aware bounded actual-host acceptance driver |
-| Native/Web app | `examples/flutter_app/lib/auth/`, account lifecycle UI | Isolated fresh proofs, pending consent, cancellation/recovery and cache-open verification | Actual proof receipts and host-driven simulator process-death tooling |
-| ACA Terraform | `infra/terraform/azure-container-apps/` | Typed directory opt-in/image guard, assigned UAMI binding, 61 mock plans and strict generated-JSON/Go contract; old modes preserved | Exact nonpublishing candidate image/CI and separate activation review |
-| Native live runner | `tools/native_entra_auth.py`, `entra_auth_live_test.dart` | API-only mode retained; transient directory-proof v2, provided/server nonce distinction, source-bound fresh failure receipts and foreground gate implemented | Clean-source emulator restart repetition and actual attended customer evidence |
-| Hosted SDK runner | `tools/directory_azure_live.py`, `test/directory_azure_live.dart` | Explicit recorded-directory preflight/data journey, immutable runtime/native-proof pinning, shared ledger and partial/unknown-outcome receipts | Official Cosmos-emulator/candidate CI, then actual approved hosting/customer journey |
+| Go BFF | `bff/identity_runtime.go`, `identity_http.go`, `broker_proof.go`, `broker_directory.go` | Opt-in directory factory, exact API/ID correlation, uncached trusted profile, register/link/unlink, stable ownership, generation fences | Reviewed hosting artifact and actual hosted identity execution |
+| Dart SDK | `packages/cosmos_sync/`, `tool/identity_probe.dart` | Typed lifecycle transport, identity-aware SQLite/IndexedDB fencing, shared recorded directory driver and signed local/emulator evidence | Actual approved hosted directory acceptance |
+| Native/Web app | `examples/flutter_app/lib/auth/`, account lifecycle UI | Isolated fresh proofs, pending consent, cancellation/recovery, cache-open verification and clean emulator process-death/replay | Actual customer proof and final physical acceptance |
+| ACA Terraform | `infra/terraform/azure-container-apps/` | Typed directory opt-in/image guard, assigned UAMI binding, 61 mock plans, strict generated-JSON/Go contract and clean nonpublishing image/CI; old modes preserved | Separate concrete artifact/activation review |
+| Native live runner | `tools/native_entra_auth.py`, `entra_auth_live_test.dart` | API-only mode retained; transient directory-proof v2, provided/server nonce distinction, source-bound fresh failure receipts and foreground gate implemented | Actual attended customer evidence |
+| Hosted SDK runner | `tools/directory_azure_live.py`, `test/directory_azure_live.dart` | Explicit recorded-directory preflight/data journey, immutable runtime/native-proof pinning, shared ledger, partial/unknown-outcome receipts and official Cosmos-emulator/candidate CI | Actual approved hosting/customer journey |
 | Local cloud/UI runners | `tools/live_azure_contract.py`, `tools/flutter_azure_live.py`, `azure_live_ui_test.dart` | Separate legacy grants-file and recorded-token contracts | Cannot stand for directory authorization, hosted MI or actual fresh ordinary login |
 | Retained Azure | Prior readback and Issues #16/#24 | Startup/configuration observed; minimum replicas returned to zero | Envoy 403, evaluated peer, log delivery and actual application data path remain unverified |
 
 The reviewed IaC/proof/driver gaps are now implemented. The same recorded
 preflight/data path measured 25/29 requests inside the signed TLS/Graph/Dart/SQLite
-fixture; the full lifecycle uses its separate 54/80 fixture allowance. An actual
-Android emulator restart passed on the working tree with dirty-source attribution.
+fixture; the full lifecycle uses its separate 54/80 fixture allowance. The actual
+Android emulator exact-PID restart now passed from clean `36f502f`, with the same
+installation, secure binding, exact pending operation/ACK and owned cleanup.
 Native SDK/application, Chromium/Node, Python and BFF race/vet/build checks passed.
 The pre-restart local Docker attempts failed before execution. After restart,
 Docker is available and the complete official Cosmos-emulator suite passed with
-the corrected private fixture namespace. Exact portable candidate CI and clean
-restart repetition remain necessary. Identity linking, Web support and core
-authorization must not be reimplemented to work around the separate actual
-customer/artifact/hosting gates.
+the corrected private fixture namespace. All nine portable candidate jobs and
+clean nonpublishing image checks passed; no image was published or activated.
+Identity linking, Web support and core authorization must not be reimplemented
+to work around the separate actual customer/artifact/hosting gates.
 
 ## 4. Recipe and architecture
 
@@ -386,7 +393,7 @@ not proof of current customer issuance or hosted execution.
 - [x] Record validation targets, version boundaries and unresolved decisions.
 - [x] Owner approves implementation plan (2026-10-06).
 - [x] Implement and locally verify source/proof/recorded-driver work and initial emulator OS restart.
-- [ ] Persist the candidate, repeat restart cleanly and complete nonpublishing container/Cosmos-emulator checks and exact-head CI.
+- [x] Persist runtime candidate `36f502f`, repeat restart cleanly and complete nonpublishing container/Cosmos-emulator checks and all nine exact-candidate CI jobs.
 - [ ] Review a concrete activation artifact/plan and complete Azure validation.
 - [ ] Execute separately authorized deployment and attended acceptance.
 - [ ] Reproduce onboarding, final Android and close scoped leaves with evidence.
@@ -455,7 +462,39 @@ emulator's isolated database and newly created container were cleaned. This is
 signed local issuer/Graph fixture evidence, not actual customer, hosted Graph or
 Azure consistency evidence.
 
-Persist this repair on the existing PR branch, verify exact-head CI and repeat
-the exact-PID restart from clean source on a newly owned emulator before closing
-the applicable preparation Issues. Record the exact hashes/results in the
-existing English Issues without rewriting the failed `f300273` run as passed.
+The repair is committed/pushed at `36f502f`. All nine exact-candidate jobs passed;
+clean local multiarch OCI and newly owned Android exact-PID restart checks passed,
+with owned builder/app/reverse/emulator/AVD cleanup. Preparation #27/#28 is
+completed and #24's offline checklist is complete. Their exact hashes/results
+are in the existing English Issues; failed `f300273` remains a historical failure.
+
+## 13. Retained hosting read-only checkpoint, 2026-10-06
+
+Existing credentials still permit the specifically approved metadata reads; no
+new management login was opened. App/environment/workspace read back Succeeded.
+The sole ingress allow rule, assigned UAMI, executable-only command, original
+builtin image/configuration and min0/max1 are unchanged. The active revision is
+Healthy/Provisioned/ScaledToZero with zero replicas. ResourceHealth still reports
+UnsupportedResourceType, not an application failure.
+
+The environment remains external/noninternal with its approved subnet and Azure
+Monitor destination. HTTP diagnostics point to the approved workspace, support
+the ContainerAppHTTPLogs category and read back a null destination type. A bounded
+query of existing target HTTP records since October 4 returned zero rows, including
+zero correlated health/403/peer records. Existing request/replica metrics supplied
+52 hourly values, with request total zero and maximum replica count zero. This
+does not identify the evaluated peer or prove log delivery or routed BFF health.
+
+No new BFF probe, document write, policy/identity/secret change, scale action or
+deployment was made; the aggregate ledger remains seven requests. Do not infer a
+Cosmos authorization error from historical Envoy 403, or fix nullable logging
+metadata speculatively. #16 remains open for measured routing/log delivery and
+actual hosted identity readiness.
+
+The normal publication workflow admits only an explicitly approved main SHA
+with completed main CI. PR merge, a new source-addressed container publication
+and a concrete saved activation plan are separate decisions; do not publish a
+development package, weaken this release gate or overwrite retained artifacts
+to sidestep them. The SDK can remain pinned source until separately reviewed
+distribution. Attended customer, controlled identity/member coverage, private
+two-BFF reachability, onboarding and final Android retain their existing gates.
