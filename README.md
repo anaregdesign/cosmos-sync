@@ -6,8 +6,9 @@ Native SQLite and Chromium IndexedDB store confirmed documents and a durable out
 
 Development is tracked by [epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2). [Verification](docs/verification.md) reports actual results; owner-controlled distribution and live-cloud gates remain explicit.
 
-The [2026-10-06 delivery plan](.azure/deployment-plan.md) separates completed
-directory source/tooling from remaining compatibility, activation and acceptance.
+The [2026-10-07 delivery plan](.azure/deployment-plan.md) separates completed
+directory source/tooling, browser compatibility and approved activation from
+remaining hosted/customer/onboarding/final-device acceptance.
 It is a planning document, not approval to publish, deploy or operate a device.
 
 The product goal is a Firestore-like developer experience for the supported
@@ -144,13 +145,14 @@ It wires a secret-free trusted broker reader, explicit fresh-proof registration/
 link/unlink, stable random ownership, identity-bound sessions/cursors/caches and
 confirmation/recovery UI. Proofs never replace the main credentials; email and
 provider navigation never link accounts. Its current trusted Graph reader is
-workforce-federation-specific, not universal social linking. The old SDK archive,
-original image tags and retained Azure deployment are unchanged. Actual customer nonce/authentication-time,
-MI/Graph and production capacity/recovery checks are required before deployment.
+workforce-federation-specific, not universal social linking. The old SDK archive
+and original image tags are unchanged. The retained Azure app now uses the
+published directory image/configuration after separately approved activation
+and provider/state reconciliation. Actual customer nonce/authentication-time,
+hosted MI/Graph and ordinary data checks remain required for acceptance.
 The Terraform workload supports explicit directory opt-in while preserving
-builtin/legacy defaults. The compatible image is now published; activation still
-needs current management-state validation and a separately approved saved plan,
-not an unreviewed template apply.
+builtin/legacy defaults. Consumers still need their own management state,
+validation and separately approved saved plan, not an unreviewed template apply.
 
 ```sh
 cd bff
@@ -183,11 +185,14 @@ Exact registry access/verification evidence is recorded in
 The earlier [verification-tool correction](https://github.com/anaregdesign/cosmos-sync/issues/34)
 preserved the original artifacts. [Epic #2](https://github.com/anaregdesign/cosmos-sync/issues/2)
 keeps actual Azure, hosted onboarding and consumer-provider gates separate.
-The retained Azure app still runs the original `82e937c` builtin image. The prior
-read-only six-resource mirror remains unchanged. The approved distinct private
-management state is now adopted and canonically validated: fresh baseline has
-six no-ops and the saved directory overlay updates only the app image/runtime.
-Actual app update remains unapproved; state preparation is not hosted acceptance.
+The retained Azure app now runs the published `36d2680` directory image. The
+first approved update took effect but Terraform returned a case-only resource-ID
+error. A separately approved fresh same-configuration update succeeded; the
+designated private management state is reconciled, its fresh plan has six no-ops,
+and exact live UAMI/container/named-secret role metadata passed. The old mirror
+remains unchanged and nonauthoritative. Healthy startup, role metadata and state
+reconciliation do not establish routed HTTPS, hosted Graph/customer/data or
+final Android acceptance; see [the measured checkpoint](docs/verification.md#approved-directory-activation-and-provider-reconciliation-2026-10-07).
 
 Dedicated Entra registration is complete. macOS browser PKCE, secure credential
 restore, refresh and local sign-out lifecycle stages were observed; independent

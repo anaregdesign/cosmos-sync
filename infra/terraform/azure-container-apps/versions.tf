@@ -21,8 +21,9 @@ provider "azurerm" {
 }
 
 provider "azapi" {
-  subscription_id            = var.deployment.subscription_id
-  tenant_id                  = var.deployment.tenant_id
-  enable_preflight           = false
-  skip_provider_registration = true
+  subscription_id             = var.deployment.subscription_id
+  tenant_id                   = var.deployment.tenant_id
+  enable_preflight            = false
+  skip_provider_registration  = true
+  preserve_resource_id_casing = true
 }

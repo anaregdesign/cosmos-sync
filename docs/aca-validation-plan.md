@@ -1,7 +1,8 @@
 # Retained private ACA validation topology and deployment runbook
 
 This records the selected minimal West US 2 configuration and its staged
-execution, as of 2026-10-04 JST. The Cosmos account/database/container and its
+execution, with October 4 topology/startup history and the October 7 activation
+checkpoint below. The Cosmos account/database/container and its
 human container role are created. All ten private-network/Key Vault prerequisite
 resources applied successfully. The cursor key was initialized once; the public
 bootstrap tool subsequently reused the same version's metadata with no PUT.
@@ -32,6 +33,16 @@ The HTTP table exists, but requested `Dedicated` read back as null and four
 bounded correlated queries returned zero rows. Log delivery and the edge-denial
 cause remain unverified. See
 [verification](verification.md) for the latest acceptance record.
+
+On 2026-10-07 the separately approved published directory image/runtime became
+active. Its first Terraform command failed after the Azure update on case-only
+resource-ID metadata; conditional local reimport was restored when not no-op.
+A separately approved fresh same-configuration app update then exited 0 with
+six subsequent no-ops. The same private authority/recovery and exact live
+UAMI/container/named-secret role metadata are verified. Latest revision was
+Healthy/Provisioned/ScaledToZero with zero replicas. Original topology, sole
+Allow, min0/max1, empty CORS, command/probes/resources and cursor/history remain.
+No new BFF request or customer/data/device acceptance occurred.
 
 The owner authorized necessary minimal Azure resources/settings in the selected
 subscription and retained reusable resources. Actual names, IDs, private state,
@@ -136,8 +147,8 @@ roles. [Provider registration](https://learn.microsoft.com/en-us/azure/azure-res
 
 ## Traffic and cursor-key bootstrap
 
-The actual retained Azure startup checkpoint still uses the original public
-immutable image, with no registry secret or rebuild:
+The historical October 4 startup checkpoint used this original public immutable
+image, with no registry secret or rebuild. It is not the current directory image:
 
 ```text
 ghcr.io/anaregdesign/cosmos-sync-bff@sha256:a23ab75eb4518597aa26e4833787b9b77a07def717868e080944555594adc1b3
@@ -151,8 +162,8 @@ conflicts with environment-only configuration. Preserve the override in the real
 plan and verify actual revision command/args before accepting startup.
 [ACA container command/arguments](https://learn.microsoft.com/en-us/azure/container-apps/containers#configuration)
 
-For a new deployment or reviewed upgrade, the current verified public BFF release
-is from `36d2680e5f88d31acfafa4473d0d4996f1de0ff7`:
+The current verified public BFF release, now separately activated on the retained
+reference, is from `36d2680e5f88d31acfafa4473d0d4996f1de0ff7`:
 
 ```text
 ghcr.io/anaregdesign/cosmos-sync-bff@sha256:adfe83a08dcd8754f85652641a85138e9a90993c1766ce70c86953365b9a6102
@@ -161,20 +172,21 @@ ghcr.io/anaregdesign/cosmos-sync-bff@sha256:adfe83a08dcd8754f85652641a85138e9a90
 All nine [main CI checks](https://github.com/anaregdesign/cosmos-sync/actions/runs/37433122046)
 and its [public release verification](https://github.com/anaregdesign/cosmos-sync/actions/runs/37438116005)
 passed, including public manifest access, both architectures, MIT/nonroot and
-bound SBOM/BuildKit provenance. This publication did not update the retained
-cloud image or prove the new image's hosted SDK contract. The SDK archive remains
+bound SBOM/BuildKit provenance. Publication itself did not update the cloud;
+separate approved activation/state recovery did. Neither proves the new image's
+hosted SDK contract. The SDK archive remains
 at its original source and was not republished.
 The prior `76c1f46` image is historical and remains unchanged. The new BFF also
 supports explicit directory lifecycle; use pinned repository SDK source and
-reviewed directory configuration, never send those fields to the retained old
-image. The approved distinct private management state is now adopted and
-canonically validated. Its fresh six-no-op baseline and app-only/five-no-op
-directory overlay preserve existing resources/roles/topology/cursor/history/
-empty CORS. The old mirror remains unchanged reference-only; a private recovery
+reviewed directory configuration, never send those fields to the historical old
+image. The approved distinct private management state is adopted, validated and
+reconciled after actual activation. Its fresh post-recovery six-no-op plan
+preserves existing resources/roles/topology/cursor/history/empty CORS.
+The old mirror remains unchanged reference-only; a private recovery
 backup outside the removable worktree does not create another active writer.
 Original/external-writer absence is still unproved and discovery requires
-reconciliation. Actual update still needs separate saved-plan approval; see
-[the fresh validation proof](../.azure/deployment-plan.md#fresh-r3-validation-proof-2026-10-06).
+reconciliation. Both concrete update approvals are consumed, not permission for
+another apply. See [actual recovery evidence](verification.md#approved-directory-activation-and-provider-reconciliation-2026-10-07).
 
 This newer BFF supports optional `oidc.allowed_client_ids`, an exact allowlist of
 signed `azp` client IDs in addition to issuer/API-audience/scope checks. Use the

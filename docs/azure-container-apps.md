@@ -38,17 +38,26 @@ actual Google/Apple configuration and connections for this delivery; common
 External ID OIDC and hosted data acceptance remain separate requirements.
 Use simulators during development and physical Android only at the final gate.
 
-## Current activation stage, 2026-10-06
+## Current activation stage, 2026-10-07
 
 PR #39 is merged and the directory-capable BFF from `36d2680` is
-[published and verified](release.md). The retained app still uses the original
-builtin image. The prior six-resource read-only mirror/saved-plan validation
-passed; it is not an active deployment state. The owner has approved adopting
-and revalidating a **distinct** private management state on the
-original-artifacts-unavailable assumption, but that stage has not started.
-Original-file provision or the same adoption approval must not be requested
-again. Fresh management-state validation and separate concrete app-update
-approval remain required; no actual update is authorized or executed here.
+[published and verified](release.md). Separately approved activation now gives
+the retained app that immutable image and directory configuration. The first
+Terraform command exited 1 after Azure updated it, due to case-only ARM ID
+inconsistency. Conditional canonical reimport left imported defaults/output
+differences, so its protected local state was restored. The owner then approved
+one freshly validated same-configuration app update; it exited 0, preserved all
+unrelated controls and produced a fresh six-no-op plan.
+
+The same **distinct** private management authority now matches the actual state,
+with protected restore-only recovery outside the worktree. The old mirror is
+unchanged and nonauthoritative; original/external-writer absence is not proven.
+Exact live UAMI, six-action container role and named cursor Secret User metadata
+passed. Latest revision was Healthy/Provisioned/ScaledToZero, zero replicas
+within unchanged min0/max1. No new resource, IAM/network/CORS/scale-policy change,
+secret-value read or BFF/customer/device request occurred. Routed HTTPS/log
+delivery, hosted UAMI/Graph/data and attended acceptance remain open.
+See [actual evidence](verification.md#approved-directory-activation-and-provider-reconciliation-2026-10-07).
 
 ## Provisioned resources and prerequisites
 
@@ -104,18 +113,19 @@ state, roles, private networking and replica limits. No profile, Graph grant,
 federated credential or published candidate is created by this option.
 Offline mock/configuration checks are not hosted execution evidence.
 
-Its [verified immutable release](release.md) is available, but has not been
-applied to the retained app. The owner approved read-only reconstruction of a
+Its [verified immutable release](release.md) is now active on the retained
+reference after the separately approved operations above. The earlier
+read-only reconstruction used a
 validation-only local Terraform mirror from exact existing resources because the
 original private state is intentionally absent from the isolated worktree.
 This mirror neither replaces original state nor authorizes deployment. Preserve
 the retained cursor/history and private state; reject unexpected baseline drift,
 creates, replacements, role/network changes or replica expansion. Keep raw
 state/plans and resource identifiers private. The separately approved new-state
-handoff must preserve this old mirror read-only and require fresh baseline/app-only
-plans, an authority manifest and one active writer. Actual apply still requires
-separate concrete saved-plan approval after that stage; the approval is not pending
-for the already authorized local adoption itself.
+handoff preserved this old mirror read-only and required fresh baseline/app-only
+plans, an authority manifest and one active writer. Both consumed activation
+approvals are recorded; neither permits another replay or downstream expansion.
+Consumers and future changes require their own concrete saved-plan approval.
 
 Only six Cosmos data actions are included: metadata read, item read/create/replace,
 query and the SDK-required readChangeFeed permission. They allow the BFF's atomic
@@ -168,16 +178,18 @@ plan and actual revision. The reviewed override applied at 03:43 UTC and produce
 actual Healthy/listening startup; no image rebuild, key rotation or configuration
 file mount was needed. [ACA command/arguments](https://learn.microsoft.com/en-us/azure/container-apps/containers#configuration).
 
-The retained Azure checkpoint uses the original image from source `82e937c`.
-The latest [verified public BFF release](release.md), from `36d2680`, supports
+The October 4 startup checkpoint used the original image from source `82e937c`.
+The current retained deployment uses the [verified public BFF release](release.md)
+from `36d2680`, supporting
 directory lifecycle and optional client admission. The earlier `76c1f46` release
 supports client admission but not the directory activation contract; its digest
 remains in the [historical image/source split](aca-validation-plan.md#traffic-and-cursor-key-bootstrap).
 Its optional `oidc.allowed_client_ids` checks exact signed `azp` client IDs in
 addition to issuer/API audience/scope. Select the registered native public client
 ID there when restricting API admission; shared membership remains server-managed.
-The original image does not implement that option. Publishing the new image did
-not change the retained runtime or establish its hosted acceptance.
+The original image does not implement that option. The separate approved
+activation changed the retained runtime; publication, activation and hosted
+acceptance remain distinct evidence.
 
 ACA terminates external TLS at its edge ingress. `allowInsecure=false` prevents
 plain HTTP application traffic; the app uses port 8080 and HTTP between its

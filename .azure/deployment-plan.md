@@ -1,9 +1,9 @@
 # Cosmos Sync delivery and deployment plan
 
-Status: Validated
-Current scope: Generic browser source and distinct private six-binding management preparation completed; actual Azure activation and attended acceptance remain separately unauthorized.
+Status: Deployed (configuration only; hosted acceptance incomplete)
+Current scope: Both approved existing-app operations are recorded; fresh normalization exited zero, six no-ops and live role metadata passed, and the same private state authority/recovery is reconciled. No further apply is authorized; routed/customer/data/onboarding/device gates remain open.
 Previous validation: Read-only mirror/saved directory plan passed at `adbf0da`; retained as reference evidence.
-Date: 2026-10-06 JST
+Date: 2026-10-07 JST
 Mode: MODIFY
 Runtime preparation candidate: `36f502fe5040f81164a9304992f6819b9d382c5a`
 Published runtime source: `36d2680e5f88d31acfafa4473d0d4996f1de0ff7`
@@ -426,6 +426,53 @@ There is no local Azure data-plane functional test in this stage. Hosted MI/
 Graph/Cosmos, ingress, actual customer freshness and independent-BFF/member
 coverage are still separate #16/#24 gates.
 
+### Fresh approved-activation Validation Proof, 2026-10-07
+
+| Command/evidence | New activation-cycle result |
+| --- | --- |
+| `prepare.py retry-recheck` | Initial CLI argument failure preserved/corrected; exact normal ARM tenant/subscription matched without login or new scope |
+| Fresh locked init/baseline | Six no-ops; SHA256 `a355f126b7c6f68d8157b585bb84e2f2e65808f0c558d3c9faf0979eb056680b` |
+| Fresh reviewed candidate | One app update/five no-ops, zero creates/deletes/replacements; SHA256 `e812fd6badf7c53159e93d30dc26da6afabca7e25a97fce3c7b19780f6fa10be` |
+| Approval equivalence | Actions/configured after-values exactly match owner-approved saved `5eadced86...`; image/OIDC/authorization only, no other scope change |
+| `prepare.py canonical` | Unmodified official Terraform script passed all nine applicable checks; AZD-only input check not applicable, exact private JSON parsed/passed |
+| Independent canonical plan | Exact reviewed actions/values, SHA256 `80a568916c2a9b9dca5926d94a634353e0f42fb661a61d0f2725d842c2e612e7` |
+| Released contract/build | Fresh strict saved-JSON/pure-target test and `go build ./...` passed |
+| `prepare.py roles-policy` | Assigned UAMI with six exact-container data actions and exact named cursor Secret User, verified against unchanged code/plan; no role changes |
+| Exact app/inherited policy | Fresh bounded read returned zero applicable assignments |
+| State/source/reference integrity | Designated six-binding state, pinned source, private inputs and old mirror unchanged; previous canonical binary/marker preserved privately |
+| Scope/evidence | Preapply validation evidence in private `.cache/delivery-activation-20261007/`; zero writes/attempts during validation; actual subsequent outcomes in sections20-21 |
+
+**Role Assignment Verification: Verified (static source/plan).** Hosted identity
+exchange, uncached Graph and application data execution remain unproved. No local
+Azure data-plane test or unallocated probe is substituted for those live gates.
+
+### Fresh normalization Validation Proof, 2026-10-07
+
+This is a new validation cycle for section21, not reuse of either earlier
+completed marker. Preparation at `2026-10-07T01:53:49Z` used the already approved
+exact existing target and explicit `ARM_PRESERVE_RESOURCE_ID_CASING=true`.
+Fresh validation completed its actual checks through static roles/policies at
+`2026-10-07T01:55:07Z`; proof and error-resolution steps were recorded and the
+new official workflow completed through `UpdateStatus`.
+
+| Command/evidence | Actual preparation result |
+| --- | --- |
+| `normalize.py prepare` | Official one-app canonical binding import, protected before-state outside worktree; all six case-insensitive bindings and lineage preserved |
+| Fresh proposed saved plan | One imported-metadata app update/five no-ops, zero creates/deletes/replacements; SHA256 `3a842b3d0c1c650dbcc517d5904e50b32537c4ab902e16cc782aa97097b402e7` |
+| Exact configured after-values | Every app after-attribute matches the already approved active candidate except case-only ID spelling; body/image/OIDC/directory and all unrelated resources unchanged |
+| Fresh observed live controls | Independently match existing intended body and original ingress/CORS/scale/UAMI/secrets/command/probes/resources/other environment |
+| Prepared local state | SHA256 `9abeda89ebcbe92b700edbcb73fd475addd6328828e335848196b5987ebd1978`; no raw-state editing or second active authority |
+| Offline source fix | Four Python contract checks and locked Terraform/schema/61 mock plans/Go JSON contract/TFLint passed for explicit ID-casing option |
+| Evidence boundary | Previous canonical binary and validator marker preserved; zero additional Azure resource writes or BFF/customer/device requests during preparation |
+| `normalize.py canonical` / unmodified official script | Nine applicable Terraform checks passed at `2026-10-07T01:54:54Z`; AZD-only check not applicable, no subscription mutation or cloud update |
+| Independent canonical binary | Same exact reviewed actions/configured after-values; SHA256 `160adc3713fb84b7d321521516f3546475145bf401e432caafc4fdbd524109a3` |
+| `normalize.py build` | Frozen released-source `go build ./...` and strict saved JSON/pure-target contract passed at `2026-10-07T01:55:05Z` |
+| `normalize.py roles` | Static assigned-UAMI, exact-container six-action Cosmos and exact named cursor Secret User checks passed; target app/inherited policy query returned zero |
+| Integrity and current scope | Prepared state/source/old mirror/private input hashes unchanged during read-only validation; zero additional Azure resource writes/BFF/customer/device requests |
+
+**Role Assignment Verification: Verified (fresh static source/plan).** This
+does not prove the hosted UAMI/Graph exchange, routed HTTP or ordinary data path.
+
 ## 8. Validation and Issue closure
 
 | Change | Smallest relevant existing validation |
@@ -486,23 +533,61 @@ No login, provider registration, backend migration or apply is permitted.
 | Old mirror / pinned source hashes and private recovery | Hashes unchanged; protected recovery verified outside removable worktree |
 | Sanitized proof / new workflow status | Fresh section7 proof recorded; new canonical workflow completed through UpdateStatus |
 
+#### Approved existing-app activation validation, 2026-10-07
+
+These are the new cycle's children of **All validation checks pass**, not reuse
+of the R3 completed marker. The actual nested module and private JSON inputs
+are used; subscription selection, provider registration and remote backends
+are excluded.
+
+- [x] Terraform and Azure CLI installed; normal exact-context authentication.
+- [x] Locked `terraform init`, `terraform fmt -check`, `terraform validate`.
+- [x] Exact private-input saved plan and `terraform state list`.
+- [x] Unresolved Go-style template scan; AZD-only JSON check not applicable,
+  with the actual private JSON explicitly parsed.
+- [x] Canonical saved actions/configured values equal the fresh and approved
+  one-app-update/five-no-op review; no creation/deletion/replacement or drift.
+- [x] Released-source strict configuration/pure-target test and build.
+- [x] Static exact-container/named-secret data roles reviewed against source.
+- [x] Exact app/inherited policy read and compliance review.
+- [x] State/source/old-mirror integrity, new validation proof and complete
+  official workflow status before Azure Deploy.
+
+#### Fresh same-configuration normalization checks, 2026-10-07
+
+All validation checks pass for the existing pure-Terraform module only.
+Explicit provider ID-casing preservation is scoped to this execution; frozen
+runtime source, locked provider/API versions and private inputs remain unchanged.
+
+- [x] Terraform and Azure CLI installed; exact existing authentication/target.
+- [x] Locked `terraform init`, `terraform fmt -check`, `terraform validate`.
+- [x] Exact private-input canonical saved plan and local `terraform state list`.
+- [x] Go-style template-variable scan; AZD-only JSON check not applicable,
+  with actual private inputs parsed and hash-bound.
+- [x] One app imported-metadata update/five no-ops; configured after-values
+  exactly match the active approved body and other resource values.
+- [x] Released-source build and strict saved JSON/pure-target contract.
+- [x] Static assigned-UAMI, exact-container six-action Cosmos role and exact
+  named cursor Secret User; no grant broadening or data-plane login.
+- [x] Exact app/inherited policy query and applicable compliance review.
+- [x] Same prepared state/six bindings/lineage, old mirror/source/input hashes,
+  protected before-state, recorded proof and complete new official workflow.
+
 ## 9. Provisioning inventory and decision gates
 
-The initial local preparation deployed **zero** resources and executed **zero**
-live plans/applies. The separately approved section 14 now permits current
-resource GET/import and read-only Terraform plans into a validation-only mirror;
-**zero applies** remain authorized/executed. No quota or replica allocation is
-changed or claimed validated. Live quota/capacity checks are not applicable to
-this zero-allocation review; they must be completed for an explicitly approved
-execution plan if its inventory changes. The retained environment continues to
-have costs.
+Initial local preparation and section14's old mirror were read-only. Subsequent
+separately approved app-only activation and same-configuration normalization are
+recorded in sections20-21; the second command succeeded and both permissions
+are consumed. No new resource, quota or replica-policy allocation was changed.
+Capacity expansion is not part of those saved plans; any future inventory
+change requires its own review. The retained environment continues to have costs.
 
 | Gate | Required decision/evidence |
 | --- | --- |
-| Implementation | Approved P1/P2/P3 preparation completed with exact-source evidence; #40 is the newly tracked browser source gap |
-| Management state | Adoption/revalidation approved; distinct workspace, authority manifest and fresh validation not yet executed |
-| Browser compatibility | #40 tracks the concrete Entra-only Web restriction; generic BFF/native OIDC is not a universal Web/profile guarantee |
-| Candidate distribution/hosting | Exact compatible immutable artifact and reviewed saved plan; no development publication or retained-image overwrite |
+| Implementation | P1/P2/P3 and #40 source/standards-fixture acceptance completed; actual live criteria remain separate |
+| Management state | Distinct private authority adopted, validated and reconciled after approved operations; six no-ops and protected recovery verified |
+| Browser compatibility | Explicit generic Code/S256 and Entra/MSAL implemented; generic sign-in does not claim the workforce-directory proof profile |
+| Candidate distribution/hosting | Published immutable directory image is active; state/revision/live roles verified, routed/hosted exchange remains open; no new publication |
 | Namespace/data | Explicit new directory provenance; no automatic builtin/legacy ownership migration |
 | Real credential/member coverage | Owner decision on incompatible one-customer versus independent-credential/member criteria; no silent waiver or extra identity |
 | Attended authentication | Owner availability and coordinated current selected-customer session after readiness |
@@ -529,9 +614,10 @@ not proof of current customer issuance or hosted execution.
 - [x] Merge PR #39 and publish/verify the separately approved exact-main BFF.
 - [x] Record approval to adopt/revalidate a distinct management state on the original-artifacts-unavailable assumption.
 - [x] Reconcile current Issues and identify the provider-neutral Web compatibility gap.
-- [ ] Execute approved new-state adoption and fresh canonical validation; old mirror validation does not satisfy this stage.
-- [ ] Complete #40's browser compatibility implementation and exact-source evidence.
-- [ ] Execute separately authorized deployment and attended acceptance.
+- [x] Execute approved new-state adoption and fresh canonical validation; old mirror validation does not satisfy this stage.
+- [x] Complete #40's browser compatibility implementation and exact-source evidence.
+- [x] Execute separately approved app activation/provider recovery and persist reconciled state/backup.
+- [ ] Execute actual routed/hosted/customer acceptance after its separate prerequisites.
 - [ ] Reproduce onboarding, final Android and close scoped leaves with evidence.
 
 Execute approved local work first. Do not mark this document Ready for
@@ -1018,3 +1104,304 @@ and body hashes are in
 `.cache/implementation-resume-20261006/issue-update-summary.private.json`.
 The persistent restart handoff has been updated. No new PR, merge, publication
 or deployment approval follows from this documentation checkpoint.
+
+## 20. Remaining delivery execution, 2026-10-07
+
+The owner requested completion of all remaining Issue work and reported that
+Android is connected. This is not an implicit expansion of resource, identity,
+publication, data-budget or unattended device permissions. Earlier source/state
+acceptance in section19 remains completed and is not being relabelled as live
+acceptance. This execution skeleton began in Draft; the separately approved
+configuration phase and provider/state reconciliation are now complete.
+
+### Planning checklist
+
+- [x] Read the current five open Issues and their latest decisions/evidence.
+- [x] Reconcile retained authority, saved plans and exact target/context.
+- [x] Finalize the bounded activation, hosted, customer, onboarding and Android order.
+- [ ] Obtain approval for the concrete change/coverage/attended operation at each gate.
+
+### Execution skeleton
+
+1. #16: Recheck the designated management state and app-only saved plan, then
+   follow fresh Azure validation and Azure Deploy only after concrete approval.
+2. #16: Establish evaluated-peer/log delivery, hosted MI/Graph/Cosmos and the
+   independent-BFF boundary without widening network, IAM or replica scope.
+3. #24: Resolve exact origin and controlled identity coverage, then execute the
+   approved attended customer/API/fresh-ID/data journey within the shared ledger.
+4. #32: Reproduce the selected source/SDK/image contract from a clean consumer
+   workspace after hosted readiness.
+5. #20: Run final owner-attended Android acceptance after readiness and explicit
+   availability; connection alone is not permission to operate another app/device.
+6. #2: Close only after actual leaf criteria or explicit scope decisions resolve;
+   persist English Issue evidence and the updated private restart handoff.
+
+### Preserved boundaries
+
+No new paid resources, grants, identities, secrets, public release, main merge,
+network/CORS/replica changes, automatic key rotation or extra BFF attempts are
+authorized by this skeleton. The actual ledger remains7/40 with33 fully reserved;
+unknown submitted outcomes stop. Private authority/state/inputs stay private and
+the old mirror remains reference-only. Actual Google/Apple setup stays not
+planned; their provider names are not globally denied by generic OIDC.
+
+### Current reviewed execution plan
+
+- [x] Current open Issues and latest decision comments read: #2/#16/#20/#24/#32.
+- [x] Authority/state/pinned-source/old-mirror hashes checked; designated local
+  writer lock acquired read-only, no observed Terraform lock or local drift.
+- [x] Existing Azure context detected as Enabled and matching the private inputs:
+  exact owner-confirmed subscription/tenant in `approval.private.json`, region
+  `westus2`. Resource/account identifiers remain in protected private evidence.
+- [x] Concrete candidate remains published main `36d2680` /
+  `sha256:adfe83a08dcd8754f85652641a85138e9a90993c1766ce70c86953365b9a6102`.
+  Saved directory plan SHA256
+  `5eadced86d920ae78043f00efee3f9ec2e06b9b3c7f6b30e8729b7cf253d0460`
+  is intact: one existing app image/runtime update, five no-ops,
+  zero creates/deletes/replacements.
+- [x] Existing pure-Terraform recipe retained: exact six-binding local authority,
+  no AZD reinitialization, backend migration or infrastructure regeneration.
+  Planned new resource count and capacity increase are both zero; existing
+  roles, private topology, sole Allow, min0max1 and empty CORS stay unchanged.
+- [x] Previous exact-source browser and released-contract functional acceptance
+  remains valid evidence for the unchanged candidate; hosted acceptance is new
+  and cannot be inferred from those fixtures.
+- [x] Owner approves reuse of this exact context and the concrete existing-app
+  configuration overwrite. Fresh validation must stop for drift, another writer,
+  expanded actions or any change to the reviewed configured after-values.
+- [x] Recheck baseline and candidate with new private immutable evidence files;
+  run the complete Azure Validate workflow, then Azure Deploy using only the
+  approved saved candidate and designated management workspace.
+- [x] Record the initial provider exit1, actual approved after-values and Healthy
+  revision, conditional local restore and separately approved successful new
+  normalization. Reconciled authority/six no-ops/live roles are in section21.
+- [ ] Measure routed HTTP/evaluated-peer/log delivery and actual hosted identity;
+  do not retry an uncertain operation or broaden trust without concrete review.
+- [ ] Resolve reachability and request-ledger allocation before BFF probes; exact
+  Web origin, independent BFF path and credential/member expansion remain
+  separate decisions, not part of this first existing-app change approval.
+- [ ] Execute attended #24 and clean #32 only after their concrete prerequisites;
+  perform owner-assisted #20 last, after confirming the exact physical target
+  and owner's current availability. Do not infer it from hardware connection.
+
+The user asked to finish the Issues, not to add social-provider setup. #30 stays
+NOT_PLANNED. No Google credentials/connection, SDK publication or main merge is
+included. The initial exact existing-app activation decision was separately
+approved and consumed below; no original-state/adoption question is repeated.
+
+### Explicit first activation approval
+
+The owner selected approval for revalidation and actual activation of the exact
+retained BFF app in the privately pinned subscription/WestUS2 context above.
+The approval covers only the reviewed published image and OIDC/authorization
+runtime overwrite, referenced by saved plan `5eadced86...`, with no new/deleted
+resources, IAM, network/CORS or replica change. Existing runtime usage may incur
+its normal charges. Fresh actions/configured values must match that review;
+unexpected drift or an ambiguous operation stops rather than auto-retrying.
+This resolves the actual-app-update decision, not the remaining identity/member,
+origin, private two-BFF, authentication or physical-device approvals.
+
+### Fresh activation preparation
+
+Private evidence is under `.cache/delivery-activation-20261007/`. A local helper
+argument failure (Azure CLI forbids simultaneous tenant/subscription token
+arguments) was preserved and corrected without a login or scope change.
+Normal token-context readback independently matched the exact approved tenant
+and subscription. Locked provider initialization and fresh plans passed:
+
+| Boundary | New preparation result |
+| --- | --- |
+| Baseline | Six no-ops, SHA256 `a355f126b7c6f68d8157b585bb84e2f2e65808f0c558d3c9faf0979eb056680b` |
+| Directory candidate | One app update/five no-ops, SHA256 `e812fd6badf7c53159e93d30dc26da6afabca7e25a97fce3c7b19780f6fa10be` |
+| Approval equivalence | All managed resource actions and configured after-values exactly match saved `5eadced86...`; zero creates/deletes/replacements |
+| Integrity | Designated state, pinned source, private inputs and old mirror unchanged; no observed state lock |
+| Functional/build | Fresh released strict JSON/pure-target test and `go build ./...` passed |
+| New canonical cycle | Old completed marker/binary privately preserved; marker removed before starting the new official workflow |
+| Actual changes | Zero Azure writes/BFF attempts; activation approved but not yet executed |
+
+The physical plan was marked Ready for Validation before the new Azure Validate
+invocation. Prior browser/source and R3 validation remain historical evidence,
+not substitutes for this activation cycle.
+
+The new official Azure Validate cycle performed LoadPlan,
+AddValidationSteps, RunValidation, BuildVerification, StaticRoleVerification,
+RecordProof and ResolveErrors. All applicable checks pass, section7 contains
+fresh proof and no unresolved validation error remained. Its Validated status
+and final UpdateStatus preceded Azure Deploy. The subsequent initial provider
+failure and separately approved successful normalization are recorded below;
+hosted/customer/device acceptance is still pending.
+
+### Azure Deploy pre-deployment checklist
+
+- [x] Exact subscription/region and existing-app overwrite explicitly approved;
+  current context and live group location independently match private inputs.
+- [x] Existing Container Apps environment is Succeeded and reused, with no new
+  group/environment/backend or alternate deployment workspace.
+- [x] Pure Terraform/default workspace selected; AZD environment/tag discovery
+  is not applicable and no AZD reinitialization is performed.
+- [x] Public immutable GHCR image is already published/verified; no ACR,
+  `AcrPull`, image build/publication or registry credential change is required.
+- [x] Canonical saved binary `80a568916...`, fresh validation marker, static roles,
+  policy review and source/state/reference integrity checked before application.
+- [x] Live configured before-values still match the plan. A full-ARM comparison
+  initially exposed unconfigured platform fields (`ephemeralStorage`, generated
+  ingress metadata); preserved diagnostics and exact configured-field matching
+  resolve the shape mismatch without changing Azure or IaC.
+- [x] Full live topology, network/CORS/domain, scale, probes/commands/resources,
+  secret references and nonruntime environment are captured for independent
+  post-apply preservation checks, including platform-derived fields.
+- [x] Apply is one-shot with an exclusive start marker; uncertain/nonzero results
+  require independent reconciliation, never an automatic repeat/rollback.
+- [x] Attempt the initial validated saved binary once under Azure Deploy,
+  preserving its exit1 and independent ARM proof; complete the separately
+  approved fresh normalization/live role checks in section21 without replay.
+- [ ] Resolve the separately gated HTTP/customer/data acceptance.
+
+### Observed activation and case-only provider recovery
+
+The initial one-shot apply returned exit1 after Azure updated the app: pinned AzAPI2.13.0
+produced an inconsistent ID string differing only in `containerapps` versus
+`containerApps`. Independent exact ARM readback confirms the approved after-values
+and preserved unrelated controls. At that readback its latest revision was
+Healthy/Provisioned with one replica within unchanged min0max1, and the app was
+Succeeded. No automatic
+retry/rollback occurred. This is observed activation, not a successful Terraform
+command, routed HTTP proof or customer acceptance.
+
+The archived failed state retains the new directory image/configuration, all six bindings
+and original lineage; it is not tainted. Its app attributes now use canonical
+`containerApps`, while its Terraform resource identity still uses
+`containerapps`. Both name the same case-insensitive ARM resource, but the
+subsequent read-only plan fails with `Unexpected Identity Change`. Private state SHA256 is
+`0f29727de497ff20d587a1ff8528ff1d3bc5c46e282ba58b22c458a000dbcc18`.
+This outcome required reconciliation of the same authority, not silently
+treating its previous hash as unchanged. Section21 records that reconciliation.
+
+Upstream pinned provider source confirms the supported
+`preserve_resource_id_casing` option (or explicit
+`ARM_PRESERVE_RESOURCE_ID_CASING=true`) preserves only existing ID spelling and
+does not weaken body/trust checks. The reusable module now sets that option;
+the frozen released module remains unchanged and uses the explicitly bounded
+provider environment option for recovery validation. Provider/API versions,
+runtime image/configuration and resource identities are unchanged.
+
+- [x] Verify the source-only provider option with installed schema/mock/contract
+  checks; no real providers or cloud writes in those checks.
+- [x] Attempt a fresh read-only plan with the supported provider option; preserve
+  its failure. The option prevents recurrence but does not heal the already
+  inconsistent recorded attributes/resource identity. No state/cloud write occurred.
+- [x] Obtain separate focused permission for official local binding repair of
+  this one same app: preserve protected state, `state rm` the binding only and
+  import the independently verified canonical ID/API version into the same
+  authority. No Azure update/delete, provider/API upgrade or raw-state edits.
+- [x] Enforce the local-only repair's six-no-op condition; it failed on imported
+  defaults/output normalization, so official protected-state restore completed.
+- [x] After the separate section21 approval, verify fresh ordinary six no-ops,
+  same bindings/lineage/live controls and actual exact role metadata; advance
+  the same authority and verify new protected restore-only recovery.
+- [x] Reconcile the five English Issue bodies with honest activation versus
+  hosted/customer/device evidence, preserving titles/states/unrelated bodies
+  and all remaining acceptance criteria; update source docs/private handoff.
+
+## 21. Prepared same-configuration provider reconciliation
+
+Mode: MODIFY; recipe: pure Terraform existing workload. Retain the same private
+authority, exact subscription/region/app approved in section20, immutable
+published directory image and frozen runtime/module source. No new services,
+paid resource provisioning, source/provider/API upgrade or publication.
+
+The authorized canonical reimport repaired attributes/resource-identity casing,
+but its fresh normal plan proposed one app update/five no-ops: imported
+server-default/null/alias fields and unrestricted default exports must reconcile
+with the existing configured body and three nonsecret exports. The six-no-op
+acceptance condition was not met, so the official protected-state restore ran.
+All six resource instances and lineage match the saved failed-apply snapshot;
+only the official local serial advanced. Restored pre-normalization state SHA256:
+`4e891e01f92a007654d9a3c33640808aead5960467dddeb122f35d914f85adaf`.
+There were zero additional Azure resource writes and no BFF/device requests.
+Both imported-plan failure and protected restore are preserved.
+
+Pinned upstream provider source confirms every resource Update makes an ARM
+PUT, even for these metadata differences. Do not call it a local-only update,
+hide it with body ignores, edit raw state or replay the first saved binary.
+
+The separately approved bounded follow-up, completed below, used official
+canonical binding preparation in the same
+authority, then one freshly validated saved app-only update retaining the
+**same already active configured image/OIDC/directory body**. Use only the
+supported explicit ID-casing option. Independently enforce all preserved live
+controls and unchanged managed identities/roles, networking/CORS, scale,
+command/probes/resources, secret references, cursor/history/data topology and
+other environment values. Existing running-resource usage may incur normal
+charges; no new/delete/replaced resources or scope expansion is permitted.
+
+- [x] Obtain focused owner approval for this same target and one additional
+  saved-plan app update plus its required protected local binding preparation.
+  The owner explicitly approved this exact subscription/region/existing app,
+  unchanged configured body and normal existing-resource usage charges. This is
+  not permission to replay the first saved binary or expand another gate.
+- [x] Freeze/read back exact private context, current state/authority, old
+  reference hashes and live controls; stop if another writer/drift is observed.
+- [x] Prepare a plan matching one app metadata-normalization update/five no-ops
+  and the exact existing desired configured body; unexpected changes stop.
+- [x] Run a complete fresh Azure Validate workflow with actual proof and then
+  Azure Deploy preflight; no inherited completed marker for this scope.
+- [x] Apply the new saved binary once with explicit casing preservation,
+  independently verify live controls/Healthy revision and fresh six no-ops.
+- [x] Reconcile the same state authority and new protected restore-only backup,
+  retain all earlier failed receipts and execute live role metadata verification.
+- [ ] Resolve separate HTTP-budget, origin, private two-BFF, identity coverage and
+  attended customer/device gates; do not close the five Issues on hosting alone.
+
+### Fresh normalization Azure Deploy preflight
+
+`normalize.py preflight` passed the exact binary/JSON hash and scope comparison,
+new Validated plan/UpdateStatus marker, existing approved CLI context/region,
+default local workspace, existing group and Succeeded ACA environment. Exact
+live app configuration and all unrelated controls still match the approved
+values. Pure Terraform/public immutable GHCR makes AZD environment, ACR,
+AcrPull, rebuild/publication and SQL/EF steps not applicable. No new resource,
+quota, scale policy, network or IAM allocation is proposed.
+
+The single new saved binary is
+`160adc3713fb84b7d321521516f3546475145bf401e432caafc4fdbd524109a3`;
+the first failed binary is not replayed. The protected one-shot intent marker
+must be written before submission, and any failure/unknown outcome stops
+without retry or automatic rollback.
+
+### Measured normalization result and state custody
+
+`normalize.py apply` applied only the new saved binary once and exited0.
+Independent verification at `2026-10-07T01:59:29Z` confirms unchanged configured
+body and full unrelated live controls. App is Succeeded; latest revision is
+Healthy/Provisioned/ScaledToZero with zero replicas in unchanged min0/max1.
+The fresh ordinary six-no-op plan SHA256 is
+`06a58fb0a02917f7adfc5ffc0269f0e51b0edcff3686d4363d777fdba1ca0926`.
+
+`normalize.py live-roles` verified the actual assigned UAMI, exact six-action
+custom Cosmos container role/assignment and named cursor Secret User through
+metadata-only reads. No role change or secret value was read. The same authority
+now hash-binds active state
+`104e46545b3e9d2b4def2bbdfbcc71952ef30a20dba12256b6b22c0306a0d20c`,
+with aligned app attributes/resource identity, six bindings and original lineage.
+Protected 0600 restore-only recovery outside the worktree is independently
+verified at SHA256
+`c8f2e8c52cece7b70bf0ca7b47a149e9e3c852b153285fe9914d6e1a66d9abe9`.
+The old mirror/frozen source and historical recovery/failure evidence remain.
+
+Both concrete app-update approvals are consumed; no further apply is authorized.
+No new/deleted/replaced resource, IAM/network/CORS/scale-policy change, new BFF
+attempt, secret-value read, customer login or physical operation occurred.
+Ledger remains7/40 with33 reserved and0 accepted document mutations. Routed
+trusted HTTPS/peer/log delivery, actual hosted Graph/customer/data, coverage,
+clean onboarding and final Android are still open, not passed by deployment.
+
+The guarded five-body Issue reconciliation passed independent inventory
+readback: 27 COMPLETED, one NOT_PLANNED and five OPEN (#2/#16/#20/#24/#32).
+No title, state, unrelated body or actual acceptance criterion changed.
+Protected evidence is in
+`.cache/delivery-normalization-20261007/issue-reconciliation-summary.json`;
+the private restart handoff now identifies current active state/recovery rather
+than the preactivation snapshot. Runtime main/image and the old SDK publication
+are unchanged; the reusable provider option and direct regression are source
+changes, not a new runtime publication.

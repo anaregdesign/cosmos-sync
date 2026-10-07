@@ -51,8 +51,8 @@ apply. No Graph grant, federated credential, user or legacy ownership migration
 is implicitly created here. Builtin/legacy omit `authorization.directory` and
 retain their previous generated configuration.
 
-The [verified public release](../../../docs/release.md) now supplies a compatible
-immutable directory image. It has not changed the retained Azure app. A
+The [verified public release](../../../docs/release.md) supplies a compatible
+immutable directory image. Publication alone does not change a deployment. A
 validation-only local state mirror may reconstruct only explicitly approved
 existing resources when original private state is not available in an isolated
 worktree. Imports are control-plane reads with local bindings, not authorization
@@ -60,10 +60,14 @@ to apply, migrate/replace original state, or create a second authoritative state
 Keep mirror directories/state/saved plans private; review baseline drift first.
 Actual activation still needs Azure validation, separate concrete apply approval
 and an explicit state-authority/handback decision. For the retained reference,
-the owner has since approved a distinct local management-state adoption and fresh
-validation on the original-artifacts-unavailable assumption. It is not started;
-the old mirror remains reference-only and no apply is approved. Other consumers
-must use their own state/authority decisions, not this private mirror.
+the owner separately approved distinct local management-state adoption,
+validation and app-only activation. Directory configuration is now active;
+the initial case-only provider failure and conditional local restore remain
+recorded. A separately approved, freshly validated same-configuration update
+succeeded, with six no-ops and exact live role metadata. The same private
+authority is reconciled and backed up; the old mirror remains reference-only.
+Hosted customer/data acceptance is still open. Other consumers must use their
+own state/authority decisions, not this private mirror.
 
 Before activation, preserve the existing state/cursor key, pin the compatible
 candidate and verify the retained UAMI/FIC, target-only Graph `User.Read.All`,
@@ -86,6 +90,17 @@ Ingress enum casing and probe ordering match observed ARM readback. This avoids
 an otherwise unchanged app update during an environment-only logging change;
 probe settings and security behavior are unchanged. The real saved plan and
 portable checks are distinguished in [verification](../../../docs/verification.md).
+
+The pinned AzAPI provider preserves existing resource-ID casing explicitly.
+ARM IDs are case-insensitive, but Terraform compares the recorded ID as a
+string; an imported `containerapps` ID can otherwise fail after a successful
+update that produces `containerApps`. This option affects only ID spelling,
+not body comparison, authorization or resource replacement guards.
+If an apply reports this inconsistency, do not replay it or recreate the app:
+independently read the exact resource, verify the intended configuration and
+unchanged controls, preserve the failed state/receipt, then require a six-no-op
+plan before reconciling the designated state authority. Do not edit raw state,
+force-unlock or broaden `ignore_changes` to hide a mismatch.
 
 `oidc.allowed_client_ids` optionally restricts API admission to exact signed
 `azp` client IDs in addition to the existing issuer, API audience and scope

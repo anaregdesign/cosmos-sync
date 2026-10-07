@@ -1,5 +1,10 @@
 # Verification
 
+Latest retained-runtime evidence is the [October 7 directory activation and
+provider/state reconciliation](#approved-directory-activation-and-provider-reconciliation-2026-10-07).
+Hosted/customer/data/onboarding/final-device acceptance remains incomplete;
+the earlier dated source, fixture and startup receipts below retain their scopes.
+
 Foundation v0.2 checks on 2026-10-03, macOS 26.7 arm64. Production BFF and SDK source
 commits are `9c2bdb8` and `a7998fe`. Go 1.26.5, Dart 3.12.2, Flutter 3.44.6,
 SQLite package 3.5.2 and Docker 29.5.3 were used. At that foundation stage, no paid Azure resource,
@@ -1156,3 +1161,59 @@ retained in
 `.cache/implementation-resume-20261006/issue-update-summary.private.json`.
 The updated restart handoff preserves historical failures and separates this
 source/state checkpoint from actual deployment and attended acceptance.
+
+## Approved directory activation and provider reconciliation, 2026-10-07
+
+The owner separately approved the exact existing-app image/OIDC/directory update
+after fresh canonical validation. The one-shot binary
+`80a568916c2a9b9dca5926d94a634353e0f42fb661a61d0f2725d842c2e612e7`
+**returned Terraform exit 1**, not success. Independent exact ARM readback
+confirmed the approved published `36d2680`/`adfe83a08dcd...` directory runtime
+and preserved unrelated controls; its latest revision was Healthy/Provisioned.
+Pinned AzAPI returned canonical `containerApps` attributes while the recorded
+Terraform resource identity still used case-only `containerapps`.
+
+The supported pinned-provider `preserve_resource_id_casing` setting prevents
+recurrence but does not heal that already inconsistent identity. A read-only
+plan preserved `Unexpected Identity Change`. The owner then authorized protected
+official local one-app reimport conditional on six no-ops. Import aligned the
+identity but planned imported defaults/output normalization; the no-op condition
+failed, so the official protected local state restore ran. All six instances
+and lineage matched the saved snapshot, with only local serial advanced.
+No Azure update occurred during that conditional repair.
+
+The owner separately approved one fresh same-configuration app update and its
+required canonical binding preparation. A **new** complete Azure Prepare,
+Validate and Deploy cycle used frozen released source and explicit
+`ARM_PRESERVE_RESOURCE_ID_CASING=true`; no raw-state editing, provider/API upgrade
+or body/trust ignore was used.
+
+| Actual command/evidence | Measured result |
+| --- | --- |
+| `normalize.py prepare` | Protected official same-authority canonical binding; six case-insensitive IDs/lineage preserved; one metadata app update/five no-ops, all configured after-values equal active approved configuration except ID spelling |
+| `normalize.py canonical` | Unmodified official Terraform script passed nine applicable checks; new canonical binary SHA256 `160adc3713fb84b7d321521516f3546475145bf401e432caafc4fdbd524109a3` |
+| Released-source build/contract | Fresh strict saved JSON/pure directory targets and `go build ./...` passed; runtime source `36d2680` unchanged |
+| Static roles/policy and workflow | Exact assigned UAMI/container/named-secret relationships passed; zero target/inherited policies; new official workflow completed through UpdateStatus |
+| `normalize.py preflight` | Exact approved context/region/default workspace, existing group/environment and full live controls passed; no AZD/ACR/publication/new capacity |
+| `normalize.py apply` | New binary applied once, **exit 0**; independent after-values/full controls passed at `2026-10-07T01:59:29Z`; no automatic replay of first failure |
+| Current revision | App Succeeded; latest Healthy/Provisioned/ScaledToZero; zero replicas within unchanged min0/max1 |
+| Post-update ordinary plan | Six no-ops, exit 0; SHA256 `06a58fb0a02917f7adfc5ffc0269f0e51b0edcff3686d4363d777fdba1ca0926` |
+| `normalize.py live-roles` | Actual assigned UAMI, exact custom six-action Cosmos container role/assignment and exact named cursor Secret User verified through metadata-only reads; no grant/value read |
+| Reconciled authority/state | Same designated authority, six bindings/lineage and aligned app attributes/resource identity; active state SHA256 `104e46545b3e9d2b4def2bbdfbcc71952ef30a20dba12256b6b22c0306a0d20c` |
+| Protected recovery | Verified 0600 restore-only archive outside removable worktree, SHA256 `c8f2e8c52cece7b70bf0ca7b47a149e9e3c852b153285fe9914d6e1a66d9abe9`; prior failure/preactivation recovery retained |
+| Reusable module regression | Explicit pinned AzAPI ID-casing setting; four Python contract checks and locked format/schema/61 mock plans/strict Go JSON contract/TFLint passed |
+
+Both approved existing-app writes are recorded; zero resources were created,
+deleted or replaced. IAM, topology/network/CORS, scale policy, cursor/history,
+secret references, command/probes/resources and unrelated environment are
+preserved. Old mirror/source hashes remain unchanged; original/external-writer
+absence is unproved and discovery stops another writer. Both update permissions
+are consumed and the manifest does not authorize another apply.
+
+No new BFF attempt, accepted document mutation, secret-value read, customer login
+or physical operation occurred. The aggregate ledger remains **7/40**, with33
+fully reserved by native4/SDK29. Trusted routed HTTPS/evaluated-peer/log delivery,
+actual hosted UAMI-to-Graph exchange/uncached profile, customer API/fresh-ID,
+ordinary data/RU/two-independent-BFF/member coverage and clean onboarding/final
+Android remain unproved. The five Issues #2/#16/#20/#24/#32 stay open; no acceptance
+criterion is waived by successful configuration deployment or live role metadata.

@@ -43,8 +43,11 @@ The existing public package required no visibility transition. Version remains
 `0.2.0-dev.1`; the new source-SHA tag did not overwrite old tags, republish the SDK
 or alter its archive. This source includes directory authorization and coordinated
 identity lifecycle; published-image proof is not Azure activation or customer
-authentication evidence. The retained Azure app still runs the original image
-with matching builtin configuration.
+authentication evidence. The separate October 7 approved activation/state
+recovery now gives the retained app this directory image/configuration; its
+initial provider failure and successful fresh normalization remain distinct
+receipts. Routed/customer/data acceptance is still open; see
+[verification](verification.md#approved-directory-activation-and-provider-reconciliation-2026-10-07).
 
 On 2026-10-03 the owner explicitly approved
 **MIT**, copyright 2026 anaregdesign, **public GitHub source and public GHCR**, and

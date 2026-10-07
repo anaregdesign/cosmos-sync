@@ -47,14 +47,15 @@ Existing explicit server grants remain the legacy
 mode. An empty legacy grants configuration deliberately denies document access.
 A healthy container is not yet the completed developer experience.
 
-## Current delivery paths and acceptance ownership, 2026-10-06
+## Current delivery paths and acceptance ownership, 2026-10-07
 
 The [delivery plan](../.azure/deployment-plan.md) replaces cumulative Issue
 checklists with explicit source, tooling, hosted and final-device milestones.
 The core directory factory, typed SDK and native/Web account lifecycle are
 implemented. Directory-mode Terraform and actual fresh-proof/hosted acceptance
 tooling are now implemented as separately gated preparation. Compatible artifact
-activation, actual customer/hosted acceptance and coverage decisions still remain.
+activation and private state/provider reconciliation now passed. Actual
+customer/hosted acceptance and coverage decisions still remain.
 Current source adds explicit generic browser OIDC alongside Entra/MSAL; use its
 exact #40 source/fixture evidence, not an assumed update to published main.
 Entra External ID is the preferred consumer
@@ -65,7 +66,7 @@ consumer's own deployment and private state.
 | --- | --- | --- |
 | Published SDK | Immutable `0.2.0-dev.1` archive from `82e937c`; no republication | Its original builtin/legacy transport is not the new typed directory SDK |
 | Published directory BFF | PR #39 merged as `36d2680`; verified immutable `adfe83a08dcd...` image | #27/#28 preparation completed; source-path SDK required; #16/#24 actual acceptance remains open |
-| Retained Azure | Original `82e937c` builtin image/configuration | Distinct private six-binding management state adopted/canonically validated; app-only overlay reviewed, not applied; #16 actual readiness remains open |
+| Retained Azure | Published `36d2680` directory image/configuration | Approved activation and fresh same-configuration provider recovery passed; reconciled private authority, six no-ops and live role metadata; #16 routed/hosted identity readiness remains open |
 | Browser compatibility | Source-only explicit Entra/MSAL or generic Code/S256 + signed-ID adapter | #40 pins actual standards/browser/cache evidence; generic sign-in does not advertise the workforce-directory proof profile or live provider acceptance |
 | Reproducible onboarding | Pin the exact chosen source/package/image and authorization mode before the run | #32 follows #24; it does not depend on closing epic #2 or physical-device #20 |
 | Final device | Selected physical Android after source/cloud/onboarding and owner availability | #20; iOS and cancelled actual Google/Apple are not prerequisites |
@@ -96,9 +97,10 @@ a dry run or planned package URL does not establish availability. The source
 checkout remains usable for local preparation while those gates are open.
 
 The current verified public BFF is built from `36d2680`, while the unchanged
-`cosmos_sync 0.2.0-dev.1` archive comes from `82e937c`. The actual Azure startup
-checkpoint still uses that original BFF image; new-image publication is not a
-hosted CRUD result. Use the [recorded immutable digests](release.md) and select
+`cosmos_sync 0.2.0-dev.1` archive comes from `82e937c`. The historical October 4
+startup checkpoint used that original BFF image; the retained app now uses the
+published directory image after approved activation/state recovery. Neither
+checkpoint is hosted CRUD acceptance. Use the [recorded immutable digests](release.md) and select
 one explicitly in the reviewed deployment plan.
 For directory APIs, use the explicitly pinned repository SDK path rather than
 the old pub.dev archive, even though the source package still has the same

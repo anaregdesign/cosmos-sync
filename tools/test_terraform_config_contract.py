@@ -1,6 +1,8 @@
 import copy
 import io
 import json
+from pathlib import Path
+import re
 import unittest
 
 from terraform_config_contract import extract_configuration
@@ -56,6 +58,20 @@ class TerraformConfigurationContractTests(unittest.TestCase):
         for value in ("{", " " * (8 * 1024 * 1024 + 1)):
             with self.subTest(size=len(value)), self.assertRaises(ValueError):
                 extract_configuration(io.StringIO(value))
+
+    def test_imported_arm_id_casing_is_preserved_without_ignoring_body_changes(self):
+        module = Path(__file__).resolve().parents[1] / "infra/terraform/azure-container-apps"
+        versions = (module / "versions.tf").read_text()
+        provider = re.search(r'provider "azapi"\s*\{([^{}]*)\}', versions)
+        self.assertIsNotNone(provider)
+        self.assertRegex(
+            provider.group(1),
+            r"(?m)^\s*preserve_resource_id_casing\s*=\s*true\s*$",
+        )
+        self.assertNotRegex(
+            (module / "main.tf").read_text(),
+            r"\b(?:ignore_casing|ignore_body_changes)\s*=",
+        )
 
 
 if __name__ == "__main__":
