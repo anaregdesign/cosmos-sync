@@ -30,6 +30,9 @@ FRESH_STAGES = frozenset({"directory_challenge_received", "fresh_browser_request
                          "fresh_callback_received", "fresh_proof_verified"})
 PHASES = frozenset({"initial", "refresh"})
 GUID = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+DEFAULT_TIMEOUT_SECONDS = 600
+MIN_TIMEOUT_SECONDS = 60
+MAX_TIMEOUT_SECONDS = 900
 
 
 def private_json(path, value):
@@ -61,14 +64,15 @@ def begin_native_run(root, device):
     run_parent.chmod(0o700)
     directory = run_parent / secrets.token_hex(12)
     directory.mkdir(mode=0o700)
+    started_at = datetime.now(timezone.utc).isoformat()
     report = {
         "schemaVersion": 2, "status": "incomplete", "failureStage": "argument_preflight",
-        "recordedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "recordedAtUtc": started_at, "startedAtUtc": started_at, "finishedAtUtc": None,
         "failureReason": None, "platform": ("macos" if device == "macos"
                                           else "android" if device in ("android", "android-emulator")
                                           else "unsupported"),
         "physicalDevice": device == "android", "emulator": device == "android-emulator",
-        "stages": [], "capturedApiPhases": [], "cleanupComplete": False,
+        "stages": [], "stageRecordedAtUtc": {}, "capturedApiPhases": [], "cleanupComplete": False,
         "actualNativeAppAuth": False, "actualSecureRestore": False, "actualRefresh": False,
         "localSignout": False, "verifiedApiSignatureIssuerAudienceScopeTenantOwner": False,
         "apiSubjectStableAcrossRefresh": False, "proposedSingleUserGrant": False,
@@ -149,10 +153,14 @@ def source_state(root):
     return {"sourceSha": revision.stdout.strip(), "sourceTreeDirty": bool(dirty.stdout.strip())}
 
 
-def native_command(flutter, target, url, isolated_sign_in=False, manual_start=False):
+def native_command(flutter, target, url, isolated_sign_in=False, manual_start=False,
+                   *, timeout=DEFAULT_TIMEOUT_SECONDS):
+    if type(timeout) is not int or not MIN_TIMEOUT_SECONDS <= timeout <= MAX_TIMEOUT_SECONDS:
+        raise ValueError("bounded_native_auth_timeout_required")
     command = [
         flutter, "test", "integration_test/entra_auth_live_test.dart", "-d", target,
         "--dart-define=COSMOS_SYNC_ENTRA_CONTROL_URL=" + url, "--reporter", "expanded",
+        "--dart-define=COSMOS_SYNC_ENTRA_TIMEOUT_SECONDS=" + str(timeout),
     ]
     if isolated_sign_in:
         command.append("--dart-define=COSMOS_SYNC_ENTRA_ISOLATED_SIGN_IN=true")
@@ -174,6 +182,7 @@ class NativeControl:
         self.prefix = "/" + self.capability + "/"
         self.store_key = "cosmos_sync_example.auth_live." + secrets.token_hex(16)
         self.stages = []
+        self.stage_recorded_at = {}
         self.captured = set()
         self.lock = threading.Lock()
         control = self
@@ -238,6 +247,7 @@ class NativeControl:
                         with control.lock:
                             if value["stage"] not in control.stages:
                                 control.stages.append(value["stage"])
+                                control.stage_recorded_at[value["stage"]] = datetime.now(timezone.utc).isoformat()
                                 print("NATIVE_ENTRA_STAGE_" + value["stage"].upper(), flush=True)
                     else:
                         if set(value) != {"phase", "accessToken"} or value["phase"] not in PHASES:
@@ -337,7 +347,7 @@ def run_native(args, root):
     stage = "argument_preflight"
     output_permitted = False
     try:
-        if not 60 <= args.timeout <= 900:
+        if type(args.timeout) is not int or not MIN_TIMEOUT_SECONDS <= args.timeout <= MAX_TIMEOUT_SECONDS:
             raise ValueError("bounded_native_auth_timeout_required")
         if args.device == "macos" and args.output:
             raise ValueError("android_evidence_output_requires_android_target")
@@ -379,7 +389,7 @@ def run_native(args, root):
         print("NATIVE_ENTRA_OWNER_ASSISTED_RUN_STARTED", flush=True)
         with os.fdopen(log_fd, "w") as output:
             command = native_command(args.flutter_bin, target, control.url, args.isolated_sign_in,
-                                     args.manual_start)
+                                     args.manual_start, timeout=args.timeout)
             flutter_process = subprocess.Popen(command, cwd=root / "examples/flutter_app", stdout=output,
                                                stderr=subprocess.STDOUT, start_new_session=os.name == "posix")
             deadline = time.monotonic() + args.timeout
@@ -446,10 +456,13 @@ def run_native(args, root):
             raise
         finally:
             if control is not None:
-                report.update({"stages": list(control.stages), "capturedApiPhases": sorted(control.captured)})
+                report.update({"stages": list(control.stages),
+                               "stageRecordedAtUtc": dict(control.stage_recorded_at),
+                               "capturedApiPhases": sorted(control.captured)})
             if proof_session is not None:
                 report.update(proof_session.evidence())
                 proof_session.close()
+            report["finishedAtUtc"] = datetime.now(timezone.utc).isoformat()
             replace_private_json(directory / "proof.json", report)
             if output_permitted:
                 write_android_evidence(args.output, report)
@@ -474,7 +487,8 @@ def main():
     parser.add_argument("--output")
     parser.add_argument("--flutter-bin", default=os.environ.get("FLUTTER_BIN", "flutter"))
     parser.add_argument("--go-bin", default=os.environ.get("GO_BIN", "go"))
-    parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS,
+                        help="Bounded native run/test timeout in seconds (60-900; default 600)")
     run_native(parser.parse_args(), Path(__file__).resolve().parents[1])
 
 

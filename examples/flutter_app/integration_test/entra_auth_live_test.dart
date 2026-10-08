@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'support/native_auth_timeout.dart';
 import 'support/owner_auth_binding.dart';
 import 'support/owner_auth_gate.dart';
 
@@ -17,6 +18,12 @@ import 'support/owner_auth_gate.dart';
 /// the host runner. No token, tenant account, or secret enters a dart-define.
 void main() {
   const manualStart = bool.fromEnvironment('COSMOS_SYNC_ENTRA_MANUAL_START');
+  final timeout = nativeAuthTimeout(
+    const String.fromEnvironment(
+      'COSMOS_SYNC_ENTRA_TIMEOUT_SECONDS',
+      defaultValue: '600',
+    ),
+  );
   configureOwnerAuthBinding(
     IntegrationTestWidgetsFlutterBinding.ensureInitialized(),
     manualStart: manualStart,
@@ -142,7 +149,7 @@ void main() {
       });
       expect(completed, isTrue);
     },
-    timeout: const Timeout(Duration(minutes: 8)),
+    timeout: Timeout(timeout),
   );
 }
 

@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+from datetime import datetime, timezone
 import io
 import json
 import os
@@ -106,6 +107,25 @@ class NativeEntraControlTests(unittest.TestCase):
         self.assertEqual(json.loads(body), {})
         self.assertIn("NATIVE_ENTRA_STAGE_OWNER_START_READY", self.output.getvalue())
 
+    def test_stage_timestamp_is_first_observation_not_duplicate_request_time(self):
+        observed = datetime(2030, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+        with patch.object(native, "datetime") as clock:
+            clock.now.return_value = observed
+            for _ in range(2):
+                status, _, _ = self.request(
+                    self.control.url + "stage", {"stage": "browser_request_started"})
+                self.assertEqual(status, 200)
+            clock.now.assert_called_once_with(timezone.utc)
+        self.assertEqual(self.control.stages, ["browser_request_started"])
+        self.assertEqual(self.control.stage_recorded_at,
+                         {"browser_request_started": observed.isoformat()})
+        self.assertEqual(self.control.captured, set())
+
+    def test_invalid_stage_cannot_record_a_timestamp(self):
+        status, _, _ = self.request(self.control.url + "stage", {"stage": "AUTH_CODE_MUST_NOT_LEAK"})
+        self.assertEqual(status, 400)
+        self.assertEqual(self.control.stage_recorded_at, {})
+
     def test_symlink_capture_does_not_overwrite_any_target(self):
         target = self.directory / "unrelated"
         target.write_text("unchanged")
@@ -202,6 +222,25 @@ class NativeRunFailureTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_PATH", json.dumps(self.report()))
         control.assert_not_called()
 
+    def test_failure_records_start_and_finish_separately_after_cleanup(self):
+        started = datetime(2030, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+        finished = datetime(2030, 1, 2, 3, 5, 6, tzinfo=timezone.utc)
+        with patch.object(native, "datetime") as clock, \
+                patch.object(native, "native_target", side_effect=ValueError("PRIVATE_VALUE")), \
+                patch.object(native, "cleanup_native_run") as cleanup:
+            clock.now.side_effect = [started, finished]
+            with self.assertRaises(ValueError):
+                native.run_native(self.args, self.root)
+        report = self.report()
+        self.assertEqual(report["recordedAtUtc"], started.isoformat())
+        self.assertEqual(report["startedAtUtc"], started.isoformat())
+        self.assertEqual(report["finishedAtUtc"], finished.isoformat())
+        self.assertEqual(report["stageRecordedAtUtc"], {})
+        self.assertTrue(report["cleanupComplete"])
+        self.assertNotIn("completedAtUtc", report)
+        self.assertNotIn("PRIVATE_VALUE", json.dumps(report))
+        cleanup.assert_called_once_with(None, None, None)
+
     def test_argument_denial_is_recorded_before_target_discovery(self):
         self.args.timeout = 901
         with patch.object(native, "native_target") as target:
@@ -211,7 +250,9 @@ class NativeRunFailureTests(unittest.TestCase):
         target.assert_not_called()
 
     def test_interrupt_is_distinct_and_preserves_partial_stages(self):
+        stage_time = datetime(2030, 1, 2, tzinfo=timezone.utc).isoformat()
         control = Mock(stages=["browser_request_started"], captured=set(),
+                       stage_recorded_at={"browser_request_started": stage_time},
                        url="http://127.0.0.1:1234/capability/", store_key="isolated")
         process = Mock(returncode=None)
         process.poll.side_effect = KeyboardInterrupt()
@@ -229,11 +270,14 @@ class NativeRunFailureTests(unittest.TestCase):
         self.assertEqual(report["stages"], ["browser_request_started"])
         self.assertFalse(report["actualNativeAppAuth"])
         self.assertEqual(report["capturedApiPhases"], [])
+        self.assertEqual(report["stageRecordedAtUtc"],
+                         {"browser_request_started": stage_time})
+        self.assertIsNotNone(report["finishedAtUtc"])
         stop.assert_called_once_with(process)
         control.close.assert_called_once_with()
 
     def test_cleanup_failure_records_no_success(self):
-        control = Mock(stages=[], captured=set(),
+        control = Mock(stages=[], captured=set(), stage_recorded_at={},
                        url="http://127.0.0.1:1234/capability/", store_key="isolated")
         process = Mock(returncode=1)
         process.poll.return_value = 1
@@ -250,6 +294,8 @@ class NativeRunFailureTests(unittest.TestCase):
         self.assertEqual(report["status"], "failed")
         self.assertEqual(report["failureStage"], "cleanup")
         self.assertFalse(report["cleanupComplete"])
+        self.assertIsNotNone(report["finishedAtUtc"])
+        self.assertEqual(report["stageRecordedAtUtc"], {})
         self.assertNotIn("PRIVATE_CLEANUP_FAILURE", json.dumps(report))
 
     def test_unstarted_control_cleanup_does_not_wait_for_shutdown(self):
@@ -258,6 +304,45 @@ class NativeRunFailureTests(unittest.TestCase):
         control = NativeControl(directory, {})
         control.close()
         self.assertFalse(control.thread.is_alive())
+
+    def test_success_records_terminal_time_and_does_not_claim_cloud_or_restart(self):
+        stages = list(native.expected_stages())
+        stage_times = {stage: datetime(2030, 1, 2, tzinfo=timezone.utc).isoformat()
+                       for stage in stages}
+        control = Mock(stages=stages, captured=set(native.PHASES),
+                       stage_recorded_at=stage_times,
+                       url="http://127.0.0.1:1234/capability/", store_key="isolated")
+        process = Mock(returncode=0)
+        process.poll.return_value = 0
+
+        def verify(command, **unused):
+            output = Path(command[command.index("--output-dir") + 1])
+            private_json(output / "identity.local.json",
+                         {"tenantId": "selected", "ownerObjectId": "approved", "subject": "same"})
+            return Mock(returncode=0, stdout=json.dumps({
+                "subjectFromApiToken": True, "grantsApplied": False}))
+
+        with patch.object(native, "native_target", return_value="macos"), \
+                patch.object(native, "approved_registration", return_value=(Path("receipt"), Path("owner"), {})), \
+                patch.object(native, "NativeControl", return_value=control), \
+                patch.object(native.subprocess, "Popen", return_value=process) as launch, \
+                patch.object(native.subprocess, "run", side_effect=verify), \
+                patch.object(native, "stop_owned_process"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            result = native.run_native(self.args, self.root)
+        self.assertEqual(result, self.report())
+        self.assertEqual(result["status"], "passed")
+        self.assertTrue(result["cleanupComplete"])
+        self.assertEqual(result["recordedAtUtc"], result["startedAtUtc"])
+        self.assertLessEqual(result["startedAtUtc"], result["completedAtUtc"])
+        self.assertLessEqual(result["completedAtUtc"], result["finishedAtUtc"])
+        self.assertEqual(result["stageRecordedAtUtc"], stage_times)
+        self.assertFalse(result["processRestartVerified"])
+        self.assertFalse(result["cosmosConnectionVerified"])
+        self.assertFalse(result["freshIdentityProofVerified"])
+        self.assertIn("--dart-define=COSMOS_SYNC_ENTRA_TIMEOUT_SECONDS=60",
+                      launch.call_args.args[0])
+        control.close.assert_called_once_with()
 
 
 class ApprovedRegistrationTests(unittest.TestCase):
@@ -388,6 +473,26 @@ class NativeTargetTests(unittest.TestCase):
         self.assertEqual(manual[-1], "--dart-define=COSMOS_SYNC_ENTRA_MANUAL_START=true")
         self.assertFalse(any("accessToken" in argument or "ownerObjectId" in argument
                              for argument in manual))
+
+    def test_native_test_receives_exact_bounded_timeout_not_fixed_eight_minutes(self):
+        for seconds in (60, 480, 600, 900):
+            with self.subTest(seconds=seconds):
+                command = native.native_command(
+                    "flutter", "macos", "http://127.0.0.1:1234/capability/",
+                    manual_start=True, timeout=seconds)
+                self.assertIn("--dart-define=COSMOS_SYNC_ENTRA_TIMEOUT_SECONDS=" + str(seconds),
+                              command)
+                self.assertIn("--dart-define=COSMOS_SYNC_ENTRA_MANUAL_START=true", command)
+        default = native.native_command("flutter", "macos", "http://127.0.0.1:1234/capability/")
+        self.assertIn("--dart-define=COSMOS_SYNC_ENTRA_TIMEOUT_SECONDS=600", default)
+
+    def test_native_command_rejects_invalid_timeout_before_any_process(self):
+        for seconds in (59, 901, "600", 600.0, True, None):
+            with self.subTest(seconds=seconds):
+                with self.assertRaisesRegex(ValueError, "bounded_native_auth_timeout_required"):
+                    native.native_command(
+                        "flutter", "macos", "http://127.0.0.1:1234/capability/",
+                        timeout=seconds)
 
     def test_manual_success_requires_readiness_in_addition_to_every_original_stage(self):
         self.assertEqual(native.expected_stages(), native.STAGES)

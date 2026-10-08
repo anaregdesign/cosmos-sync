@@ -11,7 +11,16 @@ python3 tools/native_entra_auth.py --owner-assisted
 ```
 
 Set `FLUTTER_BIN`/`GO_BIN` or `--flutter-bin`/`--go-bin` if those tools are not on
-PATH. macOS remains the default. For Android, select the exact supported physical
+PATH. `--timeout` bounds the native run in integer seconds (60-900, default 600)
+and supplies the same limit to the Flutter integration test. It includes native
+startup and the manual owner wait; there is no unbounded pause or automatic
+retry. Review the account/provider, expected consent, next clicks and error-detail
+collection before starting. Foreground the test app and use `--manual-start` so
+no browser request begins until the owner taps **Start Microsoft sign-in**.
+Timeout is failed evidence, even if the remaining browser later shows a source
+sign-in success or an error. Do not infer a native callback after owned cleanup.
+
+macOS remains the default. For Android, select the exact supported physical
 device in an ignored 0600 identity file and explicitly authorize installation:
 
 ```sh
@@ -78,6 +87,15 @@ Each parsed attempt creates a new incomplete `proof.json` and updates that point
 before target/configuration preflight. Invalid preflight, timeout, interruption
 and cleanup failure retain sanitized stage/reason codes and cannot reuse an old
 successful receipt. Source commit and dirty-tree status are recorded separately.
+`startedAtUtc` is run creation; legacy `recordedAtUtc` retains that same meaning,
+not shutdown. `stageRecordedAtUtc` records the first accepted observation of each
+fixed native stage. `finishedAtUtc` is recorded after the owned cleanup attempt
+on both success and failure; it does not imply cleanup succeeded. Require
+`cleanupComplete=true` and all original trust/lifecycle gates for success.
+Older receipts without these fields cannot establish an exact shutdown or stage
+time. Do not rewrite historical receipts or use their start time to correlate a
+later browser/source event as a native callback.
+
 It contains `initial.jwt`, `refresh.jwt`, per-phase `identity.local.json`,
 `grants.proposed.local.json`, `proof.json`, and a private Flutter log. Share only
 the nonidentifying proof after checking the run succeeded. Retain the access JWT
@@ -170,3 +188,7 @@ This target does not prove ordinary application data UI or hosted Cosmos CRUD.
 The separately bounded [directory SDK target](developer-onboarding.md#directory-acceptance-tooling)
 consumes the recently completed native receipt and its original API credential;
 actual customer/native/SPA/cloud acceptance remains #24, with physical work #20.
+Harness changes and offline regressions do not update a previously pinned hosted
+candidate. Keep its original source/evidence intact; a newer harness must not
+bypass the directory manifest's exact clean source/hosting checks or stand in for
+actual customer issuance.
