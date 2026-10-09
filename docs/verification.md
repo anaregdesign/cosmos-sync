@@ -1,9 +1,53 @@
 # Verification
 
-Latest retained-runtime evidence is the [October 7 directory activation and
+Latest simulator/local evidence is the [October 9 clean-source batch](#simulator-first-blocker-checkpoint-2026-10-09).
+Latest retained-runtime evidence remains the [October 7 directory activation and
 provider/state reconciliation](#approved-directory-activation-and-provider-reconciliation-2026-10-07).
 Hosted/customer/data/onboarding/final-device acceptance remains incomplete;
 the earlier dated source, fixture and startup receipts below retain their scopes.
+
+## Simulator-first blocker checkpoint, 2026-10-09
+
+At exact clean source `f73bb27a8935c01328788822c13c0b9a4296e697`, a newly owned
+Android 14/API 34 emulator completed the following non-cloud batch. No physical
+target, interactive customer/management login, Azure setting/state/deployment
+or publication was operated. Existing published `36d2680` and its execution
+clone remained unchanged.
+
+| Check | Measured result |
+| --- | --- |
+| Native SDK runtime | Exact Android marker passed with actual app-private SQLite, lost-ACK durable exact replay/deduplication, conflict recovery, watch/query, tombstone and learned-revocation purge; deterministic transport |
+| Ordinary native UI | Local signed Go HTTP, SQLite, isolated native secure storage, offline reopen/reconnect, both conflict resolutions, tombstone and pending/signout purge passed |
+| Emulator OS process restart | Exact old PID terminated; a different PID relaunched the same installation without data clear/reinstall, restored secure binding/session/exact pending operation offline without refresh, then verified matching ACK and backend deduplication |
+| Offline app regression selection | 73 passed: auth/lifecycle, directory register/link/unlink/cancellation/ambiguity, foreground gate, native timeout, identity UI and workspace |
+| Host guard regression selection | 105 passed: native proof/clocks/bounds, directory/ledger consumers, device/emulator selection, exclusive restart and owned cleanup |
+| Signed directory cross-stack | Race-enabled TLS/Go/Dart/SQLite lifecycle passed in default and configured namespaces; shared driver25/29 and full lifecycle54/80 remain separate fixture counters |
+| Official Cosmos emulator | All11 race-enabled subtests passed, including signed directory/Dart, independent BFF/SDK instances, receipt replay/session propagation, ETag rollback and production rejection of emulator Eventual consistency |
+| Example static analysis | Full `flutter analyze --no-pub --fatal-infos` passed |
+| Owned cleanup | Fixture processes/control/reverse mappings, Android emulator/AVD/ports and newly created Cosmos test container removed; absent owned targets independently verified |
+
+The batch used existing `flutter_app_smoke.py`, `flutter_restart_smoke.py`,
+the native SDK integration target, explicit signed directory Go/Dart test and
+`COSMOS_SYNC_IDENTITY_DART=1 bash tools/emulator.sh test`. Device selection was
+exact and emulator-only; no physical fallback or shared installation clearing.
+Runtime receipts retain clean `f73bb27`, not the later documentation commit.
+
+Evidence and blockers were independently posted/read back in
+[#20](https://github.com/anaregdesign/cosmos-sync/issues/20#issuecomment-6076056843)
+and [#2](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-6076057683).
+These local checks are not a new all-jobs CI run or actual customer/provider,
+hosted UAMI/Graph/private Cosmos/RU, physical airplane/suspension or Android 17
+evidence. All actual acceptance checkboxes remain open.
+
+The sole live ledger stays7/40, SDK launch absent, zero new live target BFF
+requests and zero accepted cloud document mutations. Its remaining33 are fully
+reserved by native4+SDK29. A separate final physical hosted run needs its own
+explicit allocation review under that same authority, not a reset/new ledger.
+Complete real customer/hosted diagnosis, coverage and exact candidate/onboarding
+first, then target one prebriefed final Android session as described in
+[physical-device readiness](physical-devices.md#final-android-batch-readiness).
+
+## Historical foundation checks
 
 Foundation v0.2 checks on 2026-10-03, macOS 26.7 arm64. Production BFF and SDK source
 commits are `9c2bdb8` and `a7998fe`. Go 1.26.5, Dart 3.12.2, Flutter 3.44.6,

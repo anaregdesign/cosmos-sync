@@ -11,9 +11,11 @@ specified SDK scenario on real app-private SQLite. It does not prove a real
 identity provider, deployed BFF, Azure account, app-store release signing or
 background execution.
 
-## Current verification order, 2026-10-05
+## Current verification order, 2026-10-09
 
-The owner now defers real-device verification until development is complete.
+The owner reaffirmed simulator-first work and minimum physical repetitions.
+Real-device verification waits until development and customer/hosted/onboarding
+readiness are complete.
 Continue with local/native/browser tests and simulators first, then run the
 final Android-only gate. Do not install or launch on a physical device during
 that development phase. Previously recorded Android results remain historical
@@ -22,13 +24,50 @@ integrated hosted acceptance. Physical iOS remains outside the selected scope.
 Actual Google/Apple provider connections were separately cancelled as not
 planned; common OIDC, authorization and offline safety are not waived.
 
-The owner has now left the Android phone connected but cannot operate it for
-the foreseeable period. Connection alone does not authorize unattended
-provider login, physical installation or another browser-profile retry.
+The earlier connected-phone/unavailable-owner period is historical.
+Connection alone does not authorize unattended provider login, physical
+installation or another browser-profile retry; the latest simulator instruction
+does not renew those permissions.
 The requested browser-profile reopening was clarified to be Mac, not Android;
-do not treat the uncorrelated AADSTS50020 report as an Android provider result.
+exact AADSTS50020 identifiers were subsequently captured privately from that
+Mac flow. They are not an Android provider result or successful native callback.
 
-Clean source `3214d0d` passed both the SDK SQLite fixture and ordinary local
+Fresh clean `f73bb27` passed the Android 14/API 34 native SDK and ordinary signed
+HTTP/SQLite/native-storage app fixtures, actual emulator OS process death with
+same-installation relaunch/exact replay, 73 offline app and 105 host-guard tests,
+signed directory lifecycle in two namespaces and all 11 official local Cosmos
+emulator subtests. Owned emulator/AVD/ports, fixture processes/reverse mappings
+and test container were cleaned. See [October 9 evidence](verification.md#simulator-first-blocker-checkpoint-2026-10-09).
+This does not establish real customer authentication, Azure, physical airplane
+mode/suspension or Android 17 device behavior.
+
+### Final Android batch readiness
+
+Target one prebriefed attended session rather than repeating individual fixture
+suites on the phone. A failed trust/timeout/unknown outcome stops; one session is
+a planning goal, not a guaranteed single attempt. Before scheduling it:
+
+| Readiness gate | Required evidence or decision |
+| --- | --- |
+| Customer and hosting | Genuine nonadministrative-customer API/fresh-ID issuance and routed hosted identity/data acceptance in #24/#16; healthy configuration and source sign-in alone do not pass |
+| Exact final candidate | Pinned app/SDK source, immutable BFF image, hosting/configuration/proof agreement and clean onboarding #32; do not install newer harness changes into an old pinned clone |
+| Coverage | Explicit real member/credential, Web-origin and private two-independent-BFF scope or applicable owner-approved deferral; deterministic fixture passes are not a silent waiver |
+| Physical authority | Current exact selected Android, owner availability and bounded installation/launch/manual connectivity/OS lifecycle permission; historical approval is not an unattended grant |
+| Live request allocation | Concrete final-device allocation reconciled with the sole existing ledger before any hosted request; native4+SDK29 already reserve all33 remaining at7/40 |
+
+After those gates, use the same reviewed installation to combine system-browser
+callback/secure restore, actual offline edit and OS death/relaunch/reconnect,
+suspend/resume, integrated conflict/tombstone and signout/pending purge.
+Reuse matching backend/source results for their exact scope, but still observe
+each required physical behavior. Do not repeat standalone deterministic SDK/UI
+fixtures merely because the phone is connected.
+
+If native4 and SDK29 consume the aggregate cap, no live reservation remains for
+a separate physical cloud run. Do not reset or duplicate the ledger, implicitly
+raise its cap, or count OAuth/Graph reads as BFF/RU evidence. Review the physical
+allocation separately; simulator fixtures consume none of it.
+
+Historical clean source `3214d0d` passed both the SDK SQLite fixture and ordinary local
 signed-HTTP/SQLite/native-secure-storage application fixture on a newly owned
 Android 14/API 34 emulator. Both runs returned zero and their exact platform
 markers; the physical phone was not selected. The fixture's processes/reverse
@@ -117,8 +156,8 @@ temporary arm64 toolchain workaround; it was deleted afterwards. Reproducible
 commands and the exact evidence limits are in [iOS validation](ios-validation.md).
 
 The following prerequisites apply to any future authorized physical run. The
-Android target/install grant is already supplied; iOS signing and provisioning
-are currently declined:
+earlier Android target/install grant is historical; a final run requires its
+current exact-target scope. iOS signing and provisioning remain declined:
 
 | Gate | Required action |
 | --- | --- |
@@ -238,7 +277,7 @@ COSMOS_SYNC_APP_PASS android realHttp=true realSqlite=true auth=test-adapter nat
 To reproduce after selecting the same authorized physical target:
 
 ```sh
-python3 tools/flutter_app_smoke.py --platform android \
+python3 tools/flutter_app_smoke.py --device android \
   --device-id-file .cache/devices/android.txt --authorize-install \
   --output artifacts/physical-app-android-new-run.json
 ```

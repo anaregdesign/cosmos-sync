@@ -1,12 +1,46 @@
 # Cosmos Sync delivery and deployment plan
 
 Status: Deployed (configuration only; hosted acceptance incomplete)
-Current scope: Both approved existing-app operations are recorded; fresh normalization exited zero, six no-ops and live role metadata passed, and the same private state authority/recovery is reconciled. No further apply is authorized; routed/customer/data/onboarding/device gates remain open.
+Current scope: Approved app operations/state recovery are complete. Clean current-source simulator/local verification passed; actual customer recognition, hosted routing/identity/data, coverage decisions and pinned onboarding remain open. Physical Android is last, with its exact scope and live-request allocation still required. No further apply is authorized.
 Previous validation: Read-only mirror/saved directory plan passed at `adbf0da`; retained as reference evidence.
-Date: 2026-10-07 JST
+Date: 2026-10-09 JST
 Mode: MODIFY
 Runtime preparation candidate: `36f502fe5040f81164a9304992f6819b9d382c5a`
 Published runtime source: `36d2680e5f88d31acfafa4473d0d4996f1de0ff7`
+
+## Current blockers and simulator-first checkpoint
+
+The owner reaffirmed simulator-first development and minimum physical repetitions
+on October 9. Fresh clean source `f73bb27a8935c01328788822c13c0b9a4296e697`
+passed the Android 14/API 34 SDK SQLite and ordinary signed-HTTP/native-storage
+app fixtures, actual emulator OS process death/same-installation relaunch/exact
+replay, 73 app and 105 host-guard regressions, signed directory lifecycle in two
+namespaces, all 11 official Cosmos-emulator subtests and full example analysis.
+Owned emulator/AVD/ports, fixture processes/reverse mappings and the Cosmos test
+container were cleaned. See [measured simulator evidence](https://github.com/anaregdesign/cosmos-sync/issues/20#issuecomment-6076056843)
+and [current blocker review](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-6076057683).
+
+| Gate | Remaining blocker | Simulator boundary |
+| --- | --- | --- |
+| #24 customer | AADSTS50020 remains unresolved; no selected-customer API/fresh-ID callback proof | Signed registration/link/unlink, cancellation, freshness and cache fences pass locally, not actual broker recognition |
+| #16/#24 hosted path | Routed HTTPS/evaluated peer/log delivery, hosted UAMI/Graph/private Cosmos and actual RU remain unproven | Local signed HTTP and official Cosmos SDK/storage tests cannot establish Azure ingress, managed identity or production consistency |
+| #24 coverage | Exact Web origin/CORS, approved private two-independent-BFF path and real member/credential scope remain unresolved | Independent fixture identities/servers are not authorization to create live identities or expand network/replicas |
+| #32 pinned onboarding | Final source/SDK/image/hosting/proof alignment and genuine clean consumer journey remain incomplete | New harness source is not installed in published `36d2680`; do not copy it there or loosen the exact-source gate |
+| #20 final Android | Downstream of the above; exact-target/install/connectivity permission and live-request allocation required | Reuse matching source/backend evidence, then observe actual device callback, offline OS restart/reconnect, suspension and integrated purge once |
+
+The sole live ledger remains **7/40**; native4 plus SDK29 reserve all33
+remaining. If those envelopes consume the cap, no reservations remain for a
+separate physical hosted run. Review its concrete allocation before scheduling;
+no reset, second ledger, implicit cap increase or unallocated health retry.
+Local fixture counters are separate and consumed no live reservations.
+
+Target one prebriefed final attended Android session, not a guaranteed single
+attempt. Stop on failed trust, timeout or unknown submitted writes. Complete
+customer/hosted diagnosis, explicit coverage/source decisions and pinned
+onboarding before that session; do not repeat independent low-level fixture
+suites on the phone. This plan authorizes no new login, physical operation,
+cloud setting, deployment or publication. Recheck recorded upstream expiry
+`2026-10-11T22:17:06Z` before attended use; no automatic rotation.
 
 ## 1. Goal and authorization
 
@@ -32,7 +66,7 @@ logical partition; Graph, directory metadata and application data are separate.
 Actual Google/Apple setup and connections are cancelled (#30, not planned).
 This excludes live provider operations, not providers from the OIDC contract.
 Keep authentication provider-neutral and preserve deterministic security coverage.
-The current unconfigured reference environment does not advertise social
+The current selected reference environment does not advertise live social
 navigation; that is not a global Apple/Google denylist.
 Physical iOS, Apple signing and new people are not prerequisites. Do not create
 another customer or credential under the existing same-human exception.
@@ -48,7 +82,7 @@ another customer or credential under the existing same-human exception.
 | Location | Previously approved West US 2 environment; no region change proposed |
 | Identity | One original human and the specifically approved nonadministrative customer profile |
 | Platforms | Native and Web development/fixtures first; final physical Android last |
-| Distribution | Owner-approved directory BFF published; SDK archive unchanged; actual activation remains separately gated |
+| Distribution | Owner-approved directory BFF published and approved configuration active; SDK archive unchanged; any further deployment remains separately gated |
 
 Do not ask the owner to approve the same subscription/region again. Before an
 actual resource operation, verify that the private target and live metadata
@@ -78,11 +112,11 @@ remain distinguishable.
 
 | Component | Reviewed source | Completed scope | Concrete remaining work |
 | --- | --- | --- | --- |
-| Go BFF | `bff/identity_runtime.go`, `identity_http.go`, `broker_proof.go`, `broker_directory.go` | Opt-in directory factory, exact API/ID correlation, uncached trusted profile, register/link/unlink, stable ownership, generation fences | State-authority/apply decision and actual hosted identity execution |
+| Go BFF | `bff/identity_runtime.go`, `identity_http.go`, `broker_proof.go`, `broker_directory.go` | Opt-in directory factory, exact API/ID correlation, uncached trusted profile, register/link/unlink, stable ownership, generation fences | Actual hosted identity execution; approved state/app operations are complete |
 | Dart SDK | `packages/cosmos_sync/`, `tool/identity_probe.dart` | Typed lifecycle transport, identity-aware SQLite/IndexedDB fencing, shared recorded directory driver and signed local/emulator evidence | Actual approved hosted directory acceptance |
 | Native/Web app | `examples/flutter_app/lib/auth/`, account lifecycle UI | Isolated fresh proofs, pending consent, cancellation/recovery, cache-open verification and clean emulator process-death/replay | Actual customer proof and final physical acceptance |
-| ACA Terraform | `infra/terraform/azure-container-apps/` | Typed directory opt-in/image guard, assigned UAMI binding, 61 mock plans, strict generated-JSON/Go contract, published compatible image and read-only saved-plan validation; old modes preserved | Authoritative-state handback, separate apply approval and actual activation |
-| Native live runner | `tools/native_entra_auth.py`, `entra_auth_live_test.dart` | API-only mode retained; transient directory-proof v2, provided/server nonce distinction, source-bound fresh failure receipts and foreground gate implemented | Actual attended customer evidence |
+| ACA Terraform | `infra/terraform/azure-container-apps/` | Typed directory opt-in/image guard, assigned UAMI binding, 61 mock plans, strict generated-JSON/Go contract, published compatible image, approved activation/state recovery and exact role metadata; old modes preserved | Actual routed/hosted readiness; no further apply authorized |
+| Native live runner | `tools/native_entra_auth.py`, `entra_auth_live_test.dart` | API-only mode retained; transient directory-proof v2, provided/server nonce distinction, source-bound failure receipts, foreground gate and matched timeout/explicit clocks implemented | Actual attended customer evidence and final exact source/hosting alignment |
 | Hosted SDK runner | `tools/directory_azure_live.py`, `test/directory_azure_live.dart` | Explicit recorded-directory preflight/data journey, immutable runtime/native-proof pinning, shared ledger, partial/unknown-outcome receipts and official Cosmos-emulator/candidate CI | Actual approved hosting/customer journey |
 | Local cloud/UI runners | `tools/live_azure_contract.py`, `tools/flutter_azure_live.py`, `azure_live_ui_test.dart` | Separate legacy grants-file and recorded-token contracts | Cannot stand for directory authorization, hosted MI or actual fresh ordinary login |
 | Retained Azure | Prior readback and Issues #16/#24 | Startup/configuration observed; minimum replicas returned to zero | Envoy 403, evaluated peer, log delivery and actual application data path remain unverified |
@@ -96,7 +130,9 @@ Native SDK/application, Chromium/Node, Python and BFF race/vet/build checks pass
 The pre-restart local Docker attempts failed before execution. After restart,
 Docker is available and the complete official Cosmos-emulator suite passed with
 the corrected private fixture namespace. All nine portable candidate jobs and
-clean nonpublishing image checks passed; no image was published or activated.
+clean nonpublishing image checks passed. At that preparation checkpoint no image
+was published or activated; the separately approved later publication/activation
+is recorded above.
 Identity linking, Web support and core authorization must not be reimplemented
 to work around the separate actual customer/artifact/hosting gates.
 
@@ -134,9 +170,11 @@ Apple/Google upstream; it is not a mandatory issuer for generic BFF/native OIDC.
 API admission depends on configured trust, not provider names. Dedicated API
 JWT, issuer/audience/scope and server-authorization checks remain mandatory.
 
-The supplied Web MSAL adapter currently restricts authorities to Entra/CIAM;
-generic browser compatibility is new source work in #40. The optional production
-directory Graph reader is workforce-federation-specific, not a generic social
+The explicitly selected Web MSAL adapter restricts authorities to Entra/CIAM;
+the separate generic Code/S256 browser adapter and standards/cache fixture
+completed in #40. Those fixtures are not selected-customer acceptance.
+The optional production directory Graph reader is workforce-federation-specific,
+not a generic social
 credential reader. Its narrower trusted profile contract must not be confused
 with generic OIDC authentication or loosened to adopt unknown credentials.
 
@@ -160,8 +198,8 @@ collection nor account deletion/legacy migration endpoints.
 | --- | --- | --- |
 | #27 | Completed directory-mode IaC/runtime/image compatibility and activation preparation | Accepted #26/#29 evidence; live criteria remain #16/#24 |
 | #28 | Completed fresh-proof/failure receipts and clean emulator process-restart tooling | Accepted #18/#29 and lifecycle protocol; live criteria remain #24/#20 |
-| #40 | Add provider-neutral browser OIDC while preserving the tested Entra path and trust/cache boundaries | Completed #28/#29 contracts; independent of Azure activation |
-| #16 | Adopt/revalidate the approved management state, resolve ingress/log diagnostics and verify hosted identity readiness | Completed #27/artifact review; fresh state validation and separate apply approval |
+| #40 | Completed provider-neutral browser OIDC while preserving Entra and trust/cache boundaries | Completed source/standards-fixture scope; not actual customer acceptance |
+| #16 | Approved state/app recovery complete; resolve ingress/log diagnostics and verify hosted identity readiness | Completed #27/artifact/state/approved operations; no repeat adoption/apply prerequisite |
 | #24 | Measure actual customer/API/ID/Flutter/BFF/Cosmos integration; directory driver preparation is complete | Completed #27/#28 contracts and #16 hosting checkpoint |
 | #32 | Reproduce consumer-owned, version-pinned hosted onboarding with honest OIDC/adapter coverage | #24 integrated evidence, #40 browser compatibility and exact artifact/source choice |
 | #20 | Final selected Android actual login/cloud/OS/airplane/suspension evidence | #24/#32, completed simulator tooling and owner availability |
@@ -192,7 +230,7 @@ Completed builtin Terraform #31 is not reopened or relabeled as directory work.
 
 P1/P2/P3 are completed preparation, not remaining implementation requests.
 Their original accepted boundaries are retained below. P4/P5/P6 remain
-execution/acceptance work; the newly identified browser source gap is #40.
+execution/acceptance work; #40's independent browser source gap is complete.
 
 ### P1: Directory deployment contract (#27)
 
@@ -312,8 +350,10 @@ attended window. The owner alone handles browser/password/passkey/MFA prompts.
 Verify the exact nonadministrative customer, not the workforce/admin profile.
 Capture actual callback, initial/refreshed API verification and separate fresh
 ID/server-nonce/authentication-time acceptance. Preserve missing-claim denial.
-Correlate provider/run/configuration evidence; the earlier AADSTS50020 is not a
-correlated Android result and the profile-reopening request was Mac.
+Correlate provider/run/configuration evidence. Exact October 8 AADSTS50020
+identifiers are private Mac error evidence, not a successful native callback
+or an Android result. The newer timeout/clock fix is source-only and does not
+repair broker recognition or update the published execution clone.
 
 Run the bounded ordinary app/SDK path through the compatible HTTPS BFF to the
 existing Cosmos partition. Record actual hosted identity/profile checks,
@@ -342,10 +382,15 @@ custom gateway or undocumented local file. Reuse an exact matching hosted
 receipt only for identical source/configuration/target/scope. Record incomplete
 membership/provider/replica coverage explicitly.
 
-Finally run only the selected physical Android with the owner present. Actual
-device login/cloud, OS death/relaunch, airplane mode and suspension are separate
-observations. Retain current physical-input gating; connected alone is not
-execution permission. Physical iOS and actual Google/Apple remain outside scope.
+Finally target one prebriefed physical Android session with the owner present,
+exact final app/source/target and an approved request allocation. Genuine
+customer/hosted readiness and clean onboarding must pass first. Reuse matching
+backend/source evidence rather than repeat simulator fixtures on the phone,
+while observing device login/cloud, durable offline OS death/relaunch/reconnect,
+airplane mode, suspension and integrated conflict/tombstone/purge.
+These remain distinct physical observations, not a guarantee of one successful
+attempt. Retain current physical-input gating; connected alone is not execution
+permission. Physical iOS and actual Google/Apple remain outside scope.
 
 ## 7. Dependencies, execution order and Validation Proof
 
@@ -356,7 +401,7 @@ flowchart TD
     P1 --> Host["P4: #16 reviewed compatible hosting"]
     Diag["P4: #16 read-only ingress diagnosis"] --> Host
     Artifact["Completed immutable BFF release"] --> Host
-    State["Approved state adoption + fresh validation"] --> Apply["Separate actual app-update approval"]
+    State["Completed state adoption + fresh validation"] --> Apply["Completed approved app operations"]
     Apply --> Host
     Host --> Live["P5: #24 attended CIAM and actual stack"]
     P3 --> Live
@@ -367,15 +412,18 @@ flowchart TD
     Android --> Epic["#2 delivery completion"]
 ```
 
-P1/P2/P3 preparation is complete. #40 is independent local source work.
-Read-only P4 diagnosis can be independent, but hosted activation is separately
-gated. P5 needs actual owner/hosting readiness. P6 puts physical work last.
+P1/P2/P3 preparation and #40's independent source work are complete.
+Read-only P4 diagnosis can remain independent; approved activation and state
+recovery are complete, with no further apply authorized. P5 needs actual
+owner/hosting readiness and coverage decisions. P6 puts physical work last,
+after explicit final source/target/request-allocation review.
 No calendar deadline is promised while those external gates remain unresolved.
 
-### Validation Proof
+### Historical mirror Validation Proof, 2026-10-06
 
-Validation covers exact released source `36d2680`, the private local mirror and
-its saved one-app directory plan. It does not authorize or execute deployment,
+At this historical checkpoint, validation covered released source `36d2680`,
+the private local mirror and its saved one-app directory plan.
+It does not authorize or execute deployment,
 replace original state, prove current ingress/hosted identity or permit Web CORS.
 The canonical Azure Validate checks and proof recording below passed; this is
 not a passed hosted-acceptance or apply gate.
@@ -395,7 +443,7 @@ not a passed hosted-acceptance or apply gate.
 | Applicable policy | Exact app-scope assignment query including inherited assignments returned zero; no policy definition or exception was changed |
 | Private evidence | Directory 0700, artifacts 0600; initial failed plans and state backups retained; sanitized review at `2026-10-06T09:47:31Z` |
 | English Issue proof | [#16 comment 6013697503](https://github.com/anaregdesign/cosmos-sync/issues/16#issuecomment-6013697503), [#2 comment 6013697550](https://github.com/anaregdesign/cosmos-sync/issues/2#issuecomment-6013697550) |
-| Azure apply / hosted / customer / physical acceptance | Not executed; separately gated |
+| Azure apply / hosted / customer / physical acceptance | Not executed at this checkpoint; later approved configuration operations are recorded separately |
 
 ### Fresh R3 Validation Proof, 2026-10-06
 
